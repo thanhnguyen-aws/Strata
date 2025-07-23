@@ -1,0 +1,14 @@
+name = "Strata"
+version = "0.1.0"
+defaultTargets = ["Strata", "StrataVerify"]
+testDriver = "StrataTest"
+
+[[lean_lib]]
+name = "Strata"
+
+[[lean_lib]]
+name = "StrataTest"
+globs = ["StrataTest.+"]
+
+[[lean_exe]]
+name = "StrataVerify"

@@ -1,0 +1,156 @@
+/-
+  Copyright Strata Contributors
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-/
+
+
+
+import Strata.DL.Lambda.LExprWF
+import Strata.DL.Util.Maps
+
+namespace Lambda
+
+open Std (ToFormat Format format)
+
+---------------------------------------------------------------------
+
+/-! ### Variable scopes
+
+We keep a stack of `Scopes`, where we map in-scope free variables to the
+`LExpr` values.
+
+While the evaluation of Lambda expressions does not strictly need the notion of
+scopes, other dialects that include Lambda may need to do so. For the evaluation
+of Lambda expressions in isolation, the stack can contain a single scope.
+-/
+
+variable {Identifier : Type} [DecidableEq Identifier] [ToFormat Identifier]
+
+abbrev Scope (Identifier : Type) := (Map Identifier (Option LMonoTy × (LExpr Identifier)))
+
+instance : BEq (Scope Identifier) where
+  beq m1 m2 := m1 == m2
+
+instance : Inhabited (Scope Identifier) where
+  default := []
+
+private def Scope.format (m : (Scope Identifier)) : Std.Format :=
+  match m with
+  | [] => ""
+  | [(k, (ty, v))] => go k ty v
+  | (k, (ty, v)) :: rest =>
+    go k ty v ++ Format.line ++ Scope.format rest
+  where go k ty v :=
+    match ty with
+    | some ty => f!"({k} : {ty}) → {v}"
+    | none => f!"{k} → {v}"
+
+instance : ToFormat (Scope Identifier) where
+  format := Scope.format
+
+/--
+Merge two maps `m1` and `m2`, where `m1` is assumed to be the map if `cond`
+is `true` and `m2` when it is false.
+-/
+def Scope.merge (cond : (LExpr Identifier)) (m1 m2 : (Scope Identifier)) : (Scope Identifier) :=
+  match m1 with
+  | [] => m2.map (fun (i, (ty, e)) => (i, (ty, mkIte cond (.fvar i ty) e)))
+  | (k, (ty1, e1)) :: rest =>
+    match m2.find? k with
+    | none =>
+      (k, (ty1, mkIte cond e1 (.fvar k ty1))) ::
+      Scope.merge cond rest m2
+    | some (ty2, e2) =>
+      if ty1 ≠ ty2 then
+        panic! s!"[Scope.merge] Variable {Std.format k} is of two different types \
+                  in the two varMaps\n\
+                  {Std.format m1}\n{Std.format m2}"
+      else
+        (k, (ty1, mkIte cond e1 e2)) ::
+      Scope.merge cond rest (m2.erase k)
+  where mkIte (cond tru fals : (LExpr Identifier)) : (LExpr Identifier) :=
+    if tru == fals then tru
+    else (LExpr.ite cond tru fals)
+
+section Scope.merge.tests
+open LTy.Syntax LExpr.Syntax
+
+/--
+info: (x : int) → (#8 : int)
+(z : int) → (if (#true : bool) then (#100 : int) else (z : int))
+-/
+#guard_msgs in
+#eval format $ Scope.merge (.const "true" mty[bool])
+              [(("x"), (mty[int], .const "8"   mty[int])),
+               (("z"), (mty[int], .const "100" mty[int]))]
+              [(("x"), (mty[int], .const "8"   mty[int]))]
+
+/--
+info: (x : int) → (if (#true : bool) then (#8 : int) else (x : int))
+(z : int) → (if (#true : bool) then (#100 : int) else (z : int))
+(y : int) → (if (#true : bool) then (y : int) else (#8 : int))
+-/
+#guard_msgs in
+#eval format $ Scope.merge (.const "true" mty[bool])
+              [(("x"), (mty[int], .const "8"   mty[int])),
+               (("z"), (mty[int], .const "100" mty[int]))]
+              [(("y"), (mty[int], .const "8"   mty[int]))]
+
+/--
+info: (y : int) → (if (#true : bool) then (#8 : int) else (y : int))
+(x : int) → (if (#true : bool) then (x : int) else (#8 : int))
+(z : int) → (if (#true : bool) then (z : int) else (#100 : int))
+-/
+#guard_msgs in
+#eval format $ Scope.merge (.const "true" mty[bool])
+              [(("y"), (mty[int], .const "8"   mty[int]))]
+              [(("x"), (mty[int], .const "8"   mty[int])),
+               (("z"), (mty[int], .const "100" mty[int]))]
+
+/--
+info: (a : int) → (if (#true : bool) then (#8 : int) else (a : int))
+(x : int) → (if (#true : bool) then (#800 : int) else (#8 : int))
+(b : int) → (if (#true : bool) then (#900 : int) else (b : int))
+(z : int) → (if (#true : bool) then (z : int) else (#100 : int))
+-/
+#guard_msgs in
+#eval format $ Scope.merge (.const "true" mty[bool])
+                [(("a"), (mty[int], (.const "8"   mty[int]))),
+                 (("x"), (mty[int], (.const "800" mty[int]))),
+                 (("b"), (mty[int], (.const "900" mty[int])))]
+                [(("x"), (mty[int], (.const "8"   mty[int]))),
+                 (("z"), (mty[int], (.const "100" mty[int])))]
+
+end Scope.merge.tests
+
+/--
+A stack of scopes, where each scope maps the free variables
+to their `LExpr` values.
+-/
+abbrev Scopes (Identifier : Type) := Maps Identifier (Option LMonoTy × LExpr Identifier)
+
+/--
+Merge two scopes, where `s1` is assumed to be the scope if `cond` is true, and
+`s2` otherwise.
+-/
+def Scopes.merge (cond : LExpr Identifier) (s1 s2 : Scopes Identifier) : Scopes Identifier :=
+  match s1, s2 with
+  | [], _ => s2
+  | _, [] => s1
+  | x :: xrest, y :: yrest =>
+    Scope.merge (Identifier := Identifier) cond x y :: Scopes.merge cond xrest yrest
+
+--------------------------------------------------------------------
+
+end Lambda

@@ -1,0 +1,112 @@
+/-
+  Copyright Strata Contributors
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-/
+
+
+
+import Strata.DL.Util.Props
+import Strata.Languages.Boogie.Program
+import Strata.Languages.Boogie.ProcedureType
+import Strata.Languages.Boogie.WF
+import Strata.Languages.Boogie.StatementWF
+
+namespace Boogie
+namespace WF
+
+open Lambda
+
+theorem snd_values_mem :
+  x ∈ ps →
+  x.snd ∈ Map.values ps := by
+  intros Hin
+  induction ps <;> simp_all
+  case cons h t ih =>
+  simp [Map.values]
+  cases Hin <;> simp_all
+
+set_option warn.sorry false in
+/--
+A Procedure 'pp' that passes type checking is well formed with respect to the whole program 'p'.
+-/
+theorem Procedure.typeCheckWF : Procedure.typeCheck T p pp = Except.ok (pp', T') → WFProcedureProp p pp := by
+  intros tcok
+  simp only [Procedure.typeCheck] at tcok
+  generalize Hc1 : (!decide (Map.keys pp.header.inputs).Nodup) = if1 at tcok
+  generalize Hc2 : (!decide (Map.keys pp.header.outputs).Nodup) = if2 at tcok
+  generalize Hc3 : (!decide pp.spec.modifies.Nodup) = if3 at tcok
+  generalize Hc4 : (pp.spec.modifies.any fun v => decide (v ∈ Map.keys pp.header.inputs)) = if4 at tcok
+  generalize Hc6 : (pp.spec.modifies.any fun v => decide (v ∈ Map.keys pp.header.outputs)) = if6 at tcok
+  generalize Hc7 : ((Map.keys pp.header.inputs).any fun v => decide (v ∈ Map.keys pp.header.outputs)) = if7 at tcok
+  generalize Hc8 : (pp.spec.modifies.any fun v => (Maps.find? T.context.types v).isNone) = if8 at tcok
+  generalize Hc9 : ((Imperative.Stmts.modifiedVars pp.body).eraseDups.any fun v =>
+                    decide ¬v ∈ Map.keys pp.header.outputs ++ pp.spec.modifies ++
+                    (Imperative.Stmts.definedVars pp.body).eraseDups) = if9 at tcok
+  generalize Hc10: ((Procedure.Spec.getCheckExprs pp.spec.preconditions).any fun p =>
+                          OldExpressions.containsOldExpr p) = if10 at tcok
+  cases if1 with | true => simp_all | false => cases if2 with | true => simp_all | false =>
+  cases if3 with | true => simp_all | false => cases if4 with | true => simp_all | false =>
+  cases if7 with | true => simp_all; split at tcok <;> simp_all | false =>
+    cases if8 with | true => simp_all; split at tcok <;> simp_all | false =>
+  cases if9 with
+  | true => simp_all; split at tcok <;> simp_all
+  | false =>
+  simp only [Bool.false_eq_true, ↓reduceIte] at tcok
+  constructor
+  . simp only [bind, Except.bind] at tcok
+    split at tcok <;> simp_all
+    split at tcok <;> simp_all
+    split at tcok <;> try simp_all
+    split at tcok <;> try simp_all
+    split at tcok <;> try simp_all
+    split at tcok <;> try simp_all
+    split at tcok <;> try simp_all
+    next heq =>
+    exact Statement.typeCheckWF heq
+  . -- 4. All local variable declarations in a procedure have no duplicates.
+    sorry
+  . constructor <;> simp
+    . -- precondition
+      apply forall_iff_forall_mem.mpr
+      intros x Hin
+      constructor
+      . constructor
+        -- 5. All variables in post-conditions and pre-conditions are either `BoogieIdent.locl` or `BoogieIdent.glob`.
+        sorry
+      . split at tcok <;> simp_all
+        split at tcok <;> simp_all
+        apply Hc10 x.snd.expr ?_
+        . -- precondition does not contain old expressions
+          simp [Procedure.Spec.getCheckExprs]
+          exists x.2
+          refine ⟨?_, rfl⟩
+          exact snd_values_mem Hin
+    . -- postcondition
+      apply forall_iff_forall_mem.mpr
+      intros x Hin
+      constructor
+      . -- 5. All variables in post-conditions and pre-conditions are either `BoogieIdent.locl` or `BoogieIdent.glob`.
+        sorry
+      . -- 6. Postconditions in a procedure are all `ValidExpression`s
+        sorry
+    . -- `modifies` variables
+      apply forall_iff_forall_mem.mpr
+      intros x Hin
+      constructor
+      -- 1. All modified variables in a procedure are declared in the program.
+      sorry
+  done
+
+end WF
+end Boogie

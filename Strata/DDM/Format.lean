@@ -1,0 +1,594 @@
+/-
+  Copyright Strata Contributors
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-/
+
+import Strata.DDM.AST
+import Strata.DDM.Util.Fin
+import Std.Data.HashSet
+
+open Std (Format format)
+
+namespace Strata
+
+structure PrecFormat where
+  format : Format
+  prec : Nat
+deriving Inhabited
+
+namespace PrecFormat
+
+def atom (format : Format) : PrecFormat := { format, prec := maxPrec }
+
+def ofFormat [Std.ToFormat α] (x : α) (prec : Nat := maxPrec) : PrecFormat := { format := Std.format x, prec }
+
+end PrecFormat
+
+/--
+Options to control parenthesis
+-/
+structure FormatOptions where
+  /-- Always add parenthesis when feasible. -/
+  alwaysParen : Bool := false
+
+/--
+A format context provides callbacks and information needed to
+properly pretty-print Strata AST types.
+-/
+structure FormatContext where
+  opts : FormatOptions
+  getFnDecl : QualifiedIdent → Option FunctionDecl
+  getOpDecl : QualifiedIdent → Option OpDecl
+  globalContext : GlobalContext
+
+namespace FormatContext
+
+/-- A format context that uses no syntactic sugar. -/
+def explicit : FormatContext where
+  opts := {}
+  getFnDecl _ := none
+  getOpDecl _ := none
+  globalContext := {}
+
+def fvarName (ctx : FormatContext) (idx : FreeVarIndex) : String :=
+  if let some name := ctx.globalContext.nameOf? idx then
+    name
+  else
+    s!"fvar!{idx}"
+
+end FormatContext
+
+/-- Format state includes local information -/
+structure FormatState where
+  openDialects : Std.HashSet String
+  bindings : Array String
+
+def callPrec := 30
+def appPrec := 20
+
+namespace FormatState
+
+/-- A format context that uses no syntactic sugar. -/
+def empty : FormatState where
+  openDialects := {}
+  bindings := #[]
+
+instance : Inhabited FormatState where
+  default := empty
+
+def pushBinding (s : FormatState) (ident : String) : FormatState :=
+  { s with bindings := s.bindings.push ident }
+
+def bvarName (s : FormatState) (idx : Nat) : String :=
+  let b := s.bindings
+  if h : idx < b.size then
+    b[b.size - (idx + 1)]
+  else
+    s!"bvar!{idx}"
+
+end FormatState
+
+/--
+A StrataFormat is a closure which given contextual information
+produces a format operation as well as a precedence.  This
+is used for auto-inserting parenthesis when needed.
+
+Formats should return `maxPrec` when parenthesis are not
+required.
+-/
+def StrataFormat := FormatContext → FormatState → PrecFormat
+
+class ToStrataFormat (α : Type u) where
+  mformat : α → StrataFormat
+
+export ToStrataFormat (mformat)
+
+def cformat [ToStrataFormat α] (a : α) (c : FormatContext) (s : FormatState) : Format := mformat a c s |>.format
+
+def eformat [ToStrataFormat α] (a : α) : Format := mformat a .explicit .empty |>.format
+
+instance : ToStrataFormat String where
+  mformat s _ _ := .ofFormat s
+
+instance : ToStrataFormat Format where
+  mformat s _ _ := .atom s
+
+instance : ToStrataFormat StrataFormat where
+  mformat := id
+
+instance : ToStrataFormat Nat where
+  mformat n _ _ := .ofFormat n
+
+instance : ToStrataFormat Decimal where
+  mformat n _ _ := .ofFormat n
+
+namespace StrataFormat
+
+protected def nil : StrataFormat := fun _ _ => .atom .nil
+
+/-- Pretty print a free variable with the given index -/
+protected def fvar (fvarIdx : Nat) : StrataFormat := fun c _ => .atom (c.fvarName fvarIdx)
+
+/-- Pretty print a bound variable with the given deBruijn index -/
+protected def bvar (idx : Nat) : StrataFormat := fun _ s => .atom (s.bvarName idx)
+
+/--
+Join together elements in list with no separator between adjacent elements.
+-/
+def join [ToStrataFormat α] (a : List α) : StrataFormat :=
+  match a with
+  | [] => .nil
+  | [x] => mformat x
+  | _ => fun c s => .atom (Format.join (a.map (fun e => mformat e c s |>.format)))
+
+/--
+Join together elements in list with a separator between adjacent elements.
+-/
+def sepBy [ToStrataFormat α] (a : Array α) (sep : String) : StrataFormat :=
+  match p : a.size with
+  | 0 => .nil
+  | 1 =>
+    mformat a[0]
+  | n + 2 => fun c s =>
+    let sep := format sep
+    let append f e := f ++ sep ++ (mformat e c s).format
+    .atom (a.foldl (start := 1) append (mformat a[0] c s).format)
+
+instance : Append StrataFormat where
+  append x y ctx s :=
+    let xf := x ctx s |>.format
+    let yf := y ctx s |>.format
+    .atom (xf ++ yf)
+
+/-- Set the precendce of the `fmt` to `p` without changing format. -/
+def addParens (fmt : StrataFormat) (prec : Nat) : StrataFormat := fun c s =>
+  .mk f!"({fmt c s |>.format})" prec
+
+/-- Set precedence -/
+def setPrec (fmt : StrataFormat) (prec : Nat) : StrataFormat := fun c s =>
+  { format := fmt c s |>.format, prec := prec }
+
+/-- Add parenthesis as needed to `fmt` to ensure precedence at least `p` -/
+def ensurePrec (fmt : StrataFormat) (prec : Nat) : StrataFormat := fun c s =>
+  let r := fmt c s
+  if r.prec < prec then
+    .atom f!"({r.format})"
+  else
+    r
+
+def withState (f : FormatState → FormatState) (fmt : StrataFormat) : StrataFormat := fun c s =>
+  fmt c (f s)
+
+def nest (n : Nat) (fmt : StrataFormat) : StrataFormat := fun c s =>
+  let ⟨r, p⟩ := fmt c s
+  ⟨.nest n r, p⟩
+
+end StrataFormat
+
+syntax:max "mf!" interpolatedStr(term) : term
+
+macro_rules
+  | `(mf! $interpStr) => do interpStr.expandInterpolatedStr (← `(StrataFormat)) (← `(mformat))
+
+instance : ToStrataFormat QualifiedIdent where
+  mformat (ident : QualifiedIdent) _ s :=
+    if ident.dialect ∈ s.openDialects then
+      .ofFormat ident.name
+    else
+      .atom f!"{ident.dialect}.{ident.name}"
+
+namespace TypeExpr
+
+protected def mformat : TypeExpr → StrataFormat
+| .ident tp a => a.attach.foldl (init := mformat tp) (fun m ⟨e, _⟩ => mf!"{m} {e.mformat}")
+| .bvar idx => .bvar idx
+| .fvar idx a => a.attach.foldl (init := .fvar idx) (fun m ⟨e, _⟩ => mf!"{m} {e.mformat}")
+| .arrow a r => mf!"{a.mformat} -> {r.mformat}"
+
+instance : ToStrataFormat TypeExpr where
+  mformat e := e.mformat
+
+end TypeExpr
+
+namespace PreType
+
+protected def mformat : PreType → StrataFormat
+| .ident tp a => a.attach.foldl (init := mformat tp) (fun m ⟨e, _⟩ => mf!"{m} {e.mformat}")
+| .bvar idx => .bvar idx
+| .fvar idx a => a.attach.foldl (init := .fvar idx) (fun m ⟨e, _⟩ => mf!"{m} {e.mformat}")
+| .arrow a r => mf!"{a.mformat} -> {r.mformat}"
+| .funMacro idx r => mf!"fnOf({StrataFormat.bvar idx}, {r.mformat})"
+
+instance : ToStrataFormat PreType where
+  mformat := PreType.mformat
+
+end PreType
+
+namespace SyntaxCat
+
+protected def mformat : SyntaxCat → StrataFormat
+| .atom n => mf!"{n}"
+| .app h r => mf!"{h.mformat.ensurePrec appPrec} {r.mformat.ensurePrec (appPrec+1) }".addParens appPrec
+
+instance : ToStrataFormat SyntaxCat where
+  mformat := SyntaxCat.mformat
+
+end SyntaxCat
+
+/--
+This pretty prints the argument an op atom has.
+-/
+private def SyntaxDefAtom.formatArgs (opts : FormatOptions) (args : Array PrecFormat) (stx : SyntaxDefAtom) : Format :=
+  match stx with
+  | .ident i prec =>
+    let ⟨r, innerPrec⟩ := args[i]!
+    if prec > 0 ∧ (innerPrec ≤ prec ∨ opts.alwaysParen) then
+      f!"({r})"
+    else
+      r
+  | .str s => format s
+  | .indent n f =>
+    let r := Format.join (f.attach.map (fun ⟨a, _⟩ => a.formatArgs opts args) |>.toList)
+    .nest n r
+
+private def ppOp (opts : FormatOptions) (stx : SyntaxDef) (args : Array PrecFormat) : PrecFormat :=
+  ⟨Format.join ((·.formatArgs opts args) <$> stx.atoms).toList, stx.prec⟩
+
+abbrev FormatM := ReaderT FormatContext (StateM FormatState)
+
+def pformat [ToStrataFormat α] (a : α) : FormatM PrecFormat :=
+  fun c s => (mformat a c s, s)
+
+private def escapeStringLitAux (acc : String) (c : Char) : String :=
+  if c == '"' then
+    acc ++ "\\\""
+  else if c == '\\' then
+    acc ++ "\\\\"
+  else if c == '\n' then
+    acc ++ "\\n"
+  else
+    acc.push c
+
+def escapeStringLit (s : String) : String :=
+  s.foldl escapeStringLitAux "\"" ++ "\""
+
+mutual
+
+/- Renders expression to format and precedence of outmost operator. -/
+private partial def Expr.mformatM (e : Expr) (rargs : Array Arg := #[]) : FormatM PrecFormat :=
+  let ppArgs (f : Format) : FormatM PrecFormat :=
+        if rargs.isEmpty then
+          pure <| .atom f
+        else do
+          let args := (←rargs.reverse.mapM (·.mformatM)) |>.map (·.format)
+          let args := Format.joinSep args.toList f!", "
+          pure <| .mk f!"{f}({args})" callPrec
+  match e with
+  | .bvar idx => do
+    ppArgs (← pformat (StrataFormat.bvar idx)).format
+  | .fvar idx => do
+    ppArgs (← pformat (StrataFormat.fvar idx)).format
+  | .fn f => do
+      match (←read).getFnDecl f with
+      | some op =>
+        let args := rargs.reverse
+        let bindings := op.argDecls
+        let .isTrue bsize := decEq args.size bindings.size
+              | return panic! "Mismatch betweeen binding and arg size"
+        let argResults := formatArguments (← read) (← get) bindings ⟨args, bsize⟩
+        pure <| ppOp (← read).opts op.syntaxDef (Prod.fst <$> argResults)
+      | none => ppArgs f.fullName
+  | .app f a => f.mformatM (rargs.push a)
+
+private partial def Arg.mformatM : Arg → FormatM PrecFormat
+| .op o => o.mformatM
+| .expr e => e.mformatM
+| .type e => pformat e
+| .cat e => pformat e
+| .ident x => pformat x
+| .num x => pformat x
+| .decimal v => pformat v
+| .strlit s => return .atom (.text <| escapeStringLit s)
+| .option ma =>
+  match ma with
+  | none => pure (.atom .nil)
+  | some a => a.mformatM
+| .seq entries => do
+  .atom <$> entries.foldlM (init := .nil) fun p a =>
+    return (p ++ (← a.mformatM).format)
+| .commaSepList entries => do
+  if z : entries.size = 0 then
+    pure (.atom .nil)
+  else do
+    let p : entries.size - 1 ≤ entries.size := by omega
+    let f i q s := return s ++ ", " ++ (← entries[i].mformatM).format
+    let a := (← entries[0].mformatM).format
+    .atom <$> Nat.foldM.loop entries.size f (i := entries.size - 1) p a
+
+private partial def ppArgs (f : StrataFormat) (rargs : Array Arg) : FormatM PrecFormat :=
+  if rargs.isEmpty then
+    pformat f
+  else do
+    let f := (← pformat f).format
+    let pf := (← rargs.back!.mformatM).format
+    let init := f!"{f}({pf}"
+    let rargs := rargs.pop
+    let r ← rargs.foldrM (init := init) (fun a r => return f!"{r},{(←a.mformatM).format})")
+    pure <| .atom f!"{r})"
+
+private partial def formatArguments (c : FormatContext) (initState : FormatState) (bindings : DeclBindings) (args : Vector Arg bindings.size) :=
+  let rec aux (a : Array (PrecFormat × FormatState)) :=
+        let lvl := a.size
+        if h : lvl < bindings.size then
+          let s :=
+                match bindings.argScopeLevel ⟨lvl, h⟩ with
+                | none =>
+                  initState
+                | some ⟨alvl, aisLt⟩  =>
+                  have _ : alvl < a.size := by simp at aisLt; omega
+                  a[alvl].snd
+          aux (a.push (args[lvl].mformatM c s))
+        else
+          a
+  aux (.mkEmpty bindings.size)
+
+private partial def Operation.mformatM (op : Operation) : FormatM PrecFormat := do
+  match (← read).getOpDecl op.name with
+  | some decl =>
+    let bindings := decl.argDecls
+    let args := op.args
+    let .isTrue bsize := decEq args.size bindings.size
+          | return panic! "Mismatch betweeen binding and arg size"
+    let argsV : Vector Arg bindings.size := ⟨args, bsize⟩
+    let argResults := formatArguments (← read) (← get) bindings argsV
+    let fmt := ppOp (← read).opts decl.syntaxDef (Prod.fst <$> argResults)
+    match decl.metadata.resultLevel bindings.size with
+    | some idx => set argResults[idx]!.snd
+    | none => pure ()
+    for b in decl.newBindings do
+      modify (·.pushBinding <| b.varName argsV)
+    return fmt
+  | none =>
+    -- FIXME: Consider reporting error here.
+    let initCtx ← read
+    let initState ← get
+    let args := op.args |>.map (Arg.mformatM · initCtx initState |>.fst |>.format) |>.toList
+    return .atom f!"{op.name.fullName}({Format.joinSep args ", "});"
+
+end
+
+instance Expr.instToStrataFormat : ToStrataFormat Expr where
+  mformat e c s := e.mformatM #[] c s |>.fst
+
+instance Arg.instToStrataFormat : ToStrataFormat Arg where
+  mformat a c s := a.mformatM c s |>.fst
+
+instance Operation.instToStrataFormat : ToStrataFormat Operation where
+  mformat o c s := o.mformatM c s |>.fst
+
+namespace MetadataArg
+
+protected def mformat : MetadataArg → StrataFormat
+| .bool b => if b then mf!"true" else mf!"false"
+| .num n => mformat n
+| .catbvar idx => StrataFormat.bvar idx
+| .option ma =>
+  match ma with
+  | none => mf!"none"
+  | some a => a.mformat
+
+instance : ToStrataFormat MetadataArg where
+  mformat := MetadataArg.mformat
+
+end MetadataArg
+
+namespace MetadataAttr
+
+instance : ToStrataFormat MetadataAttr where
+  mformat a :=
+    if a.args.isEmpty then
+      mformat a.ident
+    else
+      mf!"{a.ident}({StrataFormat.sepBy a.args ","})"
+
+end MetadataAttr
+
+instance Metadata.instToStrataFormat : ToStrataFormat Metadata where
+  mformat m :=
+    if m.toArray.isEmpty then
+      .nil
+    else
+      mf!"@[{StrataFormat.sepBy m.toArray ", "}]"
+
+instance DeclBindingKind.instToStrataFormat : ToStrataFormat DeclBindingKind where
+  mformat
+  | .expr tp => mformat tp
+  | .cat c => mformat c
+
+instance DeclBinding.instToStrataFormat : ToStrataFormat DeclBinding where
+  mformat b :=
+    let r := mf!"{b.ident} : {b.kind}"
+    if b.metadata.isEmpty then
+      r
+    else
+      mf!"{b.metadata} {r}"
+
+namespace DeclBindings
+
+private def mformatAux (f : Format) (c : FormatContext) (s : FormatState) (a : Array DeclBinding) (idx : Nat) : Format × FormatState :=
+  if h : idx < a.size then
+    let b := a[idx]
+    mformatAux (f ++ ", " ++ cformat b c s) c (s.pushBinding b.ident) a (idx + 1)
+  else
+    (f ++ ")", s)
+
+protected def mformat (c : FormatContext) (s : FormatState) (l : DeclBindings) : Format × FormatState :=
+  if h : 0 < l.size then
+    let b := l[0]
+    mformatAux ("(" ++ cformat b c s) c (s.pushBinding b.ident) l 1
+  else
+    ("()", s)
+
+instance : ToStrataFormat DeclBindings where
+  mformat l c s := .atom (DeclBindings.mformat c s l |>.fst)
+
+/- Format `fmt` in a context with additional bindings `b`. -/
+protected def formatIn [ToStrataFormat α] (b : DeclBindings) (fmt : α) : StrataFormat := fun c s =>
+  mformat fmt c (b.foldl (init := s) (·.pushBinding ·.ident))
+
+end DeclBindings
+
+namespace SyntaxDefAtom
+
+protected def mformat : SyntaxDefAtom → StrataFormat
+| .ident var prec => mf!"{StrataFormat.bvar var}:{prec}" -- FIXME.  This may be wrong.
+| .str lit => mformat (escapeStringLit lit)
+| .indent n f =>
+  let r := f.attach.map fun ⟨a, _⟩ => a.mformat
+  let f := StrataFormat.sepBy r " "
+  mf!"indent({n}, {f})"
+
+instance : ToStrataFormat SyntaxDefAtom where
+  mformat := SyntaxDefAtom.mformat
+
+end SyntaxDefAtom
+
+namespace SyntaxDef
+
+instance : ToStrataFormat SyntaxDef where
+  mformat s := .sepBy s.atoms " "
+
+end SyntaxDef
+
+instance SynCatDecl.instToStrataFormat : ToStrataFormat SynCatDecl where
+  mformat d :=
+    let args : StrataFormat := .join <| d.argNames.map (mf!" {·}") |>.toList
+    mf!"category {d.name}{args};\n"
+
+instance TypeDecl.instToStrataFormat : ToStrataFormat TypeDecl where
+  mformat d :=
+    let params := d.argNames
+    let params := if params.isEmpty then
+                    mf!""
+                  else
+                    let p := d.argNames.map fun nm => mf!"{nm} : Type"
+                    mf! " " ++ StrataFormat.sepBy p ", "
+    mf!"type {d.name}{params};\n"
+
+instance FunctionDecl.instToStrataFormat : ToStrataFormat FunctionDecl where
+  mformat d :=
+    let result := d.argDecls.formatIn d.result
+    mf!"op {d.name} {d.argDecls} : {result} => {d.argDecls.formatIn d.syntaxDef};\n"
+
+instance OpDecl.instToStrataFormat : ToStrataFormat OpDecl where
+  mformat d :=
+    let bindings := d.argDecls
+    let mdf := if d.metadata.isEmpty then .nil else mf!"{bindings.formatIn d.metadata} "
+    mf!"{mdf}op {d.name} {bindings} : {d.category} => {bindings.formatIn d.syntaxDef};\n"
+
+namespace MetadataArgType
+
+protected def mformat : MetadataArgType → StrataFormat
+  | .num => mf!"Num"
+  | .ident => mf!"Ident"
+  | .bool => mf!"Bool"
+  | .opt tp => mf!"Option {tp.mformat |>.ensurePrec (appPrec + 1)}" |>.setPrec appPrec
+
+instance : ToStrataFormat MetadataArgType where
+  mformat := MetadataArgType.mformat
+
+end MetadataArgType
+
+instance MetadataDecl.instToStrataFormat : ToStrataFormat MetadataDecl where
+  mformat d :=
+    if d.args.isEmpty then
+      mf!"metadata {d.name};\n"
+    else
+      let ppArg a := mf! "{a.ident} : {a.type}"
+      mf!"metadata {d.name}({StrataFormat.sepBy (d.args |>.map ppArg) ", "});\n"
+
+instance Decl.instToStrataFormat : ToStrataFormat Decl where
+  mformat
+  | .syncat d => mformat d
+  | .op d => mformat d
+  | .type d => mformat d
+  | .function d => mformat d
+  | .metadata d => mformat d
+
+instance Dialect.instToStrataFormat : ToStrataFormat Dialect where
+  mformat d :=
+    .withState ({ · with openDialects := Std.HashSet.ofList [ "Init", d.name ] }) $
+      let init := mf!"dialect {d.name} \{\n"
+      let body := .join d.declarations.toList
+      init ++ (.nest 2 body) ++ mformat "}\n"
+
+namespace Environment
+
+protected def formatContext (env : Environment) (opts : FormatOptions) : FormatContext where
+  opts := opts
+  getFnDecl sym := Id.run do
+    let .function f := env.dialects.decl! sym
+      | return panic! s!"Unknown function {sym}"
+    some f
+  getOpDecl i := Id.run do
+    let .op op := env.dialects.decl! i
+      | panic! s!"Unknown op {i}"; return default
+    some op
+  globalContext := env.globalContext
+
+protected def formatState (env : Environment) : FormatState where
+  openDialects := .ofArray env.openDialects
+  bindings := #[]
+
+protected def format (env : Environment) (opts : FormatOptions := {}) : Format :=
+  let c := env.formatContext opts
+  let s := env.formatState
+  env.commands |>.map (mformat · c s |>.format) |>.toList |> Format.join
+
+protected def formatAll (env : Environment) (opts : FormatOptions := {}) : Format :=
+  let c := env.formatContext opts
+  let s := env.formatState
+  let dialectFmt := env.dialects.toList |>.map (mformat · c s |>.format) |> Format.join
+  dialectFmt ++ env.format
+
+protected def ppDialect! (env : Environment) (name : DialectName) (opts : FormatOptions := {}) : Format :=
+  match env.dialects[name]? with
+  | some d =>
+    let c := env.formatContext opts
+    mformat d c env.formatState |>.format
+  | none => panic! s!"Unknown dialect {name}"
+
+end Environment
+
+end Strata

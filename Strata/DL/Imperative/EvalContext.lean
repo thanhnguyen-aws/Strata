@@ -1,0 +1,102 @@
+/-
+  Copyright Strata Contributors
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-/
+
+
+
+import Strata.DL.Imperative.EvalError
+import Strata.DL.Imperative.MetaData
+import Strata.DL.Util.Maps
+
+namespace Imperative
+open Std (ToFormat Format format)
+
+---------------------------------------------------------------------
+
+abbrev PathCondition (P : PureExpr)  := Map String P.Expr
+abbrev PathConditions (P : PureExpr) := Maps String P.Expr
+
+def PathCondition.format' {P} [ToFormat P.Expr] (m : PathCondition P) : Format :=
+  match m with
+  | [] => ""
+  | [(k, v)] => f!"({k}, {v})"
+  | (k, v) :: rest =>
+    f!"({k}, {v})\n" ++ PathCondition.format' rest
+
+def PathConditions.format' {P} [ToFormat P.Expr] (ms : PathConditions P) : Format :=
+  match ms with
+  | [] => ""
+  | [m] => f!"[{PathCondition.format' m}]"
+  | m :: rest =>
+    f!"[{PathCondition.format' m}]\n" ++
+    PathConditions.format' rest
+
+instance [ToFormat P.Expr] : ToFormat (PathCondition P) where
+  format p := PathCondition.format' p
+
+instance [ToFormat P.Expr] : ToFormat (PathConditions P) where
+  format p := PathConditions.format' p
+
+/--
+A proof obligation can be discharged by some backend solver or a dedicated
+decision procedure or via denotation into Lean.
+-/
+structure ProofObligation (P : PureExpr) where
+  label : String
+  assumptions : PathConditions P
+  obligation : P.Expr
+  metadata : MetaData P
+
+instance [BEq P.Ident] [BEq P.Expr] [BEq (MetaData P)] : BEq (ProofObligation P) where
+  beq a b :=
+    a.label == b.label &&
+    a.assumptions == b.assumptions &&
+    a.obligation == b.obligation &&
+    a.metadata == b.metadata
+
+instance [ToFormat P.Ident] [ToFormat P.Expr] : ToFormat (ProofObligation P) where
+  format ob := f!"Label: {ob.label}\n\
+                  Assumptions: {PathConditions.format' ob.assumptions}\n\
+                  Obligation: {ob.obligation}\n\
+                  Metadata: {ob.metadata}\n"
+
+abbrev ProofObligations (P : PureExpr) := Array (ProofObligation P)
+
+---------------------------------------------------------------------
+
+class EvalContext (P : PureExpr) (State : Type) where
+  /- Evaluation utilities -/
+  eval              : State → P.Expr → P.Expr
+  updateError       : State → EvalError P → State
+  lookupError       : State → Option (EvalError P)
+  update            : State → P.Ident → P.Ty → P.Expr → State
+  lookup            : State → P.Ident → Option P.TypedExpr
+  preprocess        : State → P.Expr → (P.Expr × State)
+  genFreeVar        : State → P.Ident → P.Ty → (P.Expr × State)
+  denoteBool        : P.Expr → Option Bool
+
+  /- Path conditions and proof obligations collected during evaluation -/
+  getPathConditions : State → (PathConditions P)
+  addPathCondition  : State → (PathCondition P) → State
+  deferObligation   : State → (ProofObligation P) → State
+
+  -- /-- If two states give the same result to all `lookup` calls, they also
+  -- give the same result to all `eval` calls. -/
+  -- lookupEval : (s1 : State) → (s2 : State) → (∀ x, lookup s1 x = lookup s2 x) →
+  --              (∀ e, eval s1 e = eval s2 e)
+
+---------------------------------------------------------------------
+
+end Imperative

@@ -1,0 +1,187 @@
+/-
+  Copyright Strata Contributors
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-/
+
+import Strata.Languages.Boogie.Boogie
+
+namespace Boogie
+
+---------------------------------------------------------------------
+
+section Tests
+open Std (ToFormat Format format)
+open Lambda.LTy.Syntax Lambda.LExpr.Syntax Boogie.Syntax
+
+def bad_prog : Program := { decls := [
+      -- type Foo _ _;
+      .type (.con { name := "Foo", numargs := 2}),
+      -- type FooAlias a = Foo bool bool;
+      .type (.syn { name := "FooAlias", typeArgs := ["a"], type := mty[Foo bool bool]}),
+      -- const fooAliasVal : FooAlias bool;
+      .func { name := "fooAliasVal", inputs := [], output := mty[FooAlias bool]},
+      -- const fooVal : Foo int bool;
+      .func { name := "fooVal", inputs := [], output := mty[Foo int bool]},
+      .proc { header := {name := "P",
+                         typeArgs := [],
+                         inputs := [],
+                         outputs := [] },
+              spec := {
+                  modifies := [],
+                  preconditions := [],
+                  postconditions := [] },
+              body := [
+                Statement.assert "test" eb[(~fooAliasVal == ~fooVal)]
+              ]
+      }
+]}
+
+/-- info: error: Cannot unify differently named type constructors bool and int! -/
+#guard_msgs in
+#eval do let ans ← typeCheckAndPartialEval bad_prog
+         return (format ans)
+
+def good_prog : Program := { decls := [
+      -- type Foo _ _;
+      .type (.con { name := "Foo", numargs := 2}),
+      -- type FooAlias a = Foo int bool;
+      .type (.syn { name := "FooAlias", typeArgs := ["a"], type := mty[Foo int bool]}),
+      -- const fooAliasVal : ∀α. FooAlias α;
+      .func { name := "fooAliasVal", typeArgs := ["α"], inputs := [], output := mty[FooAlias α]},
+      -- const fooVal : Foo int bool;
+      .func { name := "fooVal", inputs := [], output := mty[Foo int bool]},
+      .proc { header := {name := "P",
+                         typeArgs := [],
+                         inputs := [],
+                         outputs := [] },
+              spec := {
+                  modifies := [],
+                  preconditions := [],
+                  postconditions := [] },
+              body := [
+                Statement.assert "test" eb[(~fooAliasVal == ~fooVal)]
+              ]
+      }
+]}
+
+/--
+info: [Strata.Boogie] Type checking succeeded.
+
+
+VCs:
+Label: test
+Assumptions:
+Proof Obligation:
+(~fooAliasVal == ~fooVal)
+
+---
+info: ok: (type Boogie.Boundedness.Infinite Foo [_, _]
+type FooAlias a := (Foo int bool)
+func fooAliasVal : ∀[α]. () → (FooAlias α);
+func fooVal :  () → (Foo int bool);
+(procedure P :  () → ())
+modifies: []
+preconditions: ⏎
+postconditions: ⏎
+body: assert [test] (~fooAliasVal == ~fooVal)
+, Error:
+none
+Subst Map:
+
+Expression Env:
+State:
+
+
+Evaluation Config:
+Eval Depth: 200
+Variable Prefix: $__
+Variable gen count: 0
+Factory Functions:
+func Int.Add :  ((x : int) (y : int)) → int;
+func Int.Sub :  ((x : int) (y : int)) → int;
+func Int.Mul :  ((x : int) (y : int)) → int;
+func Int.Div :  ((x : int) (y : int)) → int;
+func Int.Mod :  ((x : int) (y : int)) → int;
+func Int.Neg :  ((x : int)) → int;
+func Int.Lt :  ((x : int) (y : int)) → bool;
+func Int.Le :  ((x : int) (y : int)) → bool;
+func Int.Gt :  ((x : int) (y : int)) → bool;
+func Int.Ge :  ((x : int) (y : int)) → bool;
+func Bool.And :  ((x : bool) (y : bool)) → bool;
+func Bool.Or :  ((x : bool) (y : bool)) → bool;
+func Bool.Implies :  ((x : bool) (y : bool)) → bool;
+func Bool.Equiv :  ((x : bool) (y : bool)) → bool;
+func Bool.Not :  ((x : bool)) → bool;
+func Str.Length :  ((x : string)) → int;
+func Str.Concat :  ((x : string) (y : string)) → string;
+func old : ∀[a]. ((x : a)) → a;
+func select : ∀[k, v]. ((m : (Map k v)) (i : k)) → v;
+func update : ∀[k, v]. ((m : (Map k v)) (i : k) (x : v)) → (Map k v);
+func fooAliasVal : ∀[α]. () → (FooAlias α);
+func fooVal :  () → (Foo int bool);
+
+
+Path Conditions:
+
+
+Deferred Proof Obligations:
+Label: test
+Assumptions:
+Proof Obligation:
+((~fooAliasVal : (Foo int bool)) == (~fooVal : (Foo int bool)))
+
+)
+-/
+#guard_msgs in
+#eval do let ans ← typeCheckAndPartialEval good_prog
+         return (format ans)
+
+---------------------------------------------------------------------
+
+def outOfScopeVarProg : Program := { decls := [
+      .proc { header := {name := "P",
+                         typeArgs := [],
+                         inputs := [("x", mty[bool])],
+                         outputs := [("y", mty[bool])] },
+              spec := {
+                  modifies := [],
+                  preconditions := [],
+                  postconditions := [] },
+              body := [
+                Statement.set "y" eb[((~Bool.Or x) x)],
+                .ite eb[(x == #true)]
+                  { ss := [Statement.init "q" t[int] eb[#0],
+                           Statement.set "q" eb[#1],
+                           Statement.set "y" eb[#true]] }
+                  { ss := [Statement.init "q" t[int] eb[#0],
+                           Statement.set "q" eb[#2],
+                           Statement.set "y" eb[#true]] },
+                Statement.assert "y_check" eb[y == #true],
+                Statement.assert "q_check" eb[q == #1]
+              ]
+      }
+]}
+
+/--
+info: error: [assert [q_check] (q == #1)] No free variables are allowed here!
+Free Variables: [q]
+-/
+#guard_msgs in
+#eval do let ans ← typeCheckAndPartialEval outOfScopeVarProg
+         return (format ans)
+
+---------------------------------------------------------------------
+
+end Tests
+end Boogie

@@ -1,0 +1,84 @@
+/-
+  Copyright Strata Contributors
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-/
+
+import StrataTest.DL.Imperative.ArithExpr
+import StrataTest.DL.Imperative.ArithEval
+import StrataTest.DL.Imperative.ArithType
+
+---------------------------------------------------------------------
+namespace Arith
+open Std (ToFormat Format format)
+
+def typeCheckAndPartialEval (cmds : Commands) : Except Format (Commands × Eval.State) := do
+  let (cmds, _T) ← Imperative.Cmds.typeCheck TEnv.init cmds
+  let (cmds, S) := Imperative.Cmds.eval Eval.State.init cmds
+  return (cmds, S)
+
+private def testProgram1 : Commands :=
+  [.init "x" .Num (.Var "y" (.some .Num)),
+   .havoc "x",
+   .assert "x_value_eq" (.Eq (.Var "x" .none) (.Var "y" none))]
+
+/--
+info: ok: Commands:
+init (x : Num) := (y : Num)
+#[<var x: ($__x0 : Num)>] havoc x
+assert [x_value_eq] ($__x0 : Num) = (y : Num)
+
+State:
+error: none
+deferred: #[Label: x_value_eq
+ Assumptions: ⏎
+ Obligation: ($__x0 : Num) = (y : Num)
+ Metadata: ⏎
+ ]
+pathConditions: ⏎
+env: (y, (Num, (y : Num))) (x, (Num, ($__x0 : Num)))
+genNum: 1
+-/
+#guard_msgs in
+#eval do let (cmds, S) ← typeCheckAndPartialEval testProgram1
+         return format (cmds, S)
+
+
+private def testProgram2 : Commands :=
+  [.init "x" .Num (.Num 0),
+   .set "x" (.Plus (.Var "x" .none) (.Num 100)),
+   .assert "x_value_eq" (.Eq (.Var "x" .none) (.Num 100))]
+
+/--
+info:
+Obligation x_value_eq proved via evaluation!
+
+---
+info: ok: Commands:
+init (x : Num) := 0
+x := 100
+assert [x_value_eq] 1
+
+State:
+error: none
+deferred: #[]
+pathConditions: ⏎
+env: (x, (Num, 100))
+genNum: 0
+-/
+#guard_msgs in
+#eval do let (cmds, S) ← typeCheckAndPartialEval testProgram2
+         return format (cmds, S)
+
+end Arith
+---------------------------------------------------------------------

@@ -1,0 +1,6 @@
+/.lake
+
+# SMT files generated when running tests
+vcs/*.smt2
+
+Strata.code-workspace
