@@ -8,7 +8,9 @@ developers to customize additional features to their needs.
 
 This README will help you get started with using and extending
 Strata. Also see the [Architecture](<TODO: insert pointer>) document
-that introduces some terminology and describes Strata's components.
+that introduces some terminology and describes Strata's components,
+and a [Getting Started](GettingStarted.md) guide that describes how to
+create a new dialect and analysis using existing features.
 
 **N.B.: Strata is under active development, and there may be breaking
 changes!**
@@ -24,19 +26,18 @@ changes!**
    verification.
    - Install an SMT solver. You can use any solver you want, but the unit
      tests assume `cvc5` is on your `PATH` [cvc5](https://cvc5.github.io/).
-	 ```
 
 ## Build
 
-Build the code in Lean's standard way:
+Build and test the code in Lean's standard way:
 
 ```bash
-lake build
+lake build && lake test
 ```
 
 Unit tests are run with `#guard_msgs` commands. No output means the tests passed.
 
-## [Running Analyses on Existing Strata Programs](#analysis-on-existing-programs)
+## Running Analyses on Existing Strata Programs
 
 Strata programs use the `.st` file extension, preceded the dialect name,
 preceded by a second `.` e.g., `SimpleProc.boogie.st` or

@@ -1,29 +1,24 @@
 ## Creating a New Strata Dialect + Analysis using Existing Dialects
 
-<TODO: Use API-level documentation to annotate this example so that it
-remains in sync. with the code; we plan to use Lean's doc-gen4, but a
-preliminary look indicates that we may need to move to a Github
-repo. before we can do that.>
-
 Strata provides composable building blocks that aim to reduce the
 overhead of developing new intermediate representations and
-analyses. In this [example](Strata/StrataTest/DL/Imperative), we show
+analyses. In this [example](StrataTest/DL/Imperative), we show
 some of Strata's current capabilities by defining a simple Strata
 dialect called `ArithPrograms` and an associated deductive verifier
-based on the existing [Imperative](Strata/Strata/DL/Imperative)
-dialect in Strata's Dialect Library ([DL](Strata/Strata/DL)). 
+based on the existing [Imperative](Strata/DL/Imperative)
+dialect in Strata's Dialect Library ([DL](Strata/DL)). 
 `Imperative` provides basic commands and statements, is 
 parameterizable by expressions, and has a parameterizable partial 
 evaluator that generates verification conditions.
 
 ### 1. Design the concrete syntax
 
-Strata's [Dialect Definition Mechanism (DDM)](Strata/Strata/DDM)
+Strata's [Dialect Definition Mechanism (DDM)](Strata/DDM)
 offers the ability to define a dialect's concrete syntax in a
 declarative fashion, after which we get parsing, preliminary type
 checking, and (de)serialization capabilities. The DDM definition for
 `ArithPrograms` is
-[here](Strata/StrataTest/DL/Imperative/DDMDefinition.lean).
+[here](StrataTest/DL/Imperative/DDMDefinition.lean).
 
 E.g., an expression definition in `ArithPrograms` looks like the following:
 ```bash
@@ -78,7 +73,7 @@ perhaps you would like to see named variables instead of de Bruijn
 indices (see `.fvar` above).
 
 The abstract syntax for expressions in `ArithPrograms` is defined
-[here](Strata/StrataTest/Imperative/ArithExpr.lean). For our simple
+[here](StrataTest/DL/Imperative/ArithExpr.lean). For our simple
 dialect, this is in fact quite similar to the DDM-generated one,
 except that we have `Var : String → Option Ty` that have both the
 variable names and optionally their types instead of DDM's `.fvar`s.
@@ -99,15 +94,15 @@ abbrev Arith.Commands := Imperative.Cmds Arith.PureExpr
 ```
 
 Translation from the DDM-generated types to this abstract syntax is
-done [here](Strata/StrataTest/DL/Imperative/DDMTranslate.lean).
+done [here](StrataTest/DL/Imperative/DDMTranslate.lean).
 
 ### 3. Instantiate `Imperative`'s type checker and partial evaluator
 
 `Imperative` comes with an implementation of a [type
-checker](Strata/Strata/DL/Imperative/CmdType.lean) and a [partial
-evaluator](Strata/Strata/DL/Imperative/CmdEval.lean), parameterized by
-the [`TypeContext`](Strata/Strata/DL/Imperative/TypeContext.lean) and
-[`EvalContext`](Strata/Strata/DL/Imperative/EvalContext.lean)
+checker](Strata/DL/Imperative/CmdType.lean) and a [partial
+evaluator](Strata/DL/Imperative/CmdEval.lean), parameterized by
+the [`TypeContext`](Strata/DL/Imperative/TypeContext.lean) and
+[`EvalContext`](Strata/DL/Imperative/EvalContext.lean)
 typeclasses respectively. Instantiations of these typeclasses with
 appropriate functions will give us implementations for
 `ArithPrograms`.
@@ -187,7 +182,7 @@ generated (that will not pass verification once we plug in a reasoning
 backend). All such VCs are deferred -- they are stored in the
 evaluation environment so that they can be discharged later; see
 `deferObligation` in the
-[`EvalContext`](Strata/Strata/DL/Imperative/EvalContext.lean) class.
+[`EvalContext`](Strata/DL/Imperative/EvalContext.lean) class.
 
 ```bash
 private def testProgram2 : Commands :=
@@ -221,15 +216,14 @@ genNum: 1
 
 The generated VCs are in terms of `ArithPrograms`' expressions. Given
 their simplicity, it is fairly straightforward to encode them to
-SMTLIB using Strata's [SMT dialect](Strata/Strata/SMT) <TODO: Refactor
-SMT dir. so that it "feels" more like a dialect>. Strata's SMT dialect
-provides support for some core theories, like uninterpreted functions
-with equality, integers, quantifiers, etc., and some basic utilities,
-like a counterexample parser and file I/O function to write SMTLIB
-files.
+SMTLIB using Strata's [SMT dialect](Strata/SMT). Strata's SMT
+dialect provides support for some core theories, like uninterpreted
+functions with equality, integers, quantifiers, etc., and some basic
+utilities, like a counterexample parser and file I/O function to write
+SMTLIB files.
 
 The SMT encoding for `ArithPrograms` is done
-[here](Strata/StrataTest/DL/Imperative/SMTEncoder.lean). E.g., here is
+[here](StrataTest/DL/Imperative/SMTEncoder.lean). E.g., here is
 the core encoding function:
 ```bash
 def toSMTTerm (E : Env) (e : Arith.Expr) : Except Format Term := do
@@ -261,10 +255,10 @@ We now have all the pieces in place to build an end-to-end verifier
 for `ArithPrograms`. We hook up the DDM translator with the type
 checker + partial evaluator, followed by the SMT encoder. We then
 write some basic functions to invoke an SMT solver on every deferred
-VC [here](Strata/StrataTest/DL/Imperative/Verify.lean).
+VC [here](StrataTest/DL/Imperative/Verify.lean).
 
 Some example programs can be found
-[here](Strata/StrataTest/DL/Imperative/Examples.lean).
+[here](StrataTest/DL/Imperative/Examples.lean).
 
 ```bash
 def testProgram : Environment :=
@@ -285,10 +279,8 @@ Result: verified
 #eval Strata.ArithPrograms.verify "cvc5" testProgram
 ```
 
-To invoke the verifier from the command-line (similar to what we saw
-in [a previous section](#analysis-on-existing-programs) for Boogie and
-C-Simp programs), you can also add support for `ArithPrograms` in
-[`StrataVerify`](Strata/StrataVerify.lean).
+To invoke the verifier from the command-line, you can also add support
+for `ArithPrograms` in [`StrataVerify`](StrataVerify.lean).
 
 ## Next Steps
 
@@ -305,7 +297,7 @@ some next steps to explore:
   to leverage any analysis available for the latter. You may also want
   to verify any such dialect transformations, i.e., prove that they
   are semantics-preserving. One such example in Strata is for call 
-  eliminiation in Boogie, [here](Strata/Strata/Transform/).
+  eliminiation in Boogie, [here](Strata/Transform/).
 
 - **Create a Language Frontend**: Develop a parser to translate the
   concrete syntax of your language of interest to Strata.
