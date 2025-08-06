@@ -632,6 +632,20 @@ end
 
 ---------------------------------------------------------------------
 
+def translateInvariant (bindings : TransBindings) (arg : Arg) : TransM (Option Expression.Expr) := do
+  match arg with
+  | .option (.some m) => do
+    let args ← checkOpArg m q`Boogie.invariant 1
+    translateExpr bindings args[0]!
+  | _ => pure none
+
+def translateMeasure (bindings : TransBindings) (arg : Arg) : TransM (Option Expression.Expr) := do
+  match arg with
+  | .option (.some m) => do
+    let args ← checkOpArg m q`Boogie.measure 1
+    translateExpr bindings args[0]!
+  | _ => pure none
+
 def initVarStmts (tpids : Map Expression.Ident LTy) (bindings : TransBindings) :
   TransM ((List Boogie.Statement) × TransBindings) := do
   match tpids with
@@ -696,6 +710,12 @@ partial def translateStmt (bindings : TransBindings) (arg : Arg) :
     let (tss, bindings) ← translateBlock bindings ta
     let (fss, bindings) ← translateElse bindings fa
     return ([.ite c { ss := tss } { ss := fss } ], bindings)
+  | q`Boogie.while_statement, #[ca, ma, ia, ba] =>
+    let c ← translateExpr bindings ca
+    let m ← translateMeasure bindings ma
+    let i ← translateInvariant bindings ia
+    let (bodyss, bindings) ← translateBlock bindings ba
+    return ([.loop c m i { ss := bodyss } ], bindings)
   | q`Boogie.call_statement, #[lsa, fa, esa] =>
    let ls  ← translateCommaSep (translateIdent BoogieIdent) lsa
    let f   ← translateIdent String fa

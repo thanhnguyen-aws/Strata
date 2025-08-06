@@ -29,7 +29,6 @@ def KnownTypes : List LTy :=
    t[bv64],
    t[∀a b. %a → %b],
    t[∀a b. Map %a %b]]
-
 /--
   Convert an LExpr String to an LExpr BoogieIdent, by considering all identifier as global, which is valid for axioms
   TODO: Remove when Lambda elaborator offers parametric identifier type
@@ -122,7 +121,6 @@ def realGtFunc : LFunc BoogieIdent := binaryPredicate "Real.Gt" mty[real] none
 def realGeFunc : LFunc BoogieIdent := binaryPredicate "Real.Ge" mty[real] none
 
 /- String Operations -/
-
 def strLengthFunc : LFunc BoogieIdent :=
     { name := "Str.Length",
       typeArgs := [],
