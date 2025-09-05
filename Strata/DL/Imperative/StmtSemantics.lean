@@ -81,7 +81,7 @@ end
 theorem eval_stmts_singleton
   [HasVarsImp P (List (Stmt P (Cmd P)))] [HasVarsImp P (Cmd P)] [HasFvar P] [HasVal P] [HasBool P] [HasBoolNeg P] :
   EvalStmts P (Cmd P) (EvalCmd P) δ δP σ₀ σ [cmd] σ' ↔
-  EvalStmt P (Cmd P) (EvalCmd P) δ δP σ₀ σ cmd σ' :=by
+  EvalStmt P (Cmd P) (EvalCmd P) δ δP σ₀ σ cmd σ' := by
   constructor <;> intro Heval
   cases Heval with | @stmts_some_sem _ _ _ _ _ σ1 _ _ Heval Hempty =>
     cases Hempty; assumption
