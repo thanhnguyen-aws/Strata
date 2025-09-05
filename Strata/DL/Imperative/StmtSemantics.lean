@@ -91,7 +91,7 @@ theorem eval_stmts_concat
   [HasVarsImp P (List (Stmt P (Cmd P)))] [HasFvar P] [HasVal P] [HasBool P] [HasBoolNeg P] :
   EvalStmts P (Cmd P) (EvalCmd P) δ δP σ₀ σ cmds1 σ' →
   EvalStmts P (Cmd P) (EvalCmd P) δ δP σ₀ σ' cmds2 σ'' →
-  EvalStmts P (Cmd P) (EvalCmd P) δ δP σ₀ σ (cmds1 ++ cmds2) σ'' :=by
+  EvalStmts P (Cmd P) (EvalCmd P) δ δP σ₀ σ (cmds1 ++ cmds2) σ'' := by
   intro Heval1 Heval2
   induction cmds1 generalizing cmds2 σ
   simp only [List.nil_append]
