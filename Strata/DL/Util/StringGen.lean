@@ -312,6 +312,9 @@ theorem Nat_eq_of_StringGen_suffix {x y: Nat}: ("_" ++ toString x).IsSuffix (s +
   rw [← Hsuf] at Hsuf'
   simp [String.ext_iff, Hsuf']
 
+/--
+The uniqueness of the generated string follows from the following: given that the numbers at the end of all strings are unique, then the strings themselves must be unique. 
+-/
 theorem StringGenState.WFMono :
   WF σ →
   gen pf σ = (n, σ') →
