@@ -148,7 +148,7 @@ theorem neq_elem_of_neq_index_of_nodup (H: List.Nodup a) (Hl1: x < a.length) (Hl
   rename_i x y
   simp_all
 
-theorem Nat_eq_of_digitChar_eq {n m: Nat}: n < 16 → m < 16 → n.digitChar = m.digitChar → n = m := by
+theorem Nat_eq_of_digitChar_eq : n < 16 → m < 16 → n.digitChar = m.digitChar → n = m := by
   intro H1 H2
   simp [Nat_digitChar_index]
   have: min n 16 = n := by omega
@@ -179,7 +179,7 @@ theorem Nat_toDigitsCore_list_len_le: (Nat.toDigitsCore 10 x n l).length ≥ l.l
   obtain ⟨t, H⟩ := H
   simp [← H]
 
-theorem Nat_toDigitsCore_list_len_lt {n:Nat}: x > 0 → n > 0 →  (Nat.toDigitsCore 10 x n l).length > l.length := by
+theorem Nat_toDigitsCore_list_len_lt : x > 0 → n > 0 → (Nat.toDigitsCore 10 x n l).length > l.length := by
   intros
   cases x; contradiction
   rename_i x _
