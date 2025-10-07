@@ -1757,7 +1757,6 @@ theorem SubstPostsMem :
     substPost = OldExpressions.substsOldExpr (createOldVarsSubst oldTrips) (OldExpressions.normalizeOldExpr post)
   := by
   intros Hin
-
   generalize Heq : OldExpressions.substsOldExprs
                     (createOldVarsSubst oldTrips)
                     (OldExpressions.normalizeOldExprs vs) = l at *
