@@ -266,7 +266,7 @@ theorem substsOldExpr_singleton: substsOldExpr [(var,s)] e = substOld var s e :=
 theorem substOldExpr_nil: OldExpressions.substsOldExpr [] e = e := by
   unfold OldExpressions.substsOldExpr
   simp [Map.isEmpty]
-  
+
 /--
 For each `(var, expr)` pair in `sm`, substitute `old(var)` with `expr` in
 `conds`.
