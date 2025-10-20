@@ -239,7 +239,7 @@ theorem Program.typeCheck.go_elim_acc:
   any_goals (split <;> try contradiction)
   any_goals (split <;> try contradiction)
   any_goals simp
-  any_goals (rw [List.cons_append_assoc]; intro; apply ind (by assumption))
+  any_goals (rw [← List.cons_append]; intro; apply ind (by assumption))
   any_goals (rename_i H _ _ _ _; have H:= Program.find?.go_none_of_append H; simp_all)
   rename_i H _ _ _ _ _ _ _; have H:= Program.find?.go_none_of_append H; simp_all
 
