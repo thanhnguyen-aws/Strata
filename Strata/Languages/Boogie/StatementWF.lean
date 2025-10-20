@@ -17,13 +17,105 @@ namespace WF
 
 open Std Lambda
 
+theorem typeCheckCmdWF: Statement.typeCheckCmd T p c = Except.ok v
+  → WFCmdExtProp p c := by
+  intro H
+  simp [Statement.typeCheckCmd, bind, Except.bind] at H
+  split at H <;> try contradiction
+  split at H <;> try contradiction
+  rename_i H' ; simp [Imperative.Cmd.typeCheck] at H'
+  split at H' <;> try contradiction
+  split at H' <;> try contradiction
+  split at H' <;> try contradiction
+  simp [bind, Except.bind] at H'; split at H' <;> try contradiction
+  split at H' <;> try contradiction
+  split at H' <;> try contradiction
+  split at H' <;> try contradiction
+  constructor
+  split at H' <;> try contradiction
+  simp [bind, Except.bind] at H'; split at H' <;> try contradiction
+  split at H' <;> try contradiction
+  constructor
+  split at H' <;> try contradiction
+  constructor
+  simp [bind, Except.bind] at H'; split at H' <;> try contradiction
+  split at H' <;> try contradiction
+  constructor
+  simp [bind, Except.bind] at H'; split at H' <;> try contradiction
+  split at H' <;> try contradiction
+  constructor
+  split at H <;> try contradiction
+  split at H <;> try contradiction
+  split at H <;> try contradiction
+  split at H <;> try contradiction
+  split at H <;> try contradiction
+  split at H <;> try contradiction
+  split at H <;> try contradiction
+  split at H <;> try contradiction
+  split at H <;> try contradiction
+  split at H <;> try contradiction
+  split at H <;> try contradiction
+  sorry
+  /-
+  split at H <;> try contradiction
+  split at H <;> try contradiction
+  split at H <;> try contradiction
+  constructor <;> try simp_all
+  have : WFargProp p
+    = (fun arg => Forall (fun x: BoogieIdent => x.isGlobOrLocl = true) (@Imperative.HasVarsPure.getVars Expression (LExpr LMonoTy BoogieIdent) instHasVarsPureExpressionExpr arg)) :=by
+    ext;
+    constructor <;> intro H
+    exact H.glarg;
+    constructor; assumption
+  rw[this]; assumption
+  -/
+
+theorem List.append_cons_assoc {l t : List α} : l ++ h::t  = l ++ [h] ++ t := by simp
+theorem List.cons_append_assoc {l t : List α} : h::(t ++ l)  = (h::t) ++ l := by simp
+
+theorem Statement.typeCheckAux_elim_acc: Statement.typeCheckAux.go p proc T ss (acc1 ++ acc2) = Except.ok (pp, T') ↔
+  (List.IsPrefix acc2.reverse pp ∧ Statement.typeCheckAux.go p proc T ss acc1 = Except.ok (pp.drop acc2.length, T'))
+  := by
+  induction ss generalizing pp acc1 acc2 T
+  simp [Statement.typeCheckAux.go]
+  constructor <;> intro H
+  simp [← H]
+  simp [H]
+  rw [← List.length_reverse, ← List.prefix_iff_eq_append]; simp [H]
+  rename_i h t ind
+  unfold Statement.typeCheckAux.go
+  simp [bind, Except.bind]
+  split <;> try contradiction
+  any_goals (split <;> try contradiction)
+  any_goals (split <;> try contradiction)
+  any_goals (split <;> try contradiction)
+  any_goals (split <;> try contradiction)
+  any_goals (split <;> try contradiction)
+  any_goals (split <;> try contradiction)
+  any_goals (split <;> try contradiction)
+  any_goals (split <;> try contradiction)
+  any_goals (split <;> try contradiction)
+  any_goals (split <;> try contradiction)
+  any_goals (split <;> try contradiction)
+  any_goals (split <;> try contradiction)
+  any_goals (split <;> try contradiction)
+  any_goals simp
+  any_goals rw [List.cons_append_assoc, ind]
+
+theorem Statement.typeCheckAux_elim_singleton: Statement.typeCheckAux.go p proc T ss [s] = Except.ok (pp, T') →
+  Statement.typeCheckAux.go p proc T ss [] = Except.ok (pp.drop 1, T') := by
+  intro H
+  have : [s] = [] ++ [s] := by simp
+  rw [this, Statement.typeCheckAux_elim_acc] at H; simp at H
+  simp [H]
+
 theorem Statement.typeCheckAux_go_WF :
-  Statement.typeCheckAux.go p proc T ss acc = Except.ok (pp', T') →
+  Statement.typeCheckAux.go p proc T ss [] = Except.ok (pp', T') →
   WF.WFStatementsProp p acc →
   WF.WFStatementsProp p (acc ++ ss) := by
   intros tcok h_acc_ok
   induction ss generalizing acc T pp' T' with
-  | nil => simp_all
+  | nil => simp_all [WFStatementsProp]
   | cons h t ih =>
     unfold Statement.typeCheckAux.go at tcok
     simp [bind] at tcok
@@ -32,28 +124,87 @@ theorem Statement.typeCheckAux_go_WF :
       cases c with
       | call lhs procName args md =>
         -- Show that the called procedure is declared.
-        sorry
+        simp [Except.bind] at tcok
+        split at tcok <;> try contradiction
+        rw[List.append_cons_assoc];
+        have tcok := Statement.typeCheckAux_elim_singleton tcok
+        apply ih tcok <;> try assumption
+        simp [WFStatementsProp] at *
+        simp [List.Forall_append, Forall, *]
+        apply typeCheckCmdWF (by assumption)
       | cmd cmd =>
         simp [Except.bind] at tcok
-        split at tcok <;> try simp_all
-        sorry
-    | block label bss md => sorry
-    | ite c t e md => sorry
-    | goto l => sorry
-    | loop g m i b md => sorry
+        split at tcok <;> try contradiction
+        rw[List.append_cons_assoc];
+        have tcok := Statement.typeCheckAux_elim_singleton tcok
+        apply ih tcok <;> try assumption
+        simp [WFStatementsProp] at *
+        simp [List.Forall_append, Forall, *]
+        apply typeCheckCmdWF (by assumption)
+    | block label bss md =>
+      simp [Except.bind] at tcok
+      split at tcok <;> try contradiction
+      have tcok := Statement.typeCheckAux_elim_singleton tcok
+      rw[List.append_cons_assoc];
+      apply ih tcok <;> try assumption
+      simp [WFStatementsProp] at *
+      simp [List.Forall_append, Forall, *]
+      constructor
+    | ite c t e md =>
+      simp [Except.bind] at tcok
+      split at tcok <;> try contradiction
+      split at tcok <;> try contradiction
+      split at tcok <;> try contradiction
+      split at tcok <;> try contradiction
+      split at tcok <;> try contradiction
+      have tcok := Statement.typeCheckAux_elim_singleton tcok
+      rw[List.append_cons_assoc];
+      apply ih tcok <;> try assumption
+      simp [WFStatementsProp] at *
+      simp [List.Forall_append, Forall, *]
+      constructor
+    | goto l =>
+      simp [Except.bind] at tcok
+      split at tcok <;> try contradiction
+      split at tcok <;> try contradiction
+      have tcok := Statement.typeCheckAux_elim_singleton tcok
+      rw[List.append_cons_assoc];
+      apply ih tcok <;> try assumption
+      simp [WFStatementsProp] at *
+      simp [List.Forall_append, Forall, *]
+      constructor
+    | loop g m i b md =>
+      simp [Except.bind] at tcok
+      any_goals (try split at tcok <;> try contradiction)
+      any_goals (try split at tcok <;> try contradiction)
+      any_goals (try split at tcok <;> try contradiction)
+      any_goals (try split at tcok <;> try contradiction)
+      any_goals (try split at tcok <;> try contradiction)
+      any_goals (try split at tcok <;> try contradiction)
+      any_goals (try split at tcok <;> try contradiction)
+      any_goals (try split at tcok <;> try contradiction)
+      any_goals (try split at tcok <;> try contradiction)
+      any_goals (try split at tcok <;> try contradiction)
+      any_goals (try split at tcok <;> try contradiction)
+      any_goals (try split at tcok <;> try contradiction)
+      any_goals (have tcok := Statement.typeCheckAux_elim_singleton tcok; rw[List.append_cons_assoc])
+      any_goals (apply ih tcok <;> try assumption)
+      any_goals (try simp [WFStatementsProp] at *; try simp [List.Forall_append, *]; try constructor)
+      any_goals (simp [Forall])
+      any_goals constructor
 
 /--
 A list of Statement `ss` that passes type checking is well formed with respect
 to the whole program `p`.
 -/
-theorem Statement.typeCheckAuxWF :
+theorem Statement.typeCheckWF :
   Statement.typeCheck T p proc ss = Except.ok (pp', T') →
   WF.WFStatementsProp p ss := by
   intros tcok
   simp [Statement.typeCheck, Statement.typeCheckAux, bind, Except.bind] at tcok
   split at tcok <;> simp_all
   rename_i x v heq
-  have h_tc_go := @Statement.typeCheckAux_go_WF p proc T ss [] v.fst v.snd
+  have h_tc_go := @Statement.typeCheckAux_go_WF p proc T ss v.fst v.snd []
   simp_all [WFStatementsProp, Forall]
   done
 
