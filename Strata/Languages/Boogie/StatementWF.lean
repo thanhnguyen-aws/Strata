@@ -24,13 +24,9 @@ theorem typeCheckCmdWF: Statement.typeCheckCmd T p c = Except.ok v
   split at H <;> try contradiction
   split at H <;> try contradiction
   rename_i H' ; simp [Imperative.Cmd.typeCheck] at H'
-  split at H' <;> try contradiction
-  split at H' <;> try contradiction
-  split at H' <;> try contradiction
+  repeat (split at H' <;> try contradiction)
   simp [bind, Except.bind] at H'; split at H' <;> try contradiction
-  split at H' <;> try contradiction
-  split at H' <;> try contradiction
-  split at H' <;> try contradiction
+  repeat (split at H' <;> (try contradiction; try constructor))
   constructor
   split at H' <;> try contradiction
   simp [bind, Except.bind] at H'; split at H' <;> try contradiction
@@ -44,31 +40,8 @@ theorem typeCheckCmdWF: Statement.typeCheckCmd T p c = Except.ok v
   simp [bind, Except.bind] at H'; split at H' <;> try contradiction
   split at H' <;> try contradiction
   constructor
-  split at H <;> try contradiction
-  split at H <;> try contradiction
-  split at H <;> try contradiction
-  split at H <;> try contradiction
-  split at H <;> try contradiction
-  split at H <;> try contradiction
-  split at H <;> try contradiction
-  split at H <;> try contradiction
-  split at H <;> try contradiction
-  split at H <;> try contradiction
-  split at H <;> try contradiction
+  repeat (split at H <;> try contradiction)
   sorry
-  /-
-  split at H <;> try contradiction
-  split at H <;> try contradiction
-  split at H <;> try contradiction
-  constructor <;> try simp_all
-  have : WFargProp p
-    = (fun arg => Forall (fun x: BoogieIdent => x.isGlobOrLocl = true) (@Imperative.HasVarsPure.getVars Expression (LExpr LMonoTy BoogieIdent) instHasVarsPureExpressionExpr arg)) :=by
-    ext;
-    constructor <;> intro H
-    exact H.glarg;
-    constructor; assumption
-  rw[this]; assumption
-  -/
 
 theorem List.append_cons_assoc {l t : List α} : l ++ h::t  = l ++ [h] ++ t := by simp
 theorem List.cons_append_assoc {l t : List α} : h::(t ++ l)  = (h::t) ++ l := by simp
@@ -86,19 +59,7 @@ theorem Statement.typeCheckAux_elim_acc: Statement.typeCheckAux.go p proc T ss (
   unfold Statement.typeCheckAux.go
   simp [bind, Except.bind]
   split <;> try contradiction
-  any_goals (split <;> try contradiction)
-  any_goals (split <;> try contradiction)
-  any_goals (split <;> try contradiction)
-  any_goals (split <;> try contradiction)
-  any_goals (split <;> try contradiction)
-  any_goals (split <;> try contradiction)
-  any_goals (split <;> try contradiction)
-  any_goals (split <;> try contradiction)
-  any_goals (split <;> try contradiction)
-  any_goals (split <;> try contradiction)
-  any_goals (split <;> try contradiction)
-  any_goals (split <;> try contradiction)
-  any_goals (split <;> try contradiction)
+  repeat (any_goals (split <;> try contradiction))
   any_goals simp
   any_goals rw [List.cons_append_assoc, ind]
 
@@ -152,11 +113,7 @@ theorem Statement.typeCheckAux_go_WF :
       constructor
     | ite c t e md =>
       simp [Except.bind] at tcok
-      split at tcok <;> try contradiction
-      split at tcok <;> try contradiction
-      split at tcok <;> try contradiction
-      split at tcok <;> try contradiction
-      split at tcok <;> try contradiction
+      repeat (split at tcok <;> try contradiction)
       have tcok := Statement.typeCheckAux_elim_singleton tcok
       rw[List.append_cons_assoc];
       apply ih tcok <;> try assumption
@@ -175,18 +132,10 @@ theorem Statement.typeCheckAux_go_WF :
       constructor
     | loop g m i b md =>
       simp [Except.bind] at tcok
-      any_goals (try split at tcok <;> try contradiction)
-      any_goals (try split at tcok <;> try contradiction)
-      any_goals (try split at tcok <;> try contradiction)
-      any_goals (try split at tcok <;> try contradiction)
-      any_goals (try split at tcok <;> try contradiction)
-      any_goals (try split at tcok <;> try contradiction)
-      any_goals (try split at tcok <;> try contradiction)
-      any_goals (try split at tcok <;> try contradiction)
-      any_goals (try split at tcok <;> try contradiction)
-      any_goals (try split at tcok <;> try contradiction)
-      any_goals (try split at tcok <;> try contradiction)
-      any_goals (try split at tcok <;> try contradiction)
+      repeat (split at tcok <;> try contradiction)
+      any_goals (repeat (split at tcok <;> try contradiction))
+      any_goals (repeat (split at tcok <;> try contradiction))
+      any_goals (repeat (split at tcok <;> try contradiction))
       any_goals (have tcok := Statement.typeCheckAux_elim_singleton tcok; rw[List.append_cons_assoc])
       any_goals (apply ih tcok <;> try assumption)
       any_goals (try simp [WFStatementsProp] at *; try simp [List.Forall_append, *]; try constructor)

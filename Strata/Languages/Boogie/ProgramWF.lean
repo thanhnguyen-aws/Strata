@@ -259,8 +259,6 @@ theorem Program.typeCheck.goWF : Program.typeCheck.go p T ds [] = .ok (ds', T') 
   | nil => simp [Program.typeCheck.go] at tcok
            cases tcok; constructor <;> try assumption
   | cons h t t_ih =>
-    --apply (List.Forall_cons (WF.WFDeclProp p) h t).mpr
-    --constructor
     simp [Program.typeCheck.go, bind, Except.bind] at tcok
     split at tcok <;> try contradiction
     any_goals (split at tcok <;> try contradiction)
