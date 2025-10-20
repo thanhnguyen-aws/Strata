@@ -31,9 +31,6 @@ theorem typeCheckCmdWF: Statement.typeCheckCmd T p c = Except.ok v
   sorry
   sorry
 
-theorem List.append_cons_assoc {l t : List α} : l ++ h::t  = l ++ [h] ++ t := by simp
-theorem List.cons_append_assoc {l t : List α} : h::(t ++ l)  = (h::t) ++ l := by simp
-
 theorem Statement.typeCheckAux_elim_acc: Statement.typeCheckAux.go p proc T ss (acc1 ++ acc2) = Except.ok (pp, T') ↔
   (List.IsPrefix acc2.reverse pp ∧ Statement.typeCheckAux.go p proc T ss acc1 = Except.ok (pp.drop acc2.length, T'))
   := by
@@ -49,7 +46,7 @@ theorem Statement.typeCheckAux_elim_acc: Statement.typeCheckAux.go p proc T ss (
   split <;> try contradiction
   repeat (any_goals (split <;> try contradiction))
   any_goals simp
-  any_goals rw [List.cons_append_assoc, ind]
+  any_goals rw [← List.cons_append, ind]
 
 theorem Statement.typeCheckAux_elim_singleton: Statement.typeCheckAux.go p proc T ss [s] = Except.ok (pp, T') →
   Statement.typeCheckAux.go p proc T ss [] = Except.ok (pp.drop 1, T') := by
@@ -75,7 +72,7 @@ theorem Statement.typeCheckAux_go_WF :
         -- Show that the called procedure is declared.
         simp [Except.bind] at tcok
         split at tcok <;> try contradiction
-        rw[List.append_cons_assoc];
+        rw[List.append_cons];
         have tcok := Statement.typeCheckAux_elim_singleton tcok
         apply ih tcok <;> try assumption
         simp [WFStatementsProp] at *
@@ -84,7 +81,7 @@ theorem Statement.typeCheckAux_go_WF :
       | cmd cmd =>
         simp [Except.bind] at tcok
         split at tcok <;> try contradiction
-        rw[List.append_cons_assoc];
+        rw[List.append_cons];
         have tcok := Statement.typeCheckAux_elim_singleton tcok
         apply ih tcok <;> try assumption
         simp [WFStatementsProp] at *
@@ -94,7 +91,7 @@ theorem Statement.typeCheckAux_go_WF :
       simp [Except.bind] at tcok
       split at tcok <;> try contradiction
       have tcok := Statement.typeCheckAux_elim_singleton tcok
-      rw[List.append_cons_assoc];
+      rw[List.append_cons];
       apply ih tcok <;> try assumption
       simp [WFStatementsProp] at *
       simp [List.Forall_append, Forall, *]
@@ -103,7 +100,7 @@ theorem Statement.typeCheckAux_go_WF :
       simp [Except.bind] at tcok
       repeat (split at tcok <;> try contradiction)
       have tcok := Statement.typeCheckAux_elim_singleton tcok
-      rw[List.append_cons_assoc];
+      rw[List.append_cons];
       apply ih tcok <;> try assumption
       simp [WFStatementsProp] at *
       simp [List.Forall_append, Forall, *]
@@ -113,7 +110,7 @@ theorem Statement.typeCheckAux_go_WF :
       split at tcok <;> try contradiction
       split at tcok <;> try contradiction
       have tcok := Statement.typeCheckAux_elim_singleton tcok
-      rw[List.append_cons_assoc];
+      rw[List.append_cons];
       apply ih tcok <;> try assumption
       simp [WFStatementsProp] at *
       simp [List.Forall_append, Forall, *]
@@ -124,7 +121,7 @@ theorem Statement.typeCheckAux_go_WF :
       any_goals (repeat (split at tcok <;> try contradiction))
       any_goals (repeat (split at tcok <;> try contradiction))
       any_goals (repeat (split at tcok <;> try contradiction))
-      any_goals (have tcok := Statement.typeCheckAux_elim_singleton tcok; rw[List.append_cons_assoc])
+      any_goals (have tcok := Statement.typeCheckAux_elim_singleton tcok; rw[List.append_cons])
       any_goals (apply ih tcok <;> try assumption)
       any_goals (try simp [WFStatementsProp] at *; try simp [List.Forall_append, *]; try constructor)
       any_goals (simp [Forall])
