@@ -23,24 +23,12 @@ theorem typeCheckCmdWF: Statement.typeCheckCmd T p c = Except.ok v
   simp [Statement.typeCheckCmd, bind, Except.bind] at H
   split at H <;> try contradiction
   split at H <;> try contradiction
-  rename_i H' ; simp [Imperative.Cmd.typeCheck] at H'
-  repeat (split at H' <;> try contradiction)
-  simp [bind, Except.bind] at H'; split at H' <;> try contradiction
-  repeat (split at H' <;> (try contradiction; try constructor))
-  constructor
-  split at H' <;> try contradiction
-  simp [bind, Except.bind] at H'; split at H' <;> try contradiction
-  split at H' <;> try contradiction
-  constructor
-  split at H' <;> try contradiction
-  constructor
-  simp [bind, Except.bind] at H'; split at H' <;> try contradiction
-  split at H' <;> try contradiction
-  constructor
-  simp [bind, Except.bind] at H'; split at H' <;> try contradiction
-  split at H' <;> try contradiction
-  constructor
-  repeat (split at H <;> try contradiction)
+  rename_i H' ; simp [Imperative.Cmd.typeCheck, bind, Except.bind] at H'
+  repeat (first | (split at H' <;> try contradiction) | constructor)
+  any_goals repeat (split at H <;> try contradiction)
+  any_goals simp_all
+  sorry
+  sorry
   sorry
 
 theorem List.append_cons_assoc {l t : List α} : l ++ h::t  = l ++ [h] ++ t := by simp
