@@ -53,6 +53,8 @@ structure WFcallProp (p : Program) (lhs : List Expression.Ident) (procName : Str
           proc.header.inputs.length = args.length
   outlen : (Program.Procedure.find? p (.unres procName) = some proc) →
           proc.header.outputs.length = lhs.length
+  -- If wellformedness is defined for the original program, I don't think lhs needs to be disjoint with the inputs.
+  -- The program in Examples/RecursiveProcIle.lean (line 29) is successfully type-checked.
   lhsDisj : (Program.Procedure.find? p (.unres procName) = some proc) →
           lhs.Disjoint (proc.spec.modifies ++ ListMap.keys proc.header.inputs ++ ListMap.keys proc.header.outputs)
   lhsWF : lhs.Nodup ∧ Forall (BoogieIdent.isLocl ·) lhs
@@ -137,6 +139,10 @@ structure WFDistinctDeclarationProp (p : Program) (l : Expression.Ident) (es : L
 
 structure WFProcedureProp (p : Program) (d : Procedure) : Prop where
   wfstmts : WFStatementsProp p d.body
+  -- wfloclnd is not correct according to the current implementation of the typechecker mainly because
+  -- of typechecking Blocks. In StatementType.lean, the TEnv will create an emptyContext when it sees a Block (line 88)
+  -- and push everything the Block defines into it, then REMOVEs that context after it finishes checking that Block (line 91).
+  -- Therefore, anything that is defined inside the Block can be redefined in later Statements.
   wfloclnd : (HasVarsImp.definedVars (P:=Expression) d.body).Nodup
   ioDisjoint : (ListMap.keys d.header.inputs).Disjoint (ListMap.keys d.header.outputs)
   inputsNodup : (ListMap.keys d.header.inputs).Nodup
