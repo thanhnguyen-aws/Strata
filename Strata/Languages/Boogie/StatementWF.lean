@@ -89,7 +89,7 @@ theorem Statement.typeCheckAux_go_WF :
         apply typeCheckCmdWF (by assumption)
     | block label bss md =>
       simp [Except.bind] at tcok
-      split at tcok <;> try contradiction
+      repeat split at tcok <;> try contradiction
       have tcok := Statement.typeCheckAux_elim_singleton tcok
       rw[List.append_cons];
       apply ih tcok <;> try assumption
