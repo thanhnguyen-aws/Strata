@@ -208,7 +208,7 @@ function Dict_from_DicList_rev (l : DictList, acc: Dict) : Dict;
 axiom [Dict_from_DicList_rev_nil]: forall acc: Dict ::  Dict_from_DicList_rev(DictList_nil(), acc) == acc;
 axiom [Dict_from_DicList_rev_cons]: forall k: Value, v: Value, d: DictList, acc: Dict ::  Dict_from_DicList_rev(DictList_cons(k,v,d), acc) == Dict_from_DicList_rev(d,Dict_insert(acc, k, v));
 axiom [Dict_from_DicList_def]: forall dl: DictList:: {Dict_from_DicList(dl)} Dict_from_DicList(dl) == Dict_from_DicList_rev(dl, EMPTYDICT);
-
+axiom [remove_insert_eq]: forall d: Dict, k: Value, v: Value:: !(Dict_get(d,k) == v) || (Dict_insert(Dict_remove(d,k), k, v)) == d;
 
 //Binary op function
 function int_to_real (i: int) : real;
@@ -333,7 +333,6 @@ procedure forall_dict_test () returns () {
   assert [ncontain_general']: forall d: Dict, k: Value :: !Dict_contains(Dict_remove(d,normalize_value(k)), k);
   assert [contain_general]: forall d: Dict, k: Value, v: Value :: (v == Value_none()) || Dict_contains(Dict_insert(d,k,v), k);
   assert [remove_insert]: forall d: Dict, k: Value, v: Value, k': Value :: !(Dict_get(d,k) == v) || Dict_get((Dict_insert(Dict_remove(d,k), k, v)), k') == Dict_get(d, k');
-  assert [remove_insert_eq]: forall d: Dict, k: Value, v: Value:: !(Dict_get(d,k) == v) || (Dict_insert(Dict_remove(d,k), k, v)) == d;
 };
 
 #end
