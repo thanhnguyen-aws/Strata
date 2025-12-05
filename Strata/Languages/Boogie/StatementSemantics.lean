@@ -51,7 +51,6 @@ structure WellFormedBoogieEvalCong (δ : BoogieEval): Prop where
     abscongr: (∀ σ σ' e₁ e₁' ,
       δ σ e₁ = δ σ' e₁' →
       (∀ ty m, δ σ (.abs ty m e₁) = δ σ' (.abs ty m e₁')))
-    -- binary congruence
     appcongr: (∀ σ σ' m e₁ e₁' e₂ e₂',
       δ σ e₁ = δ σ' e₁' →
       δ σ e₂ = δ σ' e₂' →
@@ -64,7 +63,6 @@ structure WellFormedBoogieEvalCong (δ : BoogieEval): Prop where
       δ σ e₁ = δ σ' e₁' →
       δ σ e₂ = δ σ' e₂' →
       (δ σ (.quant m k ty e₁ e₂) = δ σ' (.quant m k ty e₁' e₂')))
-    -- ternary congruence
     itecongr: (∀ σ σ' m e₁ e₁' e₂ e₂' e₃ e₃',
       δ σ e₁ = δ σ' e₁' →
       δ σ e₂ = δ σ' e₂' →
