@@ -2099,7 +2099,6 @@ theorem EvalExpressionIsDefined :
   isDefined σ (HasVarsPure.getVars e) := by
   intros Hwfc Hwfvr Hsome
   intros v Hin
-  simp [WellFormedBoogieEvalCong] at Hwfc
   simp [WellFormedSemanticEvalVar] at Hwfvr
   induction e generalizing v <;>
     simp [HasVarsPure.getVars, Lambda.LExpr.LExpr.getVars] at *

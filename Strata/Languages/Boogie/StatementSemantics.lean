@@ -47,26 +47,25 @@ instance : HasNot Boogie.Expression where
 abbrev BoogieEval := SemanticEval Expression
 abbrev BoogieStore := SemanticStore Expression
 
-def WellFormedBoogieEvalCong (δ : BoogieEval)
-    : Prop :=
-    (∀ σ σ' e₁ e₁' ,
+structure WellFormedBoogieEvalCong (δ : BoogieEval): Prop where
+    abscongr: (∀ σ σ' e₁ e₁' ,
       δ σ e₁ = δ σ' e₁' →
-      (∀ ty m, δ σ (.abs ty m e₁) = δ σ' (.abs ty m e₁'))) ∧
+      (∀ ty m, δ σ (.abs ty m e₁) = δ σ' (.abs ty m e₁')))
     -- binary congruence
-    (∀ σ σ' m e₁ e₁' e₂ e₂',
+    appcongr: (∀ σ σ' m e₁ e₁' e₂ e₂',
       δ σ e₁ = δ σ' e₁' →
       δ σ e₂ = δ σ' e₂' →
-      (δ σ (.app m e₁ e₂) = δ σ' (.app m e₁' e₂'))) ∧
-    (∀ σ σ' m e₁ e₁' e₂ e₂',
+      (δ σ (.app m e₁ e₂) = δ σ' (.app m e₁' e₂')))
+    eqcongr: (∀ σ σ' m e₁ e₁' e₂ e₂',
       δ σ e₁ = δ σ' e₁' →
       δ σ e₂ = δ σ' e₂' →
-      (δ σ (.eq m e₁ e₂) = δ σ' (.eq m e₁' e₂'))) ∧
-    (∀ σ σ' m k ty e₁ e₁' e₂ e₂',
+      (δ σ (.eq m e₁ e₂) = δ σ' (.eq m e₁' e₂')))
+    quantcongr: (∀ σ σ' m k ty e₁ e₁' e₂ e₂',
       δ σ e₁ = δ σ' e₁' →
       δ σ e₂ = δ σ' e₂' →
-      (δ σ (.quant m k ty e₁ e₂) = δ σ' (.quant m k ty e₁' e₂'))) ∧
+      (δ σ (.quant m k ty e₁ e₂) = δ σ' (.quant m k ty e₁' e₂')))
     -- ternary congruence
-    (∀ σ σ' m e₁ e₁' e₂ e₂' e₃ e₃',
+    itecongr: (∀ σ σ' m e₁ e₁' e₂ e₂' e₃ e₃',
       δ σ e₁ = δ σ' e₁' →
       δ σ e₂ = δ σ' e₂' →
       δ σ e₃ = δ σ' e₃' →

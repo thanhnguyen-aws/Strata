@@ -344,7 +344,6 @@ Imperative.WellFormedSemanticEvalVal δ →
 δ (updatedState σ k v) e = some v' := by
   intros Hwfv Hwfc Hwfvl Hnin Hsome
   simp [Imperative.WellFormedSemanticEvalVar, Imperative.HasFvar.getFvar] at Hwfv
-  simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
   simp [Imperative.WellFormedSemanticEvalVal] at Hwfvl
   have Hval := Hwfvl.2
   simp [← Hsome] at *
@@ -359,13 +358,13 @@ Imperative.WellFormedSemanticEvalVal δ →
     apply ((Hwfc.1 (updatedState σ k v) σ))
     grind
   case quant m kk ty tr e trih eih =>
-    apply Hwfc.2.2.2.1 <;> grind
+    apply Hwfc.quantcongr <;> grind
   case app m fn e fnih eih =>
-    apply Hwfc.2.1 <;> grind
+    apply Hwfc.appcongr <;> grind
   case ite m c t e cih tih eih =>
-    apply Hwfc.2.2.2.2 <;> grind
+    apply Hwfc.itecongr <;> grind
   case eq m e1 e2 e1ih e2ih =>
-    apply Hwfc.2.2.1 <;> grind
+    apply Hwfc.eqcongr <;> grind
 
 theorem EvalExpressionsUpdatedState {δ : BoogieEval} :
   Imperative.WellFormedSemanticEvalVar δ →
@@ -1149,13 +1148,11 @@ theorem Lambda.LExpr.substFvarCorrect :
       simp [Imperative.HasFvar.getFvar]
       simp [Imperative.HasFvar.getFvar]
   case abs m ty e ih  =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     specialize ih Hinv
     have e2 := (e.substFvar fro (Lambda.LExpr.fvar () to none))
     have Hwfc := Hwfc.1 σ σ' e ((e.substFvar fro (Lambda.LExpr.fvar () to none)))
     grind
   case quant m k ty tr e trih eih =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     simp [Imperative.invStores, Imperative.substStores,
           Imperative.HasVarsPure.getVars, Lambda.LExpr.LExpr.getVars] at *
     simp [List.app_removeAll, List.zip_append] at *
@@ -1169,9 +1166,8 @@ theorem Lambda.LExpr.substFvarCorrect :
       rw [Hinv]
       left;
       assumption
-    apply Hwfc.2.2.2.1 <;> grind
+    apply Hwfc.quantcongr <;> grind
   case app m c fn fih eih =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     simp [Imperative.invStores, Imperative.substStores,
           Imperative.HasVarsPure.getVars, Lambda.LExpr.LExpr.getVars] at *
     simp [List.app_removeAll, List.zip_append] at *
@@ -1183,9 +1179,8 @@ theorem Lambda.LExpr.substFvarCorrect :
     . intros k1 k2 Hin
       rw [Hinv]
       right; assumption
-    apply Hwfc.2.1 <;> grind
+    apply Hwfc.appcongr <;> grind
   case ite m c t e cih tih eih =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     simp [Imperative.invStores, Imperative.substStores,
           Imperative.HasVarsPure.getVars, Lambda.LExpr.LExpr.getVars] at *
     simp [List.app_removeAll, List.zip_append] at *
@@ -1201,9 +1196,8 @@ theorem Lambda.LExpr.substFvarCorrect :
     . intros k1 k2 Hin
       rw [Hinv]
       right; right; assumption
-    apply Hwfc.2.2.2.2 <;> grind
+    apply Hwfc.itecongr <;> grind
   case eq m e1 e2 e1ih e2ih =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     simp [Imperative.invStores, Imperative.substStores,
           Imperative.HasVarsPure.getVars, Lambda.LExpr.LExpr.getVars] at *
     simp [List.app_removeAll, List.zip_append] at *
@@ -1215,7 +1209,7 @@ theorem Lambda.LExpr.substFvarCorrect :
     . intros k1 k2 Hin
       rw [Hinv]
       right; assumption
-    apply Hwfc.2.2.1 <;> grind
+    apply Hwfc.eqcongr <;> grind
 
 theorem Lambda.LExpr.substFvarsCorrectZero :
   Boogie.WellFormedBoogieEvalCong δ →
@@ -1240,12 +1234,10 @@ theorem Lambda.LExpr.substFvarsCorrectZero :
     simp [Imperative.HasFvar.getFvar]
     simp [Imperative.HasFvar.getFvar]
   case abs m ty e ih  =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     specialize ih Hinv
-    have Hwfc := Hwfc.1 σ σ' e e ih
+    have Hwfc := Hwfc.abscongr σ σ' e e ih
     apply Hwfc
   case quant m k ty tr e trih eih =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     simp [Imperative.invStores, Imperative.substStores,
           Imperative.HasVarsPure.getVars, Lambda.LExpr.LExpr.getVars] at *
     simp [List.zip_append] at *
@@ -1257,9 +1249,8 @@ theorem Lambda.LExpr.substFvarsCorrectZero :
     . intros k1 k2 Hin
       rw [Hinv]
       right; assumption
-    apply Hwfc.2.2.2.1 <;> grind
+    apply Hwfc.quantcongr <;> grind
   case app m fn e fih eih =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     simp [Imperative.invStores, Imperative.substStores,
           Imperative.HasVarsPure.getVars, Lambda.LExpr.LExpr.getVars] at *
     simp [List.zip_append] at *
@@ -1271,9 +1262,8 @@ theorem Lambda.LExpr.substFvarsCorrectZero :
     . intros k1 k2 Hin
       rw [Hinv]
       right; assumption
-    apply Hwfc.2.1 <;> grind
+    apply Hwfc.appcongr <;> grind
   case ite m c t e cih tih eih =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     simp [Imperative.invStores, Imperative.substStores,
           Imperative.HasVarsPure.getVars, Lambda.LExpr.LExpr.getVars] at *
     simp [List.zip_append] at *
@@ -1289,9 +1279,8 @@ theorem Lambda.LExpr.substFvarsCorrectZero :
     . intros k1 k2 Hin
       rw [Hinv]
       right; right; assumption
-    apply Hwfc.2.2.2.2 <;> grind
+    apply Hwfc.itecongr <;> grind
   case eq m e1 e2 e1ih e2ih =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     simp [Imperative.invStores, Imperative.substStores,
           Imperative.HasVarsPure.getVars, Lambda.LExpr.LExpr.getVars] at *
     simp [List.zip_append] at *
@@ -1303,7 +1292,7 @@ theorem Lambda.LExpr.substFvarsCorrectZero :
     . intros k1 k2 Hin
       rw [Hinv]
       right; assumption
-    apply Hwfc.2.2.1 <;> grind
+    apply Hwfc.eqcongr <;> grind
 
 theorem updatedStoresInvStores :
   ¬ k ∈ ks →
@@ -1744,18 +1733,16 @@ theorem substOldCorrect :
   intros Hwfvr Hwfvl Hwfc Hwf2 Hnorm Hdef Hsubst
   induction e <;> simp [OldExpressions.substOld] at *
   case abs m ty e ih  =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     cases Hnorm with
     | abs Hnorm =>
       apply Hwfc.1
       apply ih Hnorm
   case quant m k ty tr e trih eih =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     cases Hnorm with
     | quant Ht He =>
       specialize eih He
       specialize trih Ht
-      apply Hwfc.2.2.2.1 <;> grind
+      apply Hwfc.quantcongr <;> grind
   case app m c fn fih eih =>
     cases Hnorm with
     | app Hc Hfn Hwf =>
@@ -1823,23 +1810,21 @@ theorem substOldCorrect :
       . -- is an old var that is not substituted, use congruence
         rename_i e1 e2 mOp ty0 mVar x ty1 h
         simp at m mOp ty0 mVar x ty1
-        apply Hwfc.2.1 <;> grind
+        apply Hwfc.appcongr <;> grind
     . -- is not an old var, use congruence
-      apply Hwfc.2.1 <;> grind
+      apply Hwfc.appcongr <;> grind
   case ite m c t e cih tih eih =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     cases Hnorm with
     | ite Hc Ht He =>
       specialize cih Hc
       specialize tih Ht
       specialize eih He
-      apply Hwfc.2.2.2.2 <;> grind
+      apply Hwfc.itecongr <;> grind
   case eq m e1 e2 e1ih e2ih =>
-    simp [Boogie.WellFormedBoogieEvalCong] at Hwfc
     cases Hnorm with
     | eq He1 He2 =>
     specialize e2ih He2
-    apply Hwfc.2.2.1 <;> grind
+    apply Hwfc.eqcongr <;> grind
 
 
 -- Needed from refinement theorem
