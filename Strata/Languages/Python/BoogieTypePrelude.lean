@@ -39,21 +39,21 @@ type AttributeValues := Map string Value;
 type ClassInstance;
 
 // Constructors
-function Value_bool (b : bool) : (Value);
-function Value_int (i : int) : (Value);
-function Value_float (f : real) : (Value);
-function Value_str (s : string) : (Value);
-function Value_none() : (Value);
-function Value_exception (e : Error): (Value);
-function Value_list (lv : ListValue) : (Value);
+function Value_bool (b : bool) : Value;
+function Value_int (i : int) : Value;
+function Value_float (f : real) : Value;
+function Value_str (s : string) : Value;
+function Value_none() : Value;
+function Value_exception (e : Error): Value;
+function Value_list (lv : ListValue) : Value;
 function Value_class (ci: ClassInstance) : Value;
 
-function ListValue_nil() : (ListValue);
-function ListValue_cons(x0 : Value, x1 : ListValue) : (ListValue);
+function ListValue_nil() : ListValue;
+function ListValue_cons(x0 : Value, x1 : ListValue) : ListValue;
 //Tags
 function ListValue_tag (l: ListValue) : List_tag;
-axiom [ListValue_tag_nil_def]: (ListValue_tag (ListValue_nil()) == NIL);
-axiom [ListValue_tag_cons_def]: (forall v: Value, vs: ListValue ::{ListValue_cons(v, vs)} (ListValue_tag (ListValue_cons(v, vs)) == CONS));
+axiom [ListValue_tag_nil_def]: ListValue_tag (ListValue_nil()) == NIL;
+axiom [ListValue_tag_cons_def]: forall v: Value, vs: ListValue ::{ListValue_cons(v, vs)} ListValue_tag (ListValue_cons(v, vs)) == CONS;
 
 // Types of Value
 type ValueType;
@@ -87,8 +87,8 @@ function ListType_nil() : (ListValueType);
 function ListType_cons(x0 : ValueType, x1 : ListValueType) : ListValueType;
 function ValueType_List (l: ListValueType) : ValueType;
 function ListValueType_tag (l: ListValueType) : List_tag;
-axiom [ListValueType_tag_nil_def]: (ListValueType_tag (ListType_nil()) == NIL);
-axiom [ListValueType_tag_cons_def]: (forall t: ValueType, ts: ListValueType ::{ListType_cons(t, ts)} (ListValueType_tag (ListType_cons(t, ts)) == CONS));
+axiom [ListValueType_tag_nil_def]: ListValueType_tag (ListType_nil()) == NIL;
+axiom [ListValueType_tag_cons_def]: forall t: ValueType, ts: ListValueType ::{ListType_cons(t, ts)} (ListValueType_tag (ListType_cons(t, ts)) == CONS);
 
 // TypeOf and TypesOf functions
 function TypeOf (v : Value) : ValueType;
@@ -163,14 +163,18 @@ axiom [isSubType_list_def]: forall l: ListValueType, l': ListValueType :: {Value
   isSubType(ValueType_List(l), ValueType_List(l')) == isSubTypes(l, l');
 axiom [bool_substype_int]: isSubType(BOOL, INT);
 axiom [int_substype_float]: isSubType(INT, FLOAT);
-axiom [not_isSubstype_string]: forall t: ValueType ::{} t == STR || (!isSubType(STR, t) && !isSubType(t,STR));
-axiom [not_isSubstype_none]: forall t: ValueType ::{} (t == NONE || (!isSubType(NONE, t) && !isSubType(t,NONE)));
-axiom [not_isSubstype_exception]: forall t: ValueType ::{} t == EXCEPTION || (!isSubType(EXCEPTION, t) && !isSubType(t, EXCEPTION));
-axiom [not_isSubstype_class]: forall t: ValueType, c: Class ::{} t != ValueType_class(c) ==> (!isSubType(ValueType_class(c), t) && !isSubType(t,ValueType_class(c)));
+axiom [not_isSubstype_string]: forall t: ValueType ::{isSubType(STR, t), isSubType(t,STR)}
+  t == STR || (!isSubType(STR, t) && !isSubType(t,STR));
+axiom [not_isSubstype_none]: forall t: ValueType ::{isSubType(NONE, t), isSubType(NONE, t)}
+  t == NONE || (!isSubType(NONE, t) && !isSubType(t,NONE));
+axiom [not_isSubstype_exception]: forall t: ValueType ::{isSubType(EXCEPTION, t), isSubType(t, EXCEPTION)}
+  t == EXCEPTION || (!isSubType(EXCEPTION, t) && !isSubType(t, EXCEPTION));
+axiom [not_isSubstype_class]: forall t: ValueType, c: Class ::{isSubType(ValueType_class(c), t), isSubType(t,ValueType_class(c))}
+  t != ValueType_class(c) ==> (!isSubType(ValueType_class(c), t) && !isSubType(t,ValueType_class(c)));
 // Supporting lemmas
 axiom [isSubtype_rfl]: forall t: ValueType::{isSubType (t,t)} isSubType (t,t);
-axiom [isSubtype_mono]: forall t1: ValueType, t2: ValueType ::{} !isSubType (t1,t2) || (t1 == t2 || !isSubType(t2,t1));
-axiom [isSubtype_trans]: forall t1: ValueType, t2: ValueType, t3: ValueType::{} !(isSubType(t1, t2) && isSubType(t2, t3)) || isSubType(t1, t3);
+axiom [isSubtype_mono]: forall t1: ValueType, t2: ValueType ::{isSubType (t1,t2)} !isSubType (t1,t2) || (t1 == t2 || !isSubType(t2,t1));
+axiom [isSubtype_trans]: forall t1: ValueType, t2: ValueType, t3: ValueType::{isSubType(t1, t2)} !(isSubType(t1, t2) && isSubType(t2, t3)) || isSubType(t1, t3);
 
 // isInstance function:
 function isInstance (v: Value, vt: ValueType) : bool;
@@ -197,16 +201,17 @@ function List_reverse (l: ListValue) : ListValue;
 //List function axioms
 axiom [List_contains_nil_def]: forall x : Value ::{List_contains(ListValue_nil(), x)}
   !List_contains(ListValue_nil(), x);
-axiom [List_contains_cons_def]: forall x : Value, h : Value, t : ListValue ::{}
+axiom [List_contains_cons_def]: forall x : Value, h : Value, t : ListValue ::{List_contains(ListValue_cons(h,t),x)}
   List_contains(ListValue_cons(h,t),x) == ((normalize_value(x)==normalize_value(h)) || List_contains(t, x));
 axiom [List_len_nil_def]: List_len (ListValue_nil()) == 0;
-axiom [List_len_cons_def]: forall h : Value, t : ListValue ::{} List_len (ListValue_cons(h,t)) == 1 + List_len(t);
-axiom [List_len_nonneg]: forall l: ListValue :: List_len(l) >= 0 ;
+axiom [List_len_cons_def]: forall h : Value, t : ListValue ::{List_len (ListValue_cons(h,t))}
+  List_len (ListValue_cons(h,t)) == 1 + List_len(t);
+axiom [List_len_nonneg]: forall l: ListValue :: {List_len(l)} List_len(l) >= 0 ;
 axiom [List_extend_nil_def]: forall l1: ListValue ::{List_extend (l1, ListValue_nil())}
   List_extend (l1, ListValue_nil()) == l1;
 axiom [List_nil_extend_def]: forall l1: ListValue ::{List_extend (ListValue_nil(), l1)}
   List_extend (ListValue_nil(), l1) == l1;
-axiom [List_cons_extend_def]: forall h: Value, t: ListValue, l2: ListValue  ::{}
+axiom [List_cons_extend_def]: forall h: Value, t: ListValue, l2: ListValue  ::{List_extend (ListValue_cons(h,t), l2)}
   List_extend (ListValue_cons(h,t), l2) == ListValue_cons(h, List_extend(t,l2));
 axiom [List_cons_extend_contains]: forall x: Value, l1: ListValue, l2: ListValue  ::{List_contains (List_extend(l1,l2), x)}
   List_contains (List_extend(l1,l2), x) == List_contains (l1,x) || List_contains(l2,x);
@@ -220,13 +225,13 @@ axiom [List_index_zero]: forall h : Value, t : ListValue ::{List_index (ListValu
   List_index (ListValue_cons(h,t), 0) == h;
 axiom [List_index_ind]: forall h : Value, t : ListValue, i : int ::{List_index (ListValue_cons(h,t), i)}
   (i > 0) ==> (List_index (ListValue_cons(h,t), i)) == List_index (t, i - 1);
-axiom [List_index_contains]: forall l: ListValue, i: int, x: Value :: {}
+axiom [List_index_contains]: forall l: ListValue, i: int, x: Value :: {List_contains(l,x), List_index(l,i)}
   (List_index(l,i) == x) ==> List_contains(l,x);
 axiom [List_index_ok]: forall l: ListValue, i: int:: {List_index(l,i)}
   ((List_index(l,i)) != Value_exception(Error_message("index out of bound"))) == (i < List_len(l));
 axiom [List_extend_get_shift]: forall l1: ListValue, l2: ListValue, i: int :: {List_extend(l2,l1)}
   List_index(l1, i) == List_index(List_extend(l2,l1), i + List_len(l2));
-axiom [List_extend_assoc]: forall l1: ListValue, l2: ListValue, l3: ListValue :: {}
+axiom [List_extend_assoc]: forall l1: ListValue, l2: ListValue, l3: ListValue :: {List_extend(List_extend(l1,l2), l3)}
   List_extend(List_extend(l1,l2), l3) == List_extend(l1,List_extend(l2,l3));
 axiom [List_append_def]: forall l: ListValue, x: Value :: {List_append(l,x)}
   List_append(l,x) == List_extend(l, ListValue_cons(x, ListValue_nil()));
@@ -287,7 +292,7 @@ function AttributeNames_index (l : AttributeNames, i : int) : string;
 function AttributeName_to_index (l : AttributeNames, f: string) : int;
 
 axiom [AttributeNames_len_nil_def]: AttributeNames_len (AttributeNames_nil()) == 0;
-axiom [AttributeNames_len_cons_def]: forall h : string, t : AttributeNames ::{}
+axiom [AttributeNames_len_cons_def]: forall h : string, t : AttributeNames ::{AttributeNames_len (AttributeNames_cons(h,t))}
   AttributeNames_len (AttributeNames_cons(h,t)) == 1 + AttributeNames_len(t);
 axiom [AttributeNames_tag_nil_def]: AttributeNames_tag(AttributeNames_nil()) == NIL;
 axiom [AttributeNames_tag_cons_def]: forall h : string, t : AttributeNames ::{} AttributeNames_tag (AttributeNames_cons(h,t)) == CONS;
@@ -295,13 +300,13 @@ axiom [AttributeNames_contains_nil_def]: (forall x : string ::{AttributeNames_co
   !AttributeNames_contains(AttributeNames_nil(), x));
 axiom [AttributeNames_contains_cons_def]: forall x : string, h : string, t : AttributeNames ::{AttributeNames_contains(AttributeNames_cons(h,t),x)}
   AttributeNames_contains(AttributeNames_cons(h,t),x) == ((x==h) || AttributeNames_contains(t,x));
-axiom [AttributeNames_len_nonneg]: forall l: AttributeNames :: AttributeNames_len(l) >= 0;
+axiom [AttributeNames_len_nonneg]: forall l: AttributeNames :: {AttributeNames_len(l)} AttributeNames_len(l) >= 0;
 axiom [AttributeNames_index_nil]: forall i : int ::{AttributeNames_index (AttributeNames_nil(), i)} (AttributeNames_index (AttributeNames_nil(), i)) == "";
 axiom [AttributeNames_index_zero]: forall h : string, t : AttributeNames ::{AttributeNames_index (AttributeNames_cons(h,t), 0)}
   AttributeNames_index (AttributeNames_cons(h,t), 0) == h;
 axiom [AttributeNames_index_ind]: forall h : string, t : AttributeNames, i : int ::{AttributeNames_index (AttributeNames_cons(h,t), i)}
   (i > 0) ==> (AttributeNames_index (AttributeNames_cons(h,t), i)) == AttributeNames_index (t, i - 1);
-axiom [AttributeNames_index_contains]: forall l: AttributeNames, i: int, x: string :: {}
+axiom [AttributeNames_index_contains]: forall l: AttributeNames, i: int, x: string :: {AttributeNames_index(l,i), AttributeNames_contains(l,x)}
   (AttributeNames_index(l,i) == x) ==> AttributeNames_contains(l,x);
 axiom [AttributeNames_index_ok]: forall l: AttributeNames, i: int:: {AttributeNames_index(l,i)}
   ((AttributeNames_index(l,i)) != "") == (i < AttributeNames_len(l));
@@ -315,9 +320,12 @@ axiom [AttributeName_to_index_cons_def_2]: forall f: string, h: string, t: Attri
 function Class_mk (name: string, attributes: AttributeNames): Class;
 function Class_attributes (c: Class) : AttributeNames;
 function Class_name (c: Class): string;
-axiom [Class_attributes_def]: forall name: string, attributes: AttributeNames :: {Class_mk (name, attributes)} Class_attributes(Class_mk (name, attributes)) == attributes;
-axiom [Class_name_def]: forall name: string, attributes: AttributeNames :: {Class_mk (name, attributes)} Class_name(Class_mk (name, attributes)) == name;
-axiom [Class_eq_def]: forall c: Class, c': Class :: {} (c == c') == (Class_name(c) == Class_name(c'));
+axiom [Class_attributes_def]: forall name: string, attributes: AttributeNames :: {Class_mk (name, attributes)}
+  Class_attributes(Class_mk (name, attributes)) == attributes;
+axiom [Class_name_def]: forall name: string, attributes: AttributeNames :: {Class_mk (name, attributes)}
+  Class_name(Class_mk (name, attributes)) == name;
+axiom [Class_eq_def]: forall c: Class, c': Class :: {c == c'}
+  (c == c') == (Class_name(c) == Class_name(c'));
 
 function Class_hasAttribute (c: Class, attribute: string): bool;
 axiom [Class_hasAttribute_def]: forall c: Class, attribute: string :: {Class_hasAttribute(c, attribute)}
@@ -339,33 +347,43 @@ axiom [AttributeValues_err_def]: forall attribute: string :: {AttributeValues_er
 function ClassInstance_mk (c: Class, av: AttributeValues) : ClassInstance;
 
 function ClassInstance_getAttributeValues (ci: ClassInstance) : AttributeValues;
-axiom [get_fielvalue_def]: forall c: Class, av: AttributeValues :: {ClassInstance_mk (c, av)} ClassInstance_getAttributeValues(ClassInstance_mk (c, av)) == av;
+axiom [getAttributeValues_def]: forall c: Class, av: AttributeValues :: { ClassInstance_getAttributeValues(ClassInstance_mk (c, av))}
+  ClassInstance_getAttributeValues(ClassInstance_mk (c, av)) == av;
+
 function ClassInstance_getClass (ci: ClassInstance) : Class;
-axiom [get_class_def]: forall c: Class, av: AttributeValues :: {ClassInstance_mk (c, av)} ClassInstance_getClass(ClassInstance_mk (c, av)) == c;
+axiom [get_Class_def]: forall c: Class, av: AttributeValues :: {ClassInstance_getClass(ClassInstance_mk (c, av))}
+  ClassInstance_getClass(ClassInstance_mk (c, av)) == c;
 
 axiom [TypeOf_class]: forall ci: ClassInstance :: {TypeOf(Value_class(ci))} TypeOf(Value_class(ci)) == ValueType_class(ClassInstance_getClass(ci));
 
 function ClassInstance_empty (c: Class) : ClassInstance;
-axiom [ClassInstance_mk_empty_get_attributevalues]: forall c: Class :: {ClassInstance_empty (c)} ClassInstance_getAttributeValues(ClassInstance_empty (c)) == AttributeValues_empty(c);
-axiom [ClassInstance_mk_empty_get_class]: forall c: Class :: {ClassInstance_empty (c)} ClassInstance_getClass(ClassInstance_empty (c)) == c;
+axiom [ClassInstance_mk_empty_get_attributevalues]: forall c: Class :: {ClassInstance_getAttributeValues(ClassInstance_empty (c))}
+  ClassInstance_getAttributeValues(ClassInstance_empty (c)) == AttributeValues_empty(c);
+axiom [ClassInstance_mk_empty_get_class]: forall c: Class :: {ClassInstance_getClass(ClassInstance_empty (c))}
+  ClassInstance_getClass(ClassInstance_empty (c)) == c;
 
 function ClassInstance_err (err: string) : ClassInstance;
 function ClassInstance_errortag (ci: ClassInstance): Error_tag;
-axiom [ClassInstance_err_tag]: forall err: string :: {ClassInstance_err(err)} ClassInstance_errortag(ClassInstance_err(err)) == ERR;
-axiom [ClassInstance_err_get_class_def]: forall err: string :: {ClassInstance_err(err)} ClassInstance_getClass(ClassInstance_err(err)) == Class_err();
-axiom [ClassInstance_err_get_attributevalues_def]: forall err: string :: {ClassInstance_err(err)} ClassInstance_getAttributeValues(ClassInstance_err (err)) == AttributeValues_err();
+axiom [ClassInstance_err_tag]: forall err: string :: {ClassInstance_errortag(ClassInstance_err(err))}
+  ClassInstance_errortag(ClassInstance_err(err)) == ERR;
+axiom [ClassInstance_err_get_class_def]: forall err: string :: {ClassInstance_getClass(ClassInstance_err(err)) }
+  ClassInstance_getClass(ClassInstance_err(err)) == Class_err();
+axiom [ClassInstance_err_get_attributevalues_def]: forall err: string :: {ClassInstance_getAttributeValues(ClassInstance_err (err))}
+  ClassInstance_getAttributeValues(ClassInstance_err (err)) == AttributeValues_err();
 
 function ClassInstance_get_attribute(ci: ClassInstance, attribute: string) : Value;
 axiom [ClassInstance_get_attribute_def]: forall ci: ClassInstance, attribute: string ::{ClassInstance_get_attribute(ci, attribute)}
   ClassInstance_get_attribute(ci, attribute) == ClassInstance_getAttributeValues(ci)[attribute];
 
 function ClassInstance_set_attribute (ci: ClassInstance, attribute: string, value: Value): ClassInstance;
-axiom [ClassInstance_set_attribute_def]: forall ci: ClassInstance, attribute: string, v: Value::{ClassInstance_set_attribute(ci, attribute, v)}
-  ClassInstance_set_attribute(ci, attribute, v) == if Class_hasAttribute(ClassInstance_getClass(ci), attribute) then ClassInstance_mk(ClassInstance_getClass(ci), ClassInstance_getAttributeValues(ci)[attribute:=v])
-                            else ClassInstance_err("Set value for invalid");
+axiom [ClassInstance_set_attribute_def]: forall ci: ClassInstance, attribute: string, v: Value:: {ClassInstance_set_attribute(ci, attribute, v)}
+  ClassInstance_set_attribute(ci, attribute, v) == if Class_hasAttribute(ClassInstance_getClass(ci), attribute) then
+                                                      ClassInstance_mk(ClassInstance_getClass(ci), ClassInstance_getAttributeValues(ci)[attribute:=v])
+                                                  else ClassInstance_err("Set value for invalid");
 
 function get_ClassInstance (v: Value) : ClassInstance;
-axiom [get_ClassInstance_valid]: forall ci: ClassInstance :: {get_ClassInstance(Value_class(ci))} get_ClassInstance(Value_class(ci)) == ci;
+axiom [get_ClassInstance_valid]: forall ci: ClassInstance :: {get_ClassInstance(Value_class(ci))}
+  get_ClassInstance(Value_class(ci)) == ci;
 axiom [get_ClassInstance_invalid]: forall v: Value :: {get_ClassInstance(v)}
   !isClassInstance(v) ==> get_ClassInstance(v) == ClassInstance_err ("Not of Class type");
 
@@ -392,11 +410,11 @@ function hasAttribute(v: Value, attribute: string): bool {
 //Binary op function
 function int_to_real (i: int) : real;
 function str_repeat (s: string, i: int) : string;
-function Py_add (v1: Value, v2: Value) : (Value);
-function Py_sub (v1: Value, v2: Value) : (Value);
-function Py_mul (v1: Value, v2: Value) : (Value);
-inline function bool_to_int (b: bool) : (int) {if b then 1 else 0}
-inline function bool_to_real (b: bool) : (real) {if b then 1.0 else 0.0}
+function Py_add (v1: Value, v2: Value) : Value;
+function Py_sub (v1: Value, v2: Value) : Value;
+function Py_mul (v1: Value, v2: Value) : Value;
+inline function bool_to_int (b: bool) : int {if b then 1 else 0}
+inline function bool_to_real (b: bool) : real {if b then 1.0 else 0.0}
 
 axiom [Py_add_ints]: forall i1: int, i2: int :: {Py_add(Value_int(i1), Value_int(i2))}
   Py_add(Value_int(i1), Value_int(i2)) == Value_int(i1 + i2);
