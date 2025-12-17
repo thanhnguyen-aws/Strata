@@ -66,15 +66,31 @@ const NONE : ValueType;
 const EXCEPTION : ValueType;
 function ValueType_class(c: Class): ValueType;
 
+function isListValueType (t: ValueType): bool;
+function isClassValueType (t: ValueType): bool;
+axiom [isClassType_def]: forall c: Class :: {isClassValueType(ValueType_class(c))} isClassValueType(ValueType_class(c));
+
 function isList (v: Value): bool;
 function isClassInstance (v: Value): bool;
 
+
 //Uniqueness axioms
-axiom [unique_ValueType_bool]: BOOL != INT && BOOL != FLOAT && BOOL != STR && BOOL != NONE && BOOL != EXCEPTION;
-axiom [unique_ValueType_int]: INT != STR && INT != FLOAT && INT != NONE && INT != EXCEPTION;
-axiom [unique_ValueType_float]: FLOAT != STR && FLOAT != NONE && FLOAT != EXCEPTION;
-axiom [unique_ValueType_str]: STR != NONE && STR != EXCEPTION;
-axiom [unique_ValueType_none]: NONE != EXCEPTION;
+axiom [unique_ValueType_bool]: BOOL != INT && BOOL != FLOAT && BOOL != STR && BOOL != NONE && BOOL != EXCEPTION && !isListValueType(BOOL) && !(isClassValueType(BOOL));
+axiom [unique_ValueType_int]: INT != STR && INT != FLOAT && INT != NONE && INT != EXCEPTION && !isListValueType(INT) && !(isClassValueType(INT));
+axiom [unique_ValueType_float]: FLOAT != STR && FLOAT != NONE && FLOAT != EXCEPTION && !isListValueType(FLOAT) && !(isClassValueType(FLOAT));
+axiom [unique_ValueType_str]: STR != NONE && STR != EXCEPTION && !isListValueType(STR) && !(isClassValueType(STR));
+axiom [unique_ValueType_none]: NONE != EXCEPTION && !isListValueType(NONE) && !(isClassValueType(NONE));
+axiom [unique_ValueType_exception]: !isListValueType(EXCEPTION) && !(isClassValueType(EXCEPTION));
+axiom [classtype_ne_listtype]: forall t: ValueType :: {isListValueType (t), isClassValueType (t)} !(isListValueType (t) && isClassValueType (t));
+axiom [all_ValueType_cases]: forall t: ValueType ::
+  t == BOOL ||
+  t == INT ||
+  t == FLOAT ||
+  t == STR ||
+  t == NONE ||
+  t == EXCEPTION ||
+  isListValueType (t) ||
+  isClassValueType (t);
 
 //Eq axioms
 axiom [value_int_eq]: forall i: int, j: int :: {Value_int(i) == Value_int(j)} (Value_int(i) == Value_int(j)) == (i == j);
@@ -89,6 +105,7 @@ function ValueType_List (l: ListValueType) : ValueType;
 function ListValueType_tag (l: ListValueType) : List_tag;
 axiom [ListValueType_tag_nil_def]: ListValueType_tag (ListType_nil()) == NIL;
 axiom [ListValueType_tag_cons_def]: forall t: ValueType, ts: ListValueType ::{ListType_cons(t, ts)} (ListValueType_tag (ListType_cons(t, ts)) == CONS);
+axiom [isListValueType_def]: forall l: ListValueType ::{isListValueType(ValueType_List (l))} isListValueType(ValueType_List (l));
 
 // TypeOf and TypesOf functions
 function TypeOf (v : Value) : ValueType;
@@ -97,15 +114,6 @@ function TypesOf (v: ListValue) : ListValueType;
 axiom [TypesOf_nil_def]: TypesOf(ListValue_nil()) == ListType_nil();
 axiom [TypesOf_cons_def]: forall v: Value, vs: ListValue ::{ListValue_cons(v, vs)} TypesOf(ListValue_cons(v, vs)) == ListType_cons(TypeOf(v), TypesOf(vs));
 axiom [TypeOf_list_def]: forall l: ListValue ::{Value_list(l)} TypeOf(Value_list(l)) ==  ValueType_List(TypesOf(l));
-axiom [TypeOf_ret_set]: forall v: Value :: {TypeOf(v)}
-  TypeOf(v) == BOOL ||
-  TypeOf(v) == INT ||
-  TypeOf(v) == FLOAT ||
-  TypeOf(v) == STR ||
-  TypeOf(v) == NONE ||
-  TypeOf(v) == EXCEPTION ||
-  isList(v) ||
-  isClassInstance(v);
 axiom [TypeOf_bool]: forall b: bool :: {TypeOf(Value_bool(b))} TypeOf(Value_bool(b)) == BOOL;
 axiom [TypeOf_int]: forall i: int :: {Value_int(i)} TypeOf(Value_int(i)) == INT;
 axiom [TypeOf_float]: forall f: real :: {Value_float(f)} TypeOf(Value_float(f)) == FLOAT;
@@ -114,41 +122,19 @@ axiom [TypeOf_exception]: forall e: Error :: {Value_exception(e)} TypeOf(Value_e
 axiom [TypeOf_none]: TypeOf(Value_none()) == NONE;
 axiom [TypeOf_list]: forall l: ListValue :: {Value_list(l)} TypeOf(Value_list(l)) == ValueType_List(TypesOf(l));
 
-axiom [isList_def]: forall l: ListValue :: {Value_list(l)} isList(Value_list(l));
-axiom [list_neq_other_types]: forall v: Value :: {isList(v)} isList(v) == (
-  TypeOf(v) != BOOL &&
-  TypeOf(v) != INT &&
-  TypeOf(v) != FLOAT &&
-  TypeOf(v) != STR &&
-  TypeOf(v) != NONE &&
-  TypeOf(v) != EXCEPTION &&
-  !isClassInstance(v));
-axiom [list_neq_other_types']: forall l: ListValue, ci: ClassInstance :: {TypeOf(Value_list(l))}
-  TypeOf(Value_list(l))!=BOOL &&
-  TypeOf(Value_list(l))!=INT &&
-  TypeOf(Value_list(l))!=FLOAT &&
-  TypeOf(Value_list(l))!=STR &&
-  TypeOf(Value_list(l))!=NONE &&
-  TypeOf(Value_list(l))!=EXCEPTION &&
-  TypeOf(Value_list(l))!=TypeOf(Value_class(ci));
+axiom [TypeOf_bool_exists]: forall v: Value :: {TypeOf(v) == BOOL} TypeOf(v) == BOOL ==> exists b: bool :: v == Value_bool(b);
+axiom [TypeOf_int_exists]: forall v: Value :: {TypeOf(v) == INT} TypeOf(v) == INT ==> exists i: int :: v == Value_int(i);
+axiom [TypeOf_float_exists]: forall v: Value :: {TypeOf(v) == FLOAT} TypeOf(v) == FLOAT ==> exists r: real :: v == Value_float(r);
+axiom [TypeOf_string_exists]: forall v: Value :: {TypeOf(v) == STR} TypeOf(v) == STR ==> exists s: string :: v == Value_str(s);
+axiom [TypeOf_exception_exists]: forall v: Value :: {TypeOf(v) == EXCEPTION} TypeOf(v) == EXCEPTION ==> exists e: Error :: v == Value_exception(e);
+axiom [TypeOf_none']: forall v: Value :: {TypeOf(v) == NONE} (TypeOf(v) == NONE) == (v == Value_none()) ;
+axiom [TypeOf_list_exists]: forall v: Value :: {isList(v)} isList(v) ==> exists l: ListValue :: v == Value_list(l);
+axiom [TypeOf_class_exists]: forall v: Value :: {isClassInstance(v)} isClassInstance(v) ==> exists ci: ClassInstance :: v == Value_class(ci);
 
+axiom [isList_def]: forall l: ListValue :: {Value_list(l)} isList(Value_list(l));
+axiom [isList_def']: forall v: Value :: {isListValueType(TypeOf(v))} isList(v) == isListValueType(TypeOf(v));
 axiom [isClassInstance_def]: forall ci: ClassInstance :: {Value_class(ci)} isClassInstance(Value_class(ci));
-axiom [ClassInstantType_neq_other_types]: forall v: Value :: {isClassInstance(v)} isClassInstance(v) == (
-  TypeOf(v) != BOOL &&
-  TypeOf(v) != INT &&
-  TypeOf(v) != FLOAT &&
-  TypeOf(v) != STR &&
-  TypeOf(v) != NONE &&
-  TypeOf(v) != EXCEPTION &&
-  !isList(v));
-axiom [list_neq_single_type']: forall ci: ClassInstance, l: ListValue :: {TypeOf(Value_list(l))}
-  TypeOf(Value_class(ci))!=BOOL &&
-  TypeOf(Value_class(ci))!=INT &&
-  TypeOf(Value_class(ci))!=FLOAT &&
-  TypeOf(Value_class(ci))!=STR &&
-  TypeOf(Value_class(ci))!=NONE &&
-  TypeOf(Value_class(ci))!=EXCEPTION &&
-  TypeOf(Value_class(ci))!=TypeOf(Value_list(l));
+axiom [isClassInstance_def']: forall v: Value :: {isClassValueType(TypeOf(v))} isClassInstance(v) == isClassValueType(TypeOf(v));
 
 // isSubType functions
 function isSubType (t1: ValueType, t2: ValueType) : bool;
@@ -169,6 +155,10 @@ axiom [not_isSubstype_none]: forall t: ValueType ::{isSubType(NONE, t), isSubTyp
   t == NONE || (!isSubType(NONE, t) && !isSubType(t,NONE));
 axiom [not_isSubstype_exception]: forall t: ValueType ::{isSubType(EXCEPTION, t), isSubType(t, EXCEPTION)}
   t == EXCEPTION || (!isSubType(EXCEPTION, t) && !isSubType(t, EXCEPTION));
+axiom [not_isSubstype_list]: forall t: ValueType, t': ValueType ::{isSubType(t, t')}
+  ((isListValueType(t) && !isListValueType(t')) || (!isListValueType(t) && isListValueType(t'))) ==> (!isSubType(t, t') && !isSubType(t', t));
+axiom [not_isSubstype_class_othertypes]: forall t: ValueType, t': ValueType ::{isSubType(t, t')}
+  ((isClassValueType(t) && !isClassValueType(t')) || (!isClassValueType(t) && isClassValueType(t'))) ==> (!isSubType(t, t') && !isSubType(t', t));
 axiom [not_isSubstype_class]: forall t: ValueType, c: Class ::{isSubType(ValueType_class(c), t), isSubType(t,ValueType_class(c))}
   t != ValueType_class(c) ==> (!isSubType(ValueType_class(c), t) && !isSubType(t,ValueType_class(c)));
 // Supporting lemmas
@@ -228,7 +218,7 @@ axiom [List_index_ind]: forall h : Value, t : ListValue, i : int ::{List_index (
 axiom [List_index_contains]: forall l: ListValue, i: int, x: Value :: {List_contains(l,x), List_index(l,i)}
   (List_index(l,i) == x) ==> List_contains(l,x);
 axiom [List_index_ok]: forall l: ListValue, i: int:: {List_index(l,i)}
-  ((List_index(l,i)) != Value_exception(Error_message("index out of bound"))) == (i < List_len(l) && i>=0);
+  ((List_index(l,i)) != Value_exception(Error_message("index out of bound"))) == (i < List_len(l) && i >= 0);
 axiom [List_extend_get_shift]: forall l1: ListValue, l2: ListValue, i: int :: {List_extend(l2,l1)}
   List_index(l1, i) == List_index(List_extend(l2,l1), i + List_len(l2));
 axiom [List_extend_assoc]: forall l1: ListValue, l2: ListValue, l3: ListValue :: {List_extend(List_extend(l1,l2), l3)}
@@ -240,12 +230,12 @@ axiom [List_reverse_def_cons]: forall h: Value, t: ListValue:: {List_reverse(Lis
   List_reverse(ListValue_cons(h,t)) == List_append(List_reverse(t), h);
 axiom [List_reverse_len]: forall l: ListValue :: {List_len(List_reverse(l))}
   List_len(l) == List_len(List_reverse(l));
+axiom [List_reverse_contain]: forall l: ListValue, v: Value :: {List_contains (List_reverse(l), v)}
+  List_contains (List_reverse(l), v) == List_contains(l,v);
 axiom [List_reverse_index]: forall l: ListValue, i: int :: {List_index(List_reverse(l), i)}
   List_index(List_reverse(l), i) == List_index(l, List_len(l)-1-i);
 axiom [List_reverse_extend]: forall l1: ListValue, l2: ListValue :: {List_reverse(List_extend(l1,l2))}
   List_reverse(List_extend(l1,l2)) == List_extend(List_reverse(l2), List_reverse(l1));
-axiom [List_reverse_contain]: forall l: ListValue, v: Value :: {List_contains (List_reverse(l), v)}
-  List_contains (List_reverse(l), v) == List_contains(l,v);
 
 // Dict type
 type Dict := Map Value Value;
@@ -449,7 +439,6 @@ axiom [Py_add_unsupport]: forall v1: Value, v2: Value :: {Py_add(v1,v2)}
   (TypeOf(v2)!=BOOL && TypeOf(v2)!=INT && TypeOf(v2)!=FLOAT && TypeOf(v2)!=STR)) ==>
   Py_add(v1, v2) == Value_exception(Error_message("Operand Type is not supported"));
 
-
 axiom [Py_mul_ints]: forall i1: int, i2: int :: {Py_mul(Value_int(i1), Value_int(i2))}
   Py_mul(Value_int(i1), Value_int(i2)) == Value_int(i1 * i2);
 axiom [Py_mul_bools]: forall b1: bool, b2: bool :: {Py_mul(Value_bool(b1), Value_bool(b2))}
@@ -476,6 +465,17 @@ axiom [Py_mul_unsupport]: forall v1: Value, v2: Value :: {Py_mul(v1,v2)}
 //Testing
 procedure non_contradiction_test() returns () {
   assert [one_eq_two]: 1 == 2;
+};
+
+procedure binary_op_and_types_test () returns () {
+  assert [int_add_ok]: forall i: int :: TypeOf(Py_add(Value_int(1), Value_int(i))) != EXCEPTION;
+  assert [int_add_class_except]: forall v: Value :: isClassInstance(v) ==> TypeOf(Py_add(Value_int(1), v)) == EXCEPTION;
+  assert [int_add_class_except']: forall v: Value :: hasAttribute(v, "a") ==> TypeOf(Py_add(Value_int(1), v)) == EXCEPTION;
+  assert [float_add_isInstance_int_ok]: forall v: Value :: isInstance(v,INT) ==> TypeOf(Py_add(Value_float(1.1), v)) != EXCEPTION;
+  //assert [exists_type1]: exists t: ValueType, v: Value :: (TypeOf(Py_add(Value_int(1), v)) != EXCEPTION) && (TypeOf(v) == t);
+  //assert [exist_value]: exists v: Value:: TypeOf(Py_add(Value_int(1), v)) != EXCEPTION;
+  //assert [exist_value'']: exists i: int :: {Value_int(2)} TypeOf(Py_add(Value_int(1), Value_int(i))) != EXCEPTION;
+  //assert [exists_type3]: exists v: Value :: (TypeOf(Py_add(Value_none(), v)) == STR);
 };
 
 procedure list_functions_test() returns ()
