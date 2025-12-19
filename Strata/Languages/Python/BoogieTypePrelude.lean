@@ -185,46 +185,57 @@ function List_contains (l : ListValue, x: Value) : bool;
 function List_len (l : ListValue) : int;
 function List_extend (l1 : ListValue, l2: ListValue) : ListValue;
 function List_append (l: ListValue, x: Value) : ListValue;
-function List_index (l : ListValue, i : int) : Value;
+function List_get (l : ListValue, i : int) : Value;
 function List_reverse (l: ListValue) : ListValue;
+function List_index! (l: ListValue, v: Value): int;
+function List_index (l: ListValue, v: Value): Value;
+function List_repeat (l: ListValue, n: int): ListValue;
+//TO BE done
+function List_remove (l: ListValue, v: Value): ListValue;
+function List_pop (l: ListValue, i: int): ListValue;
+function List_insert (l: ListValue, i: int, v: Value): ListValue;
 
 //List function axioms
 axiom [List_contains_nil_def]: forall x : Value ::{List_contains(ListValue_nil(), x)}
   !List_contains(ListValue_nil(), x);
 axiom [List_contains_cons_def]: forall x : Value, h : Value, t : ListValue ::{List_contains(ListValue_cons(h,t),x)}
   List_contains(ListValue_cons(h,t),x) == ((normalize_value(x)==normalize_value(h)) || List_contains(t, x));
+
 axiom [List_len_nil_def]: List_len (ListValue_nil()) == 0;
 axiom [List_len_cons_def]: forall h : Value, t : ListValue ::{List_len (ListValue_cons(h,t))}
   List_len (ListValue_cons(h,t)) == 1 + List_len(t);
 axiom [List_len_nonneg]: forall l: ListValue :: {List_len(l)} List_len(l) >= 0 ;
+
 axiom [List_extend_nil_def]: forall l1: ListValue ::{List_extend (l1, ListValue_nil())}
   List_extend (l1, ListValue_nil()) == l1;
 axiom [List_nil_extend_def]: forall l1: ListValue ::{List_extend (ListValue_nil(), l1)}
   List_extend (ListValue_nil(), l1) == l1;
 axiom [List_cons_extend_def]: forall h: Value, t: ListValue, l2: ListValue  ::{List_extend (ListValue_cons(h,t), l2)}
   List_extend (ListValue_cons(h,t), l2) == ListValue_cons(h, List_extend(t,l2));
+
 axiom [List_cons_extend_contains]: forall x: Value, l1: ListValue, l2: ListValue  ::{List_contains (List_extend(l1,l2), x)}
   List_contains (List_extend(l1,l2), x) == List_contains (l1,x) || List_contains(l2,x);
-axiom [List_cons_extend_contains_symm]: forall x: Value, l1: ListValue, l2: ListValue  ::{List_contains (List_extend(l1,l2), x)}
-  List_contains (List_extend(l1,l2), x) == List_contains (List_extend(l2,l1), x);
 axiom [List_len_extend]: forall l1: ListValue, l2: ListValue  ::{List_len (List_extend(l1,l2))}
   List_len (List_extend(l1,l2)) == List_len (l1) + List_len(l2);
-axiom [List_index_nil]: forall i : int ::{List_index (ListValue_nil(), i)}
-  List_index (ListValue_nil(), i) == Value_exception(Error_message("index out of bound"));
-axiom [List_index_zero]: forall h : Value, t : ListValue ::{List_index (ListValue_cons(h,t), 0)}
-  List_index (ListValue_cons(h,t), 0) == h;
-axiom [List_index_ind]: forall h : Value, t : ListValue, i : int ::{List_index (ListValue_cons(h,t), i)}
-  (i > 0) ==> (List_index (ListValue_cons(h,t), i)) == List_index (t, i - 1);
-axiom [List_index_contains]: forall l: ListValue, i: int, x: Value :: {List_contains(l,x), List_index(l,i)}
-  (List_index(l,i) == x) ==> List_contains(l,x);
-axiom [List_index_ok]: forall l: ListValue, i: int:: {List_index(l,i)}
-  ((List_index(l,i)) != Value_exception(Error_message("index out of bound"))) == (i < List_len(l) && i >= 0);
-axiom [List_extend_get_shift]: forall l1: ListValue, l2: ListValue, i: int :: {List_extend(l2,l1)}
-  List_index(l1, i) == List_index(List_extend(l2,l1), i + List_len(l2));
 axiom [List_extend_assoc]: forall l1: ListValue, l2: ListValue, l3: ListValue :: {List_extend(List_extend(l1,l2), l3)}
   List_extend(List_extend(l1,l2), l3) == List_extend(l1,List_extend(l2,l3));
+
+axiom [List_get_nil]: forall i : int ::{List_get (ListValue_nil(), i)}
+  List_get (ListValue_nil(), i) == Value_exception(Error_message("index out of bound"));
+axiom [List_get_zero]: forall h : Value, t : ListValue ::{List_get (ListValue_cons(h,t), 0)}
+  List_get (ListValue_cons(h,t), 0) == h;
+axiom [List_get_ind]: forall h : Value, t : ListValue, i : int ::{List_get (ListValue_cons(h,t), i)}
+  (i > 0) ==> (List_get (ListValue_cons(h,t), i)) == List_get (t, i - 1);
+axiom [List_get_contains]: forall l: ListValue, i: int, x: Value :: {List_contains(l,x), List_get(l,i)}
+  (List_get(l,i) == x) ==> List_contains(l,x);
+axiom [List_get_ok]: forall l: ListValue, i: int:: {List_get(l,i)}
+  ((List_get(l,i)) != Value_exception(Error_message("index out of bound"))) == (i < List_len(l) && i >= 0);
+axiom [List_extend_get_shift]: forall l1: ListValue, l2: ListValue, i: int :: {List_extend(l2,l1)}
+  List_get(l1, i) == List_get(List_extend(l2,l1), i + List_len(l2));
+
 axiom [List_append_def]: forall l: ListValue, x: Value :: {List_append(l,x)}
   List_append(l,x) == List_extend(l, ListValue_cons(x, ListValue_nil()));
+
 axiom [List_reverse_def_nil]: List_reverse(ListValue_nil()) == ListValue_nil();
 axiom [List_reverse_def_cons]: forall h: Value, t: ListValue:: {List_reverse(ListValue_cons(h,t))}
   List_reverse(ListValue_cons(h,t)) == List_append(List_reverse(t), h);
@@ -232,10 +243,26 @@ axiom [List_reverse_len]: forall l: ListValue :: {List_len(List_reverse(l))}
   List_len(l) == List_len(List_reverse(l));
 axiom [List_reverse_contain]: forall l: ListValue, v: Value :: {List_contains (List_reverse(l), v)}
   List_contains (List_reverse(l), v) == List_contains(l,v);
-axiom [List_reverse_index]: forall l: ListValue, i: int :: {List_index(List_reverse(l), i)}
-  List_index(List_reverse(l), i) == List_index(l, List_len(l)-1-i);
+axiom [List_reverse_index]: forall l: ListValue, i: int :: {List_get(List_reverse(l), i)}
+  List_get(List_reverse(l), i) == List_get(l, List_len(l)-1-i);
 axiom [List_reverse_extend]: forall l1: ListValue, l2: ListValue :: {List_reverse(List_extend(l1,l2))}
   List_reverse(List_extend(l1,l2)) == List_extend(List_reverse(l2), List_reverse(l1));
+
+axiom [List_index!_nil_def]: forall v: Value :: {List_index!(ListValue_nil(), v)}
+  List_index!(ListValue_nil(), v) == 0;
+axiom [List_index!_cons_def_1]: forall h: Value, t: ListValue :: {List_index!(ListValue_cons(h,t), h)}
+  List_index!(ListValue_cons(h,t), h) == 0;
+axiom [List_index!_cons_def_2]: forall v: Value, h: Value, t: ListValue :: {List_index!(ListValue_cons(h,t), v)}
+  !(normalize_value(v)==normalize_value(h)) ==> List_index!(ListValue_cons(h,t), v) == List_index!(t, v) + 1;
+axiom [List_index_def]: forall v: Value, l: ListValue :: {List_index(l, v)}
+  List_index(l,v) ==  if (List_index!(l,v) == List_len(l)) then Value_exception(Error_message("List does not contain element"))
+                      else Value_int(List_index!(l,v));
+
+axiom [List_repeat_def]: forall l: ListValue, n: int :: {List_repeat(l, n)}
+  List_repeat(l, n) ==  if (n <= 0) then ListValue_nil() else
+                        if (n == 1) then l else  List_extend(l, List_repeat(l, n-1));
+axiom [List_repeat_mul]: forall l: ListValue, n: int, m: int :: {List_repeat(List_repeat(l, n),m)}
+  List_repeat(List_repeat(l, n),m) == List_repeat(l, n * m);
 
 // Dict type
 type Dict := Map Value Value;
@@ -403,6 +430,9 @@ function str_repeat (s: string, i: int) : string;
 function Py_add (v1: Value, v2: Value) : Value;
 function Py_sub (v1: Value, v2: Value) : Value;
 function Py_mul (v1: Value, v2: Value) : Value;
+function Py_gt (v1: Value, v2: Value) : Value;
+function Py_lt (v1: Value, v2: Value) : Value;
+function Py_eq (v1: Value, v2: Value) : Value;
 inline function bool_to_int (b: bool) : int {if b then 1 else 0}
 inline function bool_to_real (b: bool) : real {if b then 1.0 else 0.0}
 
@@ -424,20 +454,37 @@ axiom [Py_add_float_bool]: forall r: real, b: bool :: {Py_add(Value_float(r), Va
   Py_add(Value_float(r), Value_bool(b)) == Value_float(r + bool_to_real(b));
 axiom [Py_add_bool_float]: forall b: bool, r: real :: {Py_add(Value_bool(b), Value_float(r))}
   Py_add(Value_bool(b), Value_float(r)) == Value_float(bool_to_real(b) + r);
-axiom [Py_add_strs]:forall s1: string, s2: string :: {Py_add(Value_str(s1), Value_str(s2))}
+axiom [Py_add_strs]: forall s1: string, s2: string :: {Py_add(Value_str(s1), Value_str(s2))}
   Py_add(Value_str(s1), Value_str(s2)) == Value_str(str.concat(s1, s2));
-axiom [Py_add_str_int]: forall s: string, i: int :: {Py_add(Value_str(s), Value_int(i))}
-  Py_add(Value_str(s), Value_int(i)) == Value_exception(Error_message("Cannot add string to int"));
-axiom [Py_add_int_str]: forall s: string, i: int :: {Py_add(Value_int(i), Value_str(s)) }
-  Py_add(Value_int(i), Value_str(s)) == Value_exception(Error_message("Cannot add string to int"));
-axiom [Py_add_str_bool]: forall s: string, b: bool :: {Py_add(Value_str(s), Value_bool(b))}
-  Py_add(Value_str(s), Value_bool(b)) == Value_exception(Error_message("Cannot add string to bool"));
-axiom [Py_add_bool_str]: forall s: string, b: bool :: {Py_add(Value_bool(b), Value_str(s))}
-  Py_add(Value_bool(b), Value_str(s)) == Value_exception(Error_message("Cannot add bool to string"));
+axiom [Py_add_lists]: forall l1: ListValue, l2: ListValue :: {Py_add(Value_list(l1), Value_list(l2))}
+  Py_add(Value_list(l1), Value_list(l2)) == Value_list(List_extend(l1, l2));
 axiom [Py_add_unsupport]: forall v1: Value, v2: Value :: {Py_add(v1,v2)}
-  ((TypeOf(v1)!=BOOL && TypeOf(v1)!=INT && TypeOf(v1)!=FLOAT && TypeOf(v1)!=STR) ||
-  (TypeOf(v2)!=BOOL && TypeOf(v2)!=INT && TypeOf(v2)!=FLOAT && TypeOf(v2)!=STR)) ==>
-  Py_add(v1, v2) == Value_exception(Error_message("Operand Type is not supported"));
+  !((isInstance(v1, FLOAT) && isInstance(v2, FLOAT)) ||
+    (TypeOf(v1) == STR && TypeOf(v2) == STR) ||
+    (isList(v1) && isList(v2)))
+  ==> Py_add(v1, v2) == Value_exception(Error_message("Operand Type is not supported"));
+
+axiom [Py_sub_ints]: forall i1: int, i2: int :: {Py_sub(Value_int(i1), Value_int(i2))}
+  Py_sub(Value_int(i1), Value_int(i2)) == Value_int(i1 - i2);
+axiom [Py_sub_floats]: forall f1: real, f2: real :: {Py_sub(Value_float(f1), Value_float(f2))}
+  Py_sub(Value_float(f1), Value_float(f2)) == Value_float(f1 - f2);
+axiom [Py_sub_bools]: forall b1: bool, b2: bool :: {Py_sub(Value_bool(b1), Value_bool(b2))}
+  Py_sub(Value_bool(b1), Value_bool(b2)) == Value_int(bool_to_int(b1) - bool_to_int(b2));
+axiom [Py_sub_int_bool]: forall i: int, b: bool :: {Py_sub(Value_int(i), Value_bool(b))}
+  Py_sub(Value_int(i), Value_bool(b)) == Value_int(i - bool_to_int(b));
+axiom [Py_sub_bool_int]: forall b: bool, i: int :: {Py_sub(Value_bool(b), Value_int(i))}
+  Py_sub(Value_bool(b), Value_int(i)) == Value_int(bool_to_int(b) - i);
+axiom [Py_sub_int_float]: forall i: int, r: real :: {Py_sub(Value_int(i), Value_float(r))}
+  Py_sub(Value_int(i), Value_float(r)) == Value_float(r - int_to_real(i));
+axiom [Py_sub_float_int]: forall r: real, i: int :: {Py_sub(Value_float(r), Value_int(i))}
+  Py_sub(Value_float(r), Value_int(i)) == Value_float(int_to_real(i) - r);
+axiom [Py_sub_float_bool]: forall r: real, b: bool :: {Py_sub(Value_float(r), Value_bool(b))}
+  Py_sub(Value_float(r), Value_bool(b)) == Value_float(r - bool_to_real(b));
+axiom [Py_sub_bool_float]: forall b: bool, r: real :: {Py_sub(Value_bool(b), Value_float(r))}
+  Py_sub(Value_bool(b), Value_float(r)) == Value_float(bool_to_real(b) - r);
+axiom [Py_sub_unsupport]: forall v1: Value, v2: Value :: {Py_sub(v1,v2)}
+  !(isInstance(v1, FLOAT) && isInstance(v2, FLOAT)) ==>
+  Py_sub(v1, v2) == Value_exception(Error_message("Operand Type is not supported"));
 
 axiom [Py_mul_ints]: forall i1: int, i2: int :: {Py_mul(Value_int(i1), Value_int(i2))}
   Py_mul(Value_int(i1), Value_int(i2)) == Value_int(i1 * i2);
@@ -447,8 +494,6 @@ axiom [Py_mul_int_bool]: forall i: int, b: bool :: {Py_mul(Value_int(i), Value_b
   Py_mul(Value_int(i), Value_bool(b)) == Value_int(i * bool_to_int(b));
 axiom [Py_mul_bool_int]: forall b: bool, i: int :: {Py_mul(Value_bool(b), Value_int(i))}
   Py_mul(Value_bool(b), Value_int(i)) == Value_int(bool_to_int(b) * i);
-axiom [Py_mul_str]: forall s1: string, s2: string :: {Py_mul(Value_str(s1), Value_str(s2))}
-  Py_mul(Value_str(s1), Value_str(s2)) == Value_exception(Error_message("Cannot multiply two strings"));
 axiom [Py_mul_str_int]: forall s: string, i: int :: {Py_mul(Value_str(s), Value_int(i))}
   Py_mul(Value_str(s), Value_int(i)) == Value_str(str_repeat(s, i));
 axiom [Py_mul_int_str]: forall s: string, i: int :: {Py_mul(Value_int(i), Value_str(s))}
@@ -457,10 +502,66 @@ axiom [Py_mul_str_bool]: forall s: string, b: bool :: {Py_mul(Value_str(s), Valu
   Py_mul(Value_str(s), Value_bool(b)) == Value_str(if b then s else "");
 axiom [Py_mul_bool_str]: forall s: string, b: bool :: {Py_mul(Value_bool(b), Value_str(s)) }
   Py_mul(Value_bool(b), Value_str(s)) ==  Value_str(if b then s else "");
-axiom [Py_mul_unsupport]: forall v1: Value, v2: Value :: {Py_mul(v1,v2)}
-  ((TypeOf(v1)!=BOOL && TypeOf(v1)!=INT && TypeOf(v1)!=FLOAT && TypeOf(v1)!=STR) ||
-  (TypeOf(v2)!=BOOL && TypeOf(v2)!=INT && TypeOf(v2)!=FLOAT && TypeOf(v2)!=STR)) ==>
-  Py_mul(v1, v2) == Value_exception(Error_message("Operand Type is not supported"));
+axiom [Py_mul_list_int]: forall l: ListValue, i: int :: {Py_mul(Value_list(l), Value_int(i))}
+  Py_mul(Value_list(l), Value_int(i)) == Value_list(List_repeat(l, i));
+axiom [Py_mul_int_list]: forall l: ListValue, i: int :: {Py_mul(Value_int(i), Value_list(l))}
+  Py_mul(Value_int(i), Value_list(l)) == Value_list(List_repeat(l, i));
+axiom [Py_mul_list_bool]: forall l: ListValue, b: bool :: {Py_mul(Value_list(l), Value_bool(b))}
+  Py_mul(Value_list(l), Value_bool(b)) == Value_list(if b then l else ListValue_nil());
+axiom [Py_mul_bool_list]: forall l: ListValue, b: bool :: {Py_mul(Value_bool(b), Value_list(l)) }
+  Py_mul(Value_bool(b), Value_list(l)) ==  Value_list(if b then l else ListValue_nil());
+axiom [Py_mul_unsupport]: forall v1: Value, v2: Value :: {Py_add(v1,v2)}
+  !((isInstance(v1, FLOAT) && isInstance(v2, FLOAT)) ||
+    (TypeOf(v1) == STR && isInstance(v2, INT)) ||
+    (TypeOf(v2) == STR && isInstance(v1, INT)) ||
+    (isList(v1) && isInstance(v2, INT)) ||
+    (isList(v2) && isInstance(v1, INT)) )
+  ==> Py_mul(v1, v2) == Value_exception(Error_message("Operand Type is not supported"));
+
+axiom [Py_lt_ints]: forall i1: int, i2: int :: {Py_lt(Value_int(i1), Value_int(i2))}
+  Py_lt(Value_int(i1), Value_int(i2)) == Value_bool(i1 < i2);
+axiom [Py_lt_floats]: forall f1: real, f2: real :: {Py_lt(Value_float(f1), Value_float(f2))}
+  Py_lt(Value_float(f1), Value_float(f2)) == Value_bool(f1 < f2);
+axiom [Py_lt_bools]: forall b1: bool, b2: bool :: {Py_lt(Value_bool(b1), Value_bool(b2))}
+  Py_lt(Value_bool(b1), Value_bool(b2)) == Value_bool(bool_to_int(b1) < bool_to_int(b2));
+axiom [Py_lt_int_bool]: forall i: int, b: bool :: {Py_lt(Value_int(i), Value_bool(b))}
+  Py_lt(Value_int(i), Value_bool(b)) == Value_bool(i < bool_to_int(b));
+axiom [Py_lt_bool_int]: forall b: bool, i: int :: {Py_lt(Value_bool(b), Value_int(i))}
+  Py_lt(Value_bool(b), Value_int(i)) == Value_bool(bool_to_int(b) < i);
+axiom [Py_lt_int_float]: forall i: int, r: real :: {Py_lt(Value_int(i), Value_float(r))}
+  Py_lt(Value_int(i), Value_float(r)) == Value_bool(r < int_to_real(i));
+axiom [Py_lt_float_int]: forall r: real, i: int :: {Py_lt(Value_float(r), Value_int(i))}
+  Py_lt(Value_float(r), Value_int(i)) == Value_bool(int_to_real(i) < r);
+axiom [Py_lt_float_bool]: forall r: real, b: bool :: {Py_lt(Value_float(r), Value_bool(b))}
+  Py_lt(Value_float(r), Value_bool(b)) == Value_bool(r < bool_to_real(b));
+axiom [Py_lt_bool_float]: forall b: bool, r: real :: {Py_lt(Value_bool(b), Value_float(r))}
+  Py_lt(Value_bool(b), Value_float(r)) == Value_bool(bool_to_real(b) < r);
+axiom [Py_lt_unsupport]: forall v1: Value, v2: Value :: {Py_lt(v1,v2)}
+  !(isInstance(v1, FLOAT) && isInstance(v2, FLOAT)) ==>
+  Py_lt(v1, v2) == Value_exception(Error_message("Operand Type is not supported"));
+
+axiom [Py_gt_ints]: forall i1: int, i2: int :: {Py_gt(Value_int(i1), Value_int(i2))}
+  Py_gt(Value_int(i1), Value_int(i2)) == Value_bool(i1 > i2);
+axiom [Py_gt_floats]: forall f1: real, f2: real :: {Py_gt(Value_float(f1), Value_float(f2))}
+  Py_gt(Value_float(f1), Value_float(f2)) == Value_bool(f1 > f2);
+axiom [Py_gt_bools]: forall b1: bool, b2: bool :: {Py_gt(Value_bool(b1), Value_bool(b2))}
+  Py_gt(Value_bool(b1), Value_bool(b2)) == Value_bool(bool_to_int(b1) > bool_to_int(b2));
+axiom [Py_gt_int_bool]: forall i: int, b: bool :: {Py_gt(Value_int(i), Value_bool(b))}
+  Py_gt(Value_int(i), Value_bool(b)) == Value_bool(i > bool_to_int(b));
+axiom [Py_gt_bool_int]: forall b: bool, i: int :: {Py_gt(Value_bool(b), Value_int(i))}
+  Py_gt(Value_bool(b), Value_int(i)) == Value_bool(bool_to_int(b) > i);
+axiom [Py_gt_int_float]: forall i: int, r: real :: {Py_gt(Value_int(i), Value_float(r))}
+  Py_gt(Value_int(i), Value_float(r)) == Value_bool(r > int_to_real(i));
+axiom [Py_gt_float_int]: forall r: real, i: int :: {Py_gt(Value_float(r), Value_int(i))}
+  Py_gt(Value_float(r), Value_int(i)) == Value_bool(int_to_real(i) > r);
+axiom [Py_gt_float_bool]: forall r: real, b: bool :: {Py_gt(Value_float(r), Value_bool(b))}
+  Py_gt(Value_float(r), Value_bool(b)) == Value_bool(r > bool_to_real(b));
+axiom [Py_gt_bool_float]: forall b: bool, r: real :: {Py_gt(Value_bool(b), Value_float(r))}
+  Py_gt(Value_bool(b), Value_float(r)) == Value_bool(bool_to_real(b) > r);
+axiom [Py_gt_unsupport]: forall v1: Value, v2: Value :: {Py_gt(v1,v2)}
+  !(isInstance(v1, FLOAT) && isInstance(v2, FLOAT)) ==>
+  Py_gt(v1, v2) == Value_exception(Error_message("Operand Type is not supported"));
+
 
 //Testing
 procedure non_contradiction_test() returns () {
@@ -482,11 +583,18 @@ procedure list_functions_test() returns ()
 {
   var l1: ListValue, l2: ListValue;
   l1 := ListValue_cons(Value_int(1), ListValue_cons(Value_int(2), ListValue_cons (Value_int(3), ListValue_nil())));
-  assert [index_1]: List_index(l1,1) == Value_int(2);
+  l2 := ListValue_cons(Value_int(1), ListValue_cons(Value_int(2), ListValue_cons (Value_int(3),
+        ListValue_cons(Value_int(1), ListValue_cons(Value_int(2), ListValue_cons (Value_int(3), ListValue_nil()))))));
+  assert [index_1]: List_get(l1,1) == Value_int(2);
   assert [contain_true]: List_contains(l1, Value_bool(true));
   assert [ValueEq]: !(Value_int(4) == Value_int(3));
   assert [normalize_value]: !(normalize_value(Value_int(4)) == Value_int(3));
   assert [contain_3]: List_contains(l1, Value_int(2));
+  assert [list_index_test1]: List_index(l1, Value_int(3)) == Value_int(2);
+  assert [list_index_test2]: TypeOf(List_index(l1, Value_int(9))) == EXCEPTION;
+  assert [list_extend]: List_extend(l1, l1) == l2;
+  assert [list_repeat1]: List_repeat(l1, 2) == l2;
+  assert [list_repeat2]: List_repeat(l1, 6) == List_repeat(l2, 3);
 };
 
 procedure list_generic_test() returns () {
@@ -500,6 +608,9 @@ procedure list_generic_test() returns () {
   assert [rev_contain]: forall l: ListValue, v: Value :: List_contains (List_reverse(l), v) == List_contains(l,v);
   assert [l1r_l2_contains_3]: forall l2: ListValue :: List_contains (List_extend(List_reverse(l1), l2), Value_int(3));
   assert [l1r_l2_contains_3']: forall l2: ListValue :: List_contains (List_reverse(List_extend(List_reverse(l1), l2)), Value_int(3));
+  assert [list_repeat_contain]: forall l: ListValue, v: Value, n: int :: List_contains(l, v) == List_contains(List_repeat(l, n), v);
+  assert [List_cons_extend_contains_symm]: forall x: Value, l1: ListValue, l2: ListValue ::
+    List_contains (List_extend(l1,l2), x) == List_contains (List_extend(l2,l1), x);
 };
 
 
