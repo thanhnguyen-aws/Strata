@@ -20,6 +20,7 @@ type List_tag;
 const CONS : List_tag;
 const NIL : List_tag;
 axiom [list_tag_unique]: CONS != NIL;
+axiom [all_list_tag]: forall lt: List_tag :: lt == CONS || lt == NIL;
 
 //Will be merged with BoogiePrelude.lean
 type Error;
@@ -28,6 +29,7 @@ type Error_tag;
 const OK : Error_tag;
 const ERR : Error_tag;
 axiom [error_tag_unique]: OK != ERR;
+axiom [all_error_tag]: forall et: Error_tag :: et == OK || et == ERR;
 
 // Value and ListValue types
 type Value;
@@ -190,10 +192,11 @@ function List_reverse (l: ListValue) : ListValue;
 function List_index! (l: ListValue, v: Value): int;
 function List_index (l: ListValue, v: Value): Value;
 function List_repeat (l: ListValue, n: int): ListValue;
-//TO BE done
-function List_remove (l: ListValue, v: Value): ListValue;
-function List_pop (l: ListValue, i: int): ListValue;
 function List_insert (l: ListValue, i: int, v: Value): ListValue;
+function List_remove (l: ListValue, v: Value): ListValue;
+//TO BE done
+function List_pop (l: ListValue, i: int): ListValue;
+
 
 //List function axioms
 axiom [List_contains_nil_def]: forall x : Value ::{List_contains(ListValue_nil(), x)}
@@ -205,6 +208,8 @@ axiom [List_len_nil_def]: List_len (ListValue_nil()) == 0;
 axiom [List_len_cons_def]: forall h : Value, t : ListValue ::{List_len (ListValue_cons(h,t))}
   List_len (ListValue_cons(h,t)) == 1 + List_len(t);
 axiom [List_len_nonneg]: forall l: ListValue :: {List_len(l)} List_len(l) >= 0 ;
+axiom [List_nil_of_len_zero]: forall l: ListValue :: {List_len(l) == 0}
+  (List_len(l) == 0) == (l == ListValue_nil());
 
 axiom [List_extend_nil_def]: forall l1: ListValue ::{List_extend (l1, ListValue_nil())}
   List_extend (l1, ListValue_nil()) == l1;
@@ -214,7 +219,7 @@ axiom [List_cons_extend_def]: forall h: Value, t: ListValue, l2: ListValue  ::{L
   List_extend (ListValue_cons(h,t), l2) == ListValue_cons(h, List_extend(t,l2));
 
 axiom [List_cons_extend_contains]: forall x: Value, l1: ListValue, l2: ListValue  ::{List_contains (List_extend(l1,l2), x)}
-  List_contains (List_extend(l1,l2), x) == List_contains (l1,x) || List_contains(l2,x);
+  List_contains (List_extend(l1,l2), x) == (List_contains (l1,x) || List_contains(l2,x));
 axiom [List_len_extend]: forall l1: ListValue, l2: ListValue  ::{List_len (List_extend(l1,l2))}
   List_len (List_extend(l1,l2)) == List_len (l1) + List_len(l2);
 axiom [List_extend_assoc]: forall l1: ListValue, l2: ListValue, l3: ListValue :: {List_extend(List_extend(l1,l2), l3)}
@@ -227,11 +232,13 @@ axiom [List_get_zero]: forall h : Value, t : ListValue ::{List_get (ListValue_co
 axiom [List_get_ind]: forall h : Value, t : ListValue, i : int ::{List_get (ListValue_cons(h,t), i)}
   (i > 0) ==> (List_get (ListValue_cons(h,t), i)) == List_get (t, i - 1);
 axiom [List_get_contains]: forall l: ListValue, i: int, x: Value :: {List_contains(l,x), List_get(l,i)}
-  (List_get(l,i) == x) ==> List_contains(l,x);
+  (List_get(l,i) == x && TypeOf(x)!= EXCEPTION) ==> List_contains(l,x);
 axiom [List_get_ok]: forall l: ListValue, i: int:: {List_get(l,i)}
   ((List_get(l,i)) != Value_exception(Error_message("index out of bound"))) == (i < List_len(l) && i >= 0);
-axiom [List_extend_get_shift]: forall l1: ListValue, l2: ListValue, i: int :: {List_extend(l2,l1)}
-  List_get(l1, i) == List_get(List_extend(l2,l1), i + List_len(l2));
+axiom [List_get_ok']: forall l: ListValue, i: int:: {List_get(l,i)}
+  (TypeOf(List_get(l,i)) != EXCEPTION) == (i < List_len(l) && i >= 0);
+axiom [List_extend_get]: forall l1: ListValue, l2: ListValue, i: int :: {List_get(List_extend(l1,l2), i)}
+  List_get(List_extend(l1,l2), i) == if i < List_len(l1) then List_get(l1, i) else List_get(l2, i - List_len(l1));
 
 axiom [List_append_def]: forall l: ListValue, x: Value :: {List_append(l,x)}
   List_append(l,x) == List_extend(l, ListValue_cons(x, ListValue_nil()));
@@ -245,6 +252,8 @@ axiom [List_reverse_contain]: forall l: ListValue, v: Value :: {List_contains (L
   List_contains (List_reverse(l), v) == List_contains(l,v);
 axiom [List_reverse_index]: forall l: ListValue, i: int :: {List_get(List_reverse(l), i)}
   List_get(List_reverse(l), i) == List_get(l, List_len(l)-1-i);
+axiom [List_reverse_reverse]: forall l: ListValue :: {List_reverse(List_reverse(l))}
+  List_reverse(List_reverse(l)) == l;
 axiom [List_reverse_extend]: forall l1: ListValue, l2: ListValue :: {List_reverse(List_extend(l1,l2))}
   List_reverse(List_extend(l1,l2)) == List_extend(List_reverse(l2), List_reverse(l1));
 
@@ -263,6 +272,41 @@ axiom [List_repeat_def]: forall l: ListValue, n: int :: {List_repeat(l, n)}
                         if (n == 1) then l else  List_extend(l, List_repeat(l, n-1));
 axiom [List_repeat_mul]: forall l: ListValue, n: int, m: int :: {List_repeat(List_repeat(l, n),m)}
   List_repeat(List_repeat(l, n),m) == List_repeat(l, n * m);
+axiom [List_repeat_contain]: forall l: ListValue, v: Value, n: int :: {List_contains(List_repeat(l, n), v)}
+  n > 0 ==> (List_contains(List_repeat(l, n), v) == List_contains(l, v));
+axiom [List_repeat_get]: forall l: ListValue, v: Value, i: int, n: int, m: int :: {List_get(List_repeat(l, n), i + m * List_len(l))}
+  (i >= 0 && i < List_len(l) && m >= 0 && m < n) ==> (List_get(List_repeat(l, n), i + m * List_len(l)) == List_get(l, i));
+
+axiom [List_insert_def0]: forall i: int, v: Value :: {List_insert(ListValue_nil(), i, v)}
+  List_insert(ListValue_nil(), i, v) == ListValue_cons(v, ListValue_nil());
+axiom [List_insert_def1]: forall l: ListValue, i: int, v: Value :: {List_insert(l, i, v)}
+  List_insert(l, 0, v) == ListValue_cons(v, l);
+axiom [List_insert_def2]: forall h: Value, t: ListValue, i: int, v: Value :: {List_insert(ListValue_cons(h,t), i, v)}
+  (i > 0) ==> List_insert(ListValue_cons(h,t), i, v) == ListValue_cons(h, List_insert(t, i-1, v));
+axiom [List_insert_def3]: forall h: Value, t: ListValue, i: int, v: Value :: {List_insert(ListValue_cons(h,t), i, v)}
+  (i < 0) ==> List_insert(ListValue_cons(h,t), i, v) == List_insert(ListValue_cons(h,t), i mod (List_len(t)+1) , v);
+axiom [List_insert_len]: forall l: ListValue, i: int, v: Value :: {List_len(List_insert(l, i, v))}
+  List_len(List_insert(l, i, v)) == List_len(l) + 1;
+axiom [List_insert_get0]: forall l: ListValue, p: int, v: Value:: {List_get(List_insert(l, p, v), p)}
+  (p >= 0 && p < List_len(l)) ==> (List_get(List_insert(l, p, v), p) == v);
+axiom [List_insert_get1]: forall l: ListValue, p: int, v: Value:: {List_get(List_insert(l, p, v), p)}
+  p >= List_len(l) ==> (List_get(List_insert(l, p, v), List_len(l)) == v);
+axiom [List_insert_get2]: forall l: ListValue, p: int, v: Value, i: int :: {List_get(List_insert(l, p, v), i)}
+  (p >= List_len(l) && i < List_len(l)) ==> (List_get(List_insert(l, p, v),i) == List_get(l, i));
+axiom [List_insert_get3]: forall l: ListValue, p: int, v: Value, i: int:: {List_get(List_insert(l, p, v), i)}
+  (p >= 0 && p < List_len(l) && i < p) ==> (List_get(List_insert(l, p, v), i) == List_get(l,i));
+axiom [List_insert_get4]: forall l: ListValue, p: int, v: Value, i: int:: {List_get(List_insert(l, p, v), i)}
+  (p >= 0 && p < List_len(l) && i > p) ==> (List_get(List_insert(l, p, v), i) == List_get(l,i -1));
+axiom [List_insert_get5]: forall l: ListValue, p: int, v: Value, i: int:: {List_get(List_insert(l, p, v), i)}
+  (p < 0 && i < p mod List_len(l)) ==> (List_get(List_insert(l, p, v), i) == List_get(l,i));
+axiom [List_insert_get6]: forall l: ListValue, p: int, v: Value, i: int:: {List_get(List_insert(l, p, v), i)}
+  (p < 0 && i > p mod List_len(l)) ==> (List_get(List_insert(l, p, v), i) == List_get(l,i -1));
+
+axiom [List_remove_nil_def]: forall x : Value ::{List_remove(ListValue_nil(), x)}
+  List_remove(ListValue_nil(), x) == ListValue_nil();
+axiom [List_remove_cons_def]: forall x : Value, h : Value, t : ListValue ::{List_remove(ListValue_cons(h,t),x)}
+  List_remove(ListValue_cons(h,t),x) == if (normalize_value(x)==normalize_value(h)) then t
+                                        else ListValue_cons(h, List_remove(t, x));
 
 // Dict type
 type Dict := Map Value Value;
@@ -432,7 +476,7 @@ function Py_sub (v1: Value, v2: Value) : Value;
 function Py_mul (v1: Value, v2: Value) : Value;
 function Py_gt (v1: Value, v2: Value) : Value;
 function Py_lt (v1: Value, v2: Value) : Value;
-function Py_eq (v1: Value, v2: Value) : Value;
+function Py_eq (v1: Value, v2: Value) : bool;
 inline function bool_to_int (b: bool) : int {if b then 1 else 0}
 inline function bool_to_real (b: bool) : real {if b then 1.0 else 0.0}
 
@@ -562,6 +606,8 @@ axiom [Py_gt_unsupport]: forall v1: Value, v2: Value :: {Py_gt(v1,v2)}
   !(isInstance(v1, FLOAT) && isInstance(v2, FLOAT)) ==>
   Py_gt(v1, v2) == Value_exception(Error_message("Operand Type is not supported"));
 
+axiom [Py_eq_def]: forall v: Value, v': Value :: {Py_eq(v, v')}
+  Py_eq(v, v') == (normalize_value(v) == normalize_value (v'));
 
 //Testing
 procedure non_contradiction_test() returns () {
@@ -603,12 +649,12 @@ procedure list_generic_test() returns () {
   assert [len_append]: forall l: ListValue, x: Value :: List_len(List_append(l,x)) == List_len(l) + 1;
   l1 := ListValue_cons(Value_int(1), ListValue_cons(Value_int(2), ListValue_cons (Value_int(3), ListValue_nil())));
   assert [l1_contains_3]: List_contains (l1, Value_int(3));
+  assert [contains_len]: forall l: ListValue, x: Value:: List_contains(l,x) ==> (List_len(l) >0);
   assert [l1l2_contains_3]: forall l2: ListValue :: List_contains (List_extend(l1, l2), Value_int(3));
   assert [revl1_contain_3]: List_contains (List_reverse(l1), Value_int(3));
   assert [rev_contain]: forall l: ListValue, v: Value :: List_contains (List_reverse(l), v) == List_contains(l,v);
   assert [l1r_l2_contains_3]: forall l2: ListValue :: List_contains (List_extend(List_reverse(l1), l2), Value_int(3));
   assert [l1r_l2_contains_3']: forall l2: ListValue :: List_contains (List_reverse(List_extend(List_reverse(l1), l2)), Value_int(3));
-  assert [list_repeat_contain]: forall l: ListValue, v: Value, n: int :: List_contains(l, v) == List_contains(List_repeat(l, n), v);
   assert [List_cons_extend_contains_symm]: forall x: Value, l1: ListValue, l2: ListValue ::
     List_contains (List_extend(l1,l2), x) == List_contains (List_extend(l2,l1), x);
 };
