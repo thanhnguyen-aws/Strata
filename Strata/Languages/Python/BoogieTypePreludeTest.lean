@@ -266,26 +266,8 @@ axiom [isSubtype_mono]: forall t1: ValueType, t2: ValueType ::{isSubType (t1,t2)
 axiom [isSubtype_trans]: forall t1: ValueType, t2: ValueType, t3: ValueType::{isSubType(t1, t2)} !(isSubType(t1, t2) && isSubType(t2, t3)) || isSubType(t1, t3);
 
 // isInstance function:
-function isInstance (v: Value, vt: ValueType) : bool {
-  isSubType(TypeOf(v), vt)
-}
-
-function isInstance_ofBool (v: Value): bool {
-  isInstance(v, BOOL)
-}
-
-function isInstance_ofInt (v: Value): bool {
-  isInstance(v, INT)
-}
-
-function isInstance_ofFloat (v: Value): bool {
-  isInstance(v, FLOAT)
-}
-
-function isInstance_ofStr (v: Value): bool {
-  isInstance(v, STR)
-}
-
+function isInstance (v: Value, vt: ValueType) : bool;
+axiom [isInstance_of_isSubtype]: forall v: Value, t: ValueType::{isInstance(v,t)} isInstance(v,t) == isSubType(TypeOf(v), t);
 
 function is_IntReal (v: Value) : bool;
 function Value_real_to_int (v: Value) : int;
@@ -787,6 +769,9 @@ axiom [Py_ge_unsupported]: forall v1: Value, v2: Value :: {Py_ge(v1,v2)}
     (isList(v1) && isList(v2)))
   ==> Py_ge(v1, v2) == boolExcept_err(Error_Undefined("Operand Type is not supported"));
 
+axiom [Py_eq_def]: forall v: Value, v': Value :: {Py_eq(v, v')}
+  Py_eq(v, v') == (normalize_value(v) == normalize_value (v'));
+
 function Py_add_unwrap (v1: Value, v2: Value) : Value {
   ValueExcept_unwrap (Py_add (v1,v2))
 }
@@ -810,18 +795,128 @@ function Py_le_unwrap (v1: Value, v2: Value) : bool {
 }
 
 
-axiom [Py_eq_def]: forall v: Value, v': Value :: {Py_eq(v, v')}
-  Py_eq(v, v') == (normalize_value(v) == normalize_value (v'));
+//Testing
+procedure non_contradiction_test() returns () {
+  assert [one_eq_two_expect_unknown]: 1 == 2;
+};
 
-type ExceptOrNone;
-type DictStrAny;
+procedure binary_op_and_types_test () returns () {
+  assert [int_add_ok]: forall i: int :: ValueExcept_tag(Py_add(Value_int(1), Value_int(i))) != ERR;
+  assert [int_add_class_except]: forall v: Value :: isClassInstance(v) ==> ValueExcept_tag(Py_add(Value_int(1), v)) == ERR;
+  assert [int_add_class_except']: forall v: Value :: hasAttribute(v, "a") ==> ValueExcept_tag(Py_add(Value_int(1), v)) == ERR;
+  assert [float_add_isInstance_int_ok]: forall v: Value :: isInstance(v,INT) ==> ValueExcept_tag(Py_add(Value_float(1.1), v)) != ERR;
+};
+
+procedure ValueTypeTest() returns () {
+  var ty1: ValueType, ty2: ValueType, tl: ValueType;
+  ty1 := TypeOf(Value_int(5));
+  ty2 := TypeOf(Value_bool(true));
+  assert [subtype1]: isSubType(ty2,ty1);
+  assert [subtypeList]: forall l: ListValueType :: isSubType (ValueType_List(ListType_cons(ty2, l)), ValueType_List(ListType_cons(ty1, l)));
+  assert [subtypeList2]: forall l1: ListValueType, l2: ListValueType :: !(isSubTypes(l1,l2)) || isSubType (ValueType_List(ListType_cons(ty2, l1)), ValueType_List(ListType_cons(ty1, l2)));
+};
+
+procedure simple_call(v1: Value, v2: Value) returns ()
+  spec {
+    requires [v1_type]: isInstance(v1, BOOL) || isInstance(v1, STR);
+    requires [v2_type]: isInstance(v2, ValueType_List(ListType_cons(INT, ListType_cons(INT, ListType_nil()))));
+  }
+{};
+
+procedure test_simple_call_argument_typecheck() returns () {
+  var arg1: Value, arg2: Value;
+  arg1 := Value_bool(true);
+  arg2 := Value_list(ListValue_cons(Value_int(3), ListValue_cons (Value_bool(true), ListValue_nil())));
+  assert [subtype_bool]: isInstance(arg1,BOOL);
+  call simple_call(arg1, arg2);
+};
+
+procedure list_functions_test() returns ()
+{
+  var l1: ListValue, l2: ListValue;
+  l1 := ListValue_cons(Value_int(1), ListValue_cons(Value_int(2), ListValue_cons (Value_int(3), ListValue_nil())));
+  l2 := ListValue_cons(Value_int(1), ListValue_cons(Value_int(2), ListValue_cons (Value_int(3),
+        ListValue_cons(Value_int(1), ListValue_cons(Value_int(2), ListValue_cons (Value_int(3), ListValue_nil()))))));
+  assert [index_1]: List_get(l1,1) == ValueExcept_ok(Value_int(2));
+  assert [contain_true]: List_contains(l1, Value_bool(true));
+  assert [ValueEq]: !(Value_int(4) == Value_int(3));
+  assert [normalize_value]: !(normalize_value(Value_int(4)) == Value_int(3));
+  assert [contain_3]: List_contains(l1, Value_int(2));
+  assert [list_index_test1]: List_index(l1, Value_int(3)) == intExcept_ok(2);
+  assert [list_index_test_expect_unknown]: List_index(l1, Value_int(3)) == intExcept_ok(3);
+  assert [list_index_test2]: intExcept_tag(List_index(l1, Value_int(9))) == ERR;
+  assert [list_extend]: List_extend(l1, l1) == l2;
+  assert [list_repeat1]: List_repeat(l1, 2) == l2;
+  assert [list_repeat2]: List_repeat(l1, 6) == List_repeat(l2, 3);
+};
+
+procedure list_generic_test() returns () {
+  var l1: ListValue;
+  assert [contains_append]: forall l: ListValue, x: Value :: List_contains(List_append(l,x), x);
+  assert [len_append]: forall l: ListValue, x: Value :: List_len(List_append(l,x)) == List_len(l) + 1;
+  l1 := ListValue_cons(Value_int(1), ListValue_cons(Value_int(2), ListValue_cons (Value_int(3), ListValue_nil())));
+  assert [l1_contains_3]: List_contains (l1, Value_int(3));
+  assert [contains_len]: forall l: ListValue, x: Value:: List_contains(l,x) ==> (List_len(l) >0);
+  assert [l1l2_contains_3]: forall l2: ListValue :: List_contains (List_extend(l1, l2), Value_int(3));
+  assert [revl1_contain_3]: List_contains (List_reverse(l1), Value_int(3));
+  assert [rev_contain]: forall l: ListValue, v: Value :: List_contains (List_reverse(l), v) == List_contains(l,v);
+  assert [l1r_l2_contains_3]: forall l2: ListValue :: List_contains (List_extend(List_reverse(l1), l2), Value_int(3));
+  assert [l1r_l2_contains_4_expect_unknown]: forall l2: ListValue :: List_contains (List_extend(List_reverse(l1), l2), Value_int(4));
+  assert [l1r_l2_contains_3']: forall l2: ListValue :: List_contains (List_reverse(List_extend(List_reverse(l1), l2)), Value_int(3));
+  assert [List_cons_extend_contains_symm]: forall x: Value, l1: ListValue, l2: ListValue ::
+    List_contains (List_extend(l1,l2), x) == List_contains (List_extend(l2,l1), x);
+  assert [contains_len]: forall l: ListValue, x: Value:: List_contains(l,x) ==> (List_len(l) >0);
+  assert [contain_remove]: forall l: ListValue, x: Value:: List_contains(l,x) ==> (List_len(l) == List_len(List_remove(l,x)) + 1);
+  assert [insert_len]: forall l: ListValue, i: int, v: Value :: List_len(List_insert(l, i, v)) == List_len(l) + 1;
+  assert [insert_contains]: forall l: ListValue, i: int, v: Value :: List_contains(List_insert(l, i, v), v);
+};
+
+procedure dict_functions_test () returns () {
+  var d1: Dict, d2: Dict, d3: Dict;
+  d1:= Dict_insert(Dict_empty(), Value_int(1), Value_int(1));
+  d2:= Dict_insert(d1, Value_bool(true), Value_int(2));
+  assert [get_1]: Dict_get(d2, Value_int(1)) == Value_int(2);
+};
+
+procedure test_dict_listconstructor () returns () {
+  var d: Dict, dl: DictList, d2: Dict, d3: Dict;
+  dl := DictList_cons(Value_bool(true), Value_int(10), DictList_cons(Value_int(1), Value_int(11), DictList_nil()));
+  d := Dict_from_DicList(dl);
+  assert [get_1]: Dict_get(d, Value_int(1)) == Value_int(11);
+  assert [get_true]: Dict_get(d, Value_bool(true)) == Value_int(11);
+  d2 := Dict_insert(Dict_insert(d, Value_int(10), Value_int(8)), Value_int(1), Value_str("abc"));
+  assert [get_true2]: Dict_get(d2, Value_bool(true)) == Value_str("abc");
+  d3 := Dict_remove(d2, Value_bool(true));
+  assert [get_1_d3]: Dict_get(d3, Value_int(1)) == Value_none();
+  assert [ncontain]: !Dict_contains(d3, Value_bool(true));
+};
+
+procedure forall_dict_test () returns () {
+  assert [ncontain_general]: forall d: Dict, k: Value :: !Dict_contains(Dict_remove(d,k), k);
+  assert [ncontain_general']: forall d: Dict, k: Value :: !Dict_contains(Dict_remove(d,normalize_value(k)), k);
+  assert [contain_general]: forall d: Dict, k: Value, v: Value :: (v == Value_none()) || Dict_contains(Dict_insert(d,k,v), k);
+  assert [remove_insert]: forall d: Dict, k: Value, v: Value, k': Value ::
+    !(Dict_get(d,k) == v) || Dict_get((Dict_insert(Dict_remove(d,k), k, v)), k') == Dict_get(d, k');
+};
+
+procedure ClassType_test() returns () {
+  var civ: Value, ci: ClassInstance, v: Value;
+  ci := ClassInstance_init_InstanceAttribute(ClassInstance_empty("point"), "x", Value_int(1));
+  ci := ClassInstance_init_InstanceAttribute(ci, "y", Value_int(2));
+  civ := Value_class (ci);
+  assert [has_x]: hasAttribute(civ,"x");
+  assert [nhas_z_expect_unknown]: hasAttribute(civ,"z");
+  assert [isInstance_class]: isInstance(civ, ValueType_class("point"));
+  assert [get_x_empty_expect_unknown]: get_InstanceAttribute(civ, "x") == ValueExcept_ok(Value_none());
+  assert [get_x]: get_InstanceAttribute(civ, "x") == ValueExcept_ok(Value_int(1));
+};
 
 #end
 
---#eval verify "cvc5" boogieTypePrelude
+#eval verify "cvc5" boogieTypePrelude
 --#eval boogieTypePrelude.format
 
-def Boogie.Typeprelude : Boogie.Program :=
+def Boogie.prelude : Boogie.Program :=
    Boogie.getProgram Strata.boogieTypePrelude |>.fst
 
 end Strata
