@@ -6,7 +6,6 @@
 
 import Strata.DDM.Elab
 import Strata.DDM.AST
-import Lean
 import Strata.Languages.Boogie.DDMTransform.Parse
 
 import Strata.Languages.Boogie.Boogie
@@ -959,4 +958,4 @@ def verifyBoogieProgram (path : String) : IO Unit := do
 
 end Strata
 
---#eval (Strata.verifyBoogieProgram "Strata/Languages/Python/simppy.python.st.ion")
+#eval (Strata.verifyBoogieProgram "Strata/Languages/Python/simppy.python.st.ion")
