@@ -94,10 +94,10 @@ assert [i_eq_n] (i == n)
 return := i
 -/
 #guard_msgs in
-#eval Strata.to_boogie (Strata.C_Simp.get_program LoopTrivialPgm)
+#eval Strata.to_core (Strata.C_Simp.get_program LoopTrivialPgm)
 
 /--
-info: [Strata.Boogie] Type checking succeeded.
+info: [Strata.Core] Type checking succeeded.
 
 
 VCs:
