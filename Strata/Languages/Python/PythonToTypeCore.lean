@@ -1072,6 +1072,8 @@ def verifyInliningCoreProgram (path : String) : IO Unit := do
   let bpgm := Strata.pythonToCore pgm
   let newPgm : Core.Program := { decls := preludePgm.decls ++ bpgm.decls }
   let newPgm :=  runInlineCall newPgm
+  let filterdecls := newPgm.decls.filter (λ d => ! d.name.name ∈ Strata.PyOps)
+  let newPgm: Core.Program := { decls := filterdecls}
   IO.print newPgm
   let verboseMode := VerboseMode.ofBool false
   let vcResults ← IO.FS.withTempDir (fun tempDir =>

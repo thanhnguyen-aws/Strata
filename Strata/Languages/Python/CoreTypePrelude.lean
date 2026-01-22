@@ -20,14 +20,9 @@ datatype Error () {
   TypeError (Type_msg : string),
   AttributeError (Attribute_msg : string),
   AssertionError (Assertion_msg : string),
-  Unimplemented (Unimplement_msg : string),
-  Undefined (Undefined_msg : string)
+  UnimplementedError (Unimplement_msg : string),
+  UndefinedError (Undefined_msg : string)
 };
-
-inline function isError (e: Error) : bool {
-  ! Error..isNoError(e)
-}
-
 
 
 type Datetime;
@@ -91,15 +86,29 @@ function TypeOf (v : Any) : PyType {
   else CLASS(classname(v))
 }
 
-inline function isAssertionError (e: Error) : Any {
-  from_bool (Error..isAssertionError(e))
-}
-
 inline function isTypeError (e: Error) : Any {
   from_bool (Error..isTypeError(e))
 }
 
+inline function isAttributeError (e: Error) : Any {
+  from_bool (Error..isTypeError(e))
+}
 
+inline function isAssertionError (e: Error) : Any {
+  from_bool (Error..isAssertionError(e))
+}
+
+inline function isUnimplementedError (e: Error) : Any {
+  from_bool (Error..isUnimplementedError(e))
+}
+
+inline function isUndefinedError (e: Error) : Any {
+  from_bool (Error..isUndefinedError(e))
+}
+
+inline function isError (e: Error) : Any {
+  from_bool (! Error..isNoError(e))
+}
 
 //Dup type for ListAny, to be remove when mutual recursive datatype is supported
 datatype ListAnyDup () {
@@ -203,7 +212,7 @@ function hasAttribute(ci: Any, attribute: string): bool {
 function isSubTypes (t1: ListPType, t2: ListPType) : bool;
 function isSubType (t1: PyType, t2: PyType) : bool {
   if t1 == t2 then true
-  else if PyType..isFLOAT(t2) && (PyType..isBOOL(t1) || PyType..isBOOL(t1)) then true
+  else if PyType..isFLOAT(t2) && (PyType..isBOOL(t1) || PyType..isINT(t1)) then true
   else if PyType..isLIST(t1) && PyType..isLIST(t2) && isSubTypes(listtype(t1), listtype(t2)) then true
   else false
 }
@@ -298,6 +307,74 @@ inline function bool_to_real (b: bool) : real {if b then 1.0 else 0.0}
 
 function string_repeat (s: string, i: int) : string;
 
+// Unary operations
+procedure PNeg (v: Any) returns (ret: Any, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_bool(v))
+  {
+    ret:= from_int(- bool_to_int(as_bool(v)));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v))
+  {
+    ret:= from_int(- as_int(v));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v))
+  {
+    ret:= from_float(- as_float(v));
+    error := NoError ();
+  }
+  else
+  {
+    ret := from_none();
+    error := UndefinedError ("Operand Type is not defined");
+  }
+  }}
+};
+
+procedure PNot (v: Any) returns (ret: Any, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_bool(v))
+  {
+    ret:= from_bool(!(as_bool(v)));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v))
+  {
+    ret:= from_bool(!(as_int(v) == 0));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v))
+  {
+    ret:= from_bool(!(as_float(v) == 0.0));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_string(v))
+  {
+    ret:= from_bool(!(as_string(v) == ""));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_ListAny(v))
+  {
+    ret:= from_bool(!(List_len(as_ListAny(v)) == 0));
+    error := NoError ();
+  }
+  else
+  {
+    ret := from_none();
+    error := UndefinedError ("Operand Type is not defined");
+  }
+  }}}}
+};
 
 
 //Binary operations
@@ -306,53 +383,58 @@ function string_le (s1: string, s2: string) : bool;
 function string_gt (s1: string, s2: string) : bool;
 function string_ge (s1: string, s2: string) : bool;
 
-procedure PAdd (v1: Any, v2: Any) returns (ret: Any, error: Error) {
-  if (TypeOf(v1) == BOOL() && TypeOf(v2) == BOOL())
+procedure PAdd (v1: Any, v2: Any) returns (ret: Any, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
   {
     ret:= from_int(bool_to_int(as_bool(v1)) + bool_to_int(as_bool(v2)));
     error := NoError ();
   }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == INT())
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
   {
     ret:= from_int(bool_to_int(as_bool(v1)) + as_int(v2));
     error := NoError ();
   }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == BOOL())
+  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
   {
     ret:= from_int(as_int(v1) + bool_to_int(as_bool(v2)));
     error := NoError ();
   }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == FLOAT())
+  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
   {
     ret:= from_float(bool_to_real(as_bool(v1)) + as_float(v2));
     error := NoError ();
   }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == BOOL())
+  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
   {
     ret:= from_float(as_float(v1) + bool_to_real(as_bool(v2)));
     error := NoError ();
   }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == INT())
+  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
   {
     ret:= from_int(as_int(v1) + as_int(v2));
     error := NoError ();
   }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == FLOAT())
+  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
   {
     ret:= from_float(int_to_real(as_int(v1)) + as_float(v2));
     error := NoError ();
   }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == INT())
+  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
   {
     ret:= from_float(as_float(v1) + int_to_real(as_int(v2)) );
     error := NoError ();
   }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == FLOAT())
+  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
   {
     ret:= from_float(as_float(v1) + as_float(v2));
     error := NoError ();
   }
-  else {if (TypeOf(v1) == STRING() && TypeOf(v2) == STRING())
+  else {if (Any..isfrom_string(v1) && Any..isfrom_string(v1))
   {
     ret:= from_string(str.concat(as_string(v1),as_string(v2)));
     error := NoError ();
@@ -365,13 +447,455 @@ procedure PAdd (v1: Any, v2: Any) returns (ret: Any, error: Error) {
   else
   {
     ret := from_none();
-    error := Undefined ("Operand Type is not defined");
+    error := UndefinedError ("Operand Type is not defined");
   }
   }}}}}}}}}}
 };
 
 
-procedure PIn (v1: Any, v2: Any) returns (ret: Any, error: Error) {
+
+procedure PSub (v1: Any, v2: Any) returns (ret: Any, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= from_int(bool_to_int(as_bool(v1)) - bool_to_int(as_bool(v2)));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
+  {
+    ret:= from_int(bool_to_int(as_bool(v1)) - as_int(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= from_int(as_int(v1) - bool_to_int(as_bool(v2)));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_float(v2))
+  {
+    ret:= from_float(bool_to_real(as_bool(v1)) - as_float(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= from_float(as_float(v1) - bool_to_real(as_bool(v2)));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
+  {
+    ret:= from_int(as_int(v1) - as_int(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
+  {
+    ret:= from_float(int_to_real(as_int(v1)) - as_float(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
+  {
+    ret:= from_float(as_float(v1) - int_to_real(as_int(v2)) );
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
+  {
+    ret:= from_float(as_float(v1) - as_float(v2));
+    error := NoError ();
+  }
+  else
+  {
+    ret := from_none();
+    error := UndefinedError ("Operand Type is not defined");
+  }
+  }}}}}}}}
+};
+
+procedure PMul (v1: Any, v2: Any) returns (ret: Any, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= from_int(bool_to_int(as_bool(v1)) * bool_to_int(as_bool(v2)));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
+  {
+    ret:= from_int(bool_to_int(as_bool(v1)) * as_int(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= from_int(as_int(v1) * bool_to_int(as_bool(v2)));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_float(v2))
+  {
+    ret:= from_float(bool_to_real(as_bool(v1)) + as_float(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= from_float(as_float(v1) * bool_to_real(as_bool(v2)));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_string(v2))
+  {
+    ret:= if as_bool(v1) then v2 else from_string("");
+    error := NoError ();
+  }
+  else {if (Any..isfrom_string(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= if as_bool(v2) then v1 else from_string("");
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
+  {
+    ret:= from_int(as_int(v1) + as_int(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
+  {
+    ret:= from_float(int_to_real(as_int(v1)) + as_float(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
+  {
+    ret:= from_float(as_float(v1) + int_to_real(as_int(v2)) );
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_string(v2))
+  {
+    ret:= from_string(string_repeat(as_string(v2), as_int(v1)));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_string(v1) && Any..isfrom_int(v2))
+  {
+    ret:= from_string(string_repeat(as_string(v1), as_int(v2)));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_ListAny(v2))
+  {
+    ret:= from_ListAny(List_repeat(as_ListAny(v2), as_int(v1)));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_int(v2))
+  {
+    ret:= from_ListAny(List_repeat(as_ListAny(v1), as_int(v2)));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
+  {
+    ret:= from_float(as_float(v1) + as_float(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_string(v1) && Any..isfrom_string(v2))
+  {
+    ret:= from_string(str.concat(as_string(v1),as_string(v2)));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
+  {
+    ret:= from_ListAny(List_extend(as_ListAny(v1),as_ListAny(v2)));
+    error := NoError ();
+  }
+  else
+  {
+    ret := from_none();
+    error := UndefinedError ("Operand Type is not defined");
+  }
+  }}}}}}}}}}}}}}}}
+};
+
+procedure PLt (v1: Any, v2: Any) returns (ret: bool, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= bool_to_int(as_bool(v1)) < bool_to_int(as_bool(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
+  {
+    ret:= bool_to_int(as_bool(v1)) < as_int(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= as_int(v1) < bool_to_int(as_bool(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_float(v2))
+  {
+    ret:= bool_to_real(as_bool(v1)) < as_float(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= as_float(v1) < bool_to_real(as_bool(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
+  {
+    ret:= as_int(v1) < as_int(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
+  {
+    ret:= int_to_real(as_int(v1)) < as_float(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
+  {
+    ret:= as_float(v1) < int_to_real(as_int(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
+  {
+    ret:= as_float(v1) < as_float(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_string(v1) && Any..isfrom_string(v2))
+  {
+    ret:= string_lt(as_string(v1), as_string(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
+  {
+    ret:= List_lt(as_ListAny(v1),as_ListAny(v2));
+    error := NoError ();
+  }
+  else
+  {
+    ret := false;
+    error := UndefinedError ("Operand Type is not defined");
+  }
+  }}}}}}}}}}
+};
+
+procedure PLe (v1: Any, v2: Any) returns (ret: bool, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= bool_to_int(as_bool(v1)) <= bool_to_int(as_bool(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
+  {
+    ret:= bool_to_int(as_bool(v1)) <= as_int(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= as_int(v1) <= bool_to_int(as_bool(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_float(v2))
+  {
+    ret:= bool_to_real(as_bool(v1)) <= as_float(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= as_float(v1) <= bool_to_real(as_bool(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
+  {
+    ret:= as_int(v1) <= as_int(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
+  {
+    ret:= int_to_real(as_int(v1)) <= as_float(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
+  {
+    ret:= as_float(v1) <= int_to_real(as_int(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
+  {
+    ret:= as_float(v1) <= as_float(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_string(v1) && Any..isfrom_string(v2))
+  {
+    ret:= string_le(as_string(v1), as_string(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
+  {
+    ret:= List_le(as_ListAny(v1),as_ListAny(v2));
+    error := NoError ();
+  }
+  else
+  {
+    ret := false;
+    error := UndefinedError("Operand Type is not defined");
+  }
+  }}}}}}}}}}
+};
+
+
+procedure PGt (v1: Any, v2: Any) returns (ret: bool, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= bool_to_int(as_bool(v1)) > bool_to_int(as_bool(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
+  {
+    ret:= bool_to_int(as_bool(v1)) > as_int(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= as_int(v1) > bool_to_int(as_bool(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_float(v2))
+  {
+    ret:= bool_to_real(as_bool(v1)) > as_float(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= as_float(v1) > bool_to_real(as_bool(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
+  {
+    ret:= as_int(v1) > as_int(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
+  {
+    ret:= int_to_real(as_int(v1)) > as_float(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
+  {
+    ret:= as_float(v1) > int_to_real(as_int(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
+  {
+    ret:= as_float(v1) > as_float(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_string(v1) && Any..isfrom_string(v2))
+  {
+    ret:= string_gt(as_string(v1), as_string(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
+  {
+    ret:= List_gt(as_ListAny(v1),as_ListAny(v2));
+    error := NoError ();
+  }
+  else
+  {
+    ret := false;
+    error := UndefinedError ("Operand Type is not defined");
+  }
+  }}}}}}}}}}
+};
+
+procedure PGe (v1: Any, v2: Any) returns (ret: bool, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= bool_to_int(as_bool(v1)) >= bool_to_int(as_bool(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
+  {
+    ret:= bool_to_int(as_bool(v1)) >= as_int(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= as_int(v1) >= bool_to_int(as_bool(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_bool(v1) && Any..isfrom_float(v2))
+  {
+    ret:= bool_to_real(as_bool(v1)) >= as_float(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
+  {
+    ret:= as_float(v1) >= bool_to_real(as_bool(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
+  {
+    ret:= as_int(v1) >= as_int(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
+  {
+    ret:= int_to_real(as_int(v1)) >= as_float(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
+  {
+    ret:= as_float(v1) >= int_to_real(as_int(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
+  {
+    ret:= as_float(v1) >= as_float(v2);
+    error := NoError ();
+  }
+  else {if (Any..isfrom_string(v1) && Any..isfrom_string(v2))
+  {
+    ret:= string_ge(as_string(v1), as_string(v2));
+    error := NoError ();
+  }
+  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
+  {
+    ret:= List_ge(as_ListAny(v1),as_ListAny(v2));
+    error := NoError ();
+  }
+  else
+  {
+    ret := false;
+    error := UndefinedError ("Operand Type is not defined");
+  }
+  }}}}}}}}}}
+};
+
+
+procedure PIn (v1: Any, v2: Any) returns (ret: Any, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
   if (Any..isfrom_Dict(v2))
   {
     ret:= Any_in_Dict(v1, v2);
@@ -384,7 +908,7 @@ procedure PIn (v1: Any, v2: Any) returns (ret: Any, error: Error) {
   }
   else {
     ret := from_bool(false);
-    error := Undefined ("Operand type not supported");
+    error := UndefinedError ("Operand type not supported");
   }
   }
 };
@@ -401,557 +925,9 @@ function PEq (v: Any, v': Any) : bool {
 --#eval verify "cvc5" CoreTypePrelude
 --#eval boogieTypePrelude.format
 
+def PyOps := ["PNot", "PNeg", "PAdd", "PMul", "PSub", "PLt", "PLe", "PGt", "PGe", "PIn"]
+
 def Core.Typeprelude : Core.Program :=
    Core.getProgram Strata.CoreTypePrelude |>.fst
 
 end Strata
-
-/-
-
-function int_to_real (i: int) : real;
-inline function bool_to_int (b: bool) : int {if b then 1 else 0}
-inline function bool_to_real (b: bool) : real {if b then 1.0 else 0.0}
-
-function string_repeat (s: string, i: int) : string;
-
-// Unary operations
-procedure PNeg (v: Any) returns (ret: Any, error: Error) {
-  if (TypeOf(v) == BOOL())
-  {
-    ret:= from_int(- bool_to_int(as_bool(v)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v) == INT())
-  {
-    ret:= from_int(- as_int(v));
-    error := NoError ();
-  }
-  else {if (TypeOf(v) == FLOAT())
-  {
-    ret:= from_float(- as_float(v));
-    error := NoError ();
-  }
-  else
-  {
-    ret := from_none();
-    error := Undefined ("Operand Type is not defined");
-  }
-  }}
-};
-
-procedure PNot (v: Any) returns (ret: Any, error: Error) {
-  if (TypeOf(v) == BOOL())
-  {
-    ret:= from_bool(!(as_bool(v)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v) == INT())
-  {
-    ret:= from_bool(!(as_int(v) == 0));
-    error := NoError ();
-  }
-  else {if (TypeOf(v) == FLOAT())
-  {
-    ret:= from_bool(!(as_float(v) == 0.0));
-    error := NoError ();
-  }
-  else {if (TypeOf(v) == STRING())
-  {
-    ret:= from_bool(!(as_string(v) == ""));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v))
-  {
-    ret:= from_bool(!(List_len(as_ListAny(v)) == 0));
-    error := NoError ();
-  }
-  else
-  {
-    ret := from_none();
-    error := Undefined ("Operand Type is not defined");
-  }
-  }}}}
-};
-
-
-//Binary operations
-function string_lt (s1: string, s2: string) : bool;
-function string_le (s1: string, s2: string) : bool;
-function string_gt (s1: string, s2: string) : bool;
-function string_ge (s1: string, s2: string) : bool;
-
-procedure PAdd (v1: Any, v2: Any) returns (ret: Any, error: Error) {
-  if (TypeOf(v1) == BOOL() && TypeOf(v2) == BOOL())
-  {
-    ret:= from_int(bool_to_int(as_bool(v1)) + bool_to_int(as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == INT())
-  {
-    ret:= from_int(bool_to_int(as_bool(v1)) + as_int(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == BOOL())
-  {
-    ret:= from_int(as_int(v1) + bool_to_int(as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == FLOAT())
-  {
-    ret:= from_float(bool_to_real(as_bool(v1)) + as_float(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == BOOL())
-  {
-    ret:= from_float(as_float(v1) + bool_to_real(as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == INT())
-  {
-    ret:= from_int(as_int(v1) + as_int(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= from_float(int_to_real(as_int(v1)) + as_float(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == INT())
-  {
-    ret:= from_float(as_float(v1) + int_to_real(as_int(v2)) );
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= from_float(as_float(v1) + as_float(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == STRING() && TypeOf(v2) == STRING())
-  {
-    ret:= from_string(str.concat(as_string(v1),as_string(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
-  {
-    ret:= from_ListAny(List_extend(as_ListAny(v1),as_ListAny(v2)));
-    error := NoError ();
-  }
-  else
-  {
-    ret := from_none();
-    error := Undefined ("Operand Type is not defined");
-  }
-  }}}}}}}}}}
-};
-
-
-procedure PSub (v1: Any, v2: Any) returns (ret: Any, error: Error) {
-  if (TypeOf(v1) == BOOL() && TypeOf(v2) == BOOL())
-  {
-    ret:= from_int(bool_to_int(as_bool(v1)) - bool_to_int(as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == INT())
-  {
-    ret:= from_int(bool_to_int(as_bool(v1)) - as_int(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == BOOL())
-  {
-    ret:= from_int(as_int(v1) - bool_to_int(as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == FLOAT())
-  {
-    ret:= from_float(bool_to_real(as_bool(v1)) - as_float(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == BOOL())
-  {
-    ret:= from_float(as_float(v1) - bool_to_real(as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == INT())
-  {
-    ret:= from_int(as_int(v1) - as_int(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= from_float(int_to_real(as_int(v1)) - as_float(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == INT())
-  {
-    ret:= from_float(as_float(v1) - int_to_real(as_int(v2)) );
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= from_float(as_float(v1) - as_float(v2));
-    error := NoError ();
-  }
-  else
-  {
-    ret := from_none();
-    error := Undefined ("Operand Type is not defined");
-  }
-  }}}}}}}}
-};
-
-
-function PEq (v: Any, v': Any) : bool {
-  normalize_any(v) == normalize_any (v')
-}
-
-procedure PMul (v1: Any, v2: Any) returns (ret: Any, error: Error) {
-  if (TypeOf(v1) == BOOL() && TypeOf(v2) == BOOL())
-  {
-    ret:= from_int(bool_to_int(as_bool(v1)) * bool_to_int(as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == INT())
-  {
-    ret:= from_int(bool_to_int(as_bool(v1)) * as_int(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == BOOL())
-  {
-    ret:= from_int(as_int(v1) * bool_to_int(as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == FLOAT())
-  {
-    ret:= from_float(bool_to_real(as_bool(v1)) + as_float(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == BOOL())
-  {
-    ret:= from_float(as_float(v1) * bool_to_real(as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == STRING())
-  {
-    ret:= if as_bool(v1) then v2 else from_string("");
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == STRING() && TypeOf(v2) == BOOL())
-  {
-    ret:= if as_bool(v2) then v1 else from_string("");
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == INT())
-  {
-    ret:= from_int(as_int(v1) + as_int(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= from_float(int_to_real(as_int(v1)) + as_float(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == INT())
-  {
-    ret:= from_float(as_float(v1) + int_to_real(as_int(v2)) );
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == STRING())
-  {
-    ret:= from_string(string_repeat(as_string(v2), as_int(v1)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == STRING() && TypeOf(v2) == INT())
-  {
-    ret:= from_string(string_repeat(as_string(v1), as_int(v2)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && Any..isfrom_ListAny(v2))
-  {
-    ret:= from_ListAny(List_repeat(as_ListAny(v2), as_int(v1)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && TypeOf(v2) == INT())
-  {
-    ret:= from_ListAny(List_repeat(as_ListAny(v1), as_int(v2)));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= from_float(as_float(v1) + as_float(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == STRING() && TypeOf(v2) == STRING())
-  {
-    ret:= from_string(str.concat(as_string(v1),as_string(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
-  {
-    ret:= from_ListAny(List_extend(as_ListAny(v1),as_ListAny(v2)));
-    error := NoError ();
-  }
-  else
-  {
-    ret := from_none();
-    error := Undefined ("Operand Type is not defined");
-  }
-  }}}}}}}}}}}}}}}}
-};
-
-procedure PLt (v1: Any, v2: Any) returns (ret: bool, error: Error) {
-  if (TypeOf(v1) == BOOL() && TypeOf(v2) == BOOL())
-  {
-    ret:= bool_to_int(as_bool(v1)) < bool_to_int(as_bool(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == INT())
-  {
-    ret:= bool_to_int(as_bool(v1)) < as_int(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == BOOL())
-  {
-    ret:= as_int(v1) < bool_to_int(as_bool(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == FLOAT())
-  {
-    ret:= bool_to_real(as_bool(v1)) < as_float(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == BOOL())
-  {
-    ret:= as_float(v1) < bool_to_real(as_bool(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == INT())
-  {
-    ret:= as_int(v1) < as_int(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= int_to_real(as_int(v1)) < as_float(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == INT())
-  {
-    ret:= as_float(v1) < int_to_real(as_int(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= as_float(v1) < as_float(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == STRING() && TypeOf(v2) == STRING())
-  {
-    ret:= string_lt(as_string(v1), as_string(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
-  {
-    ret:= List_lt(as_ListAny(v1),as_ListAny(v2));
-    error := NoError ();
-  }
-  else
-  {
-    ret := false;
-    error := Undefined ("Operand Type is not defined");
-  }
-  }}}}}}}}}}
-};
-
-procedure PLe (v1: Any, v2: Any) returns (ret: bool, error: Error) {
-  if (TypeOf(v1) == BOOL() && TypeOf(v2) == BOOL())
-  {
-    ret:= bool_to_int(as_bool(v1)) <= bool_to_int(as_bool(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == INT())
-  {
-    ret:= bool_to_int(as_bool(v1)) <= as_int(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == BOOL())
-  {
-    ret:= as_int(v1) <= bool_to_int(as_bool(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == FLOAT())
-  {
-    ret:= bool_to_real(as_bool(v1)) <= as_float(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == BOOL())
-  {
-    ret:= as_float(v1) <= bool_to_real(as_bool(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == INT())
-  {
-    ret:= as_int(v1) <= as_int(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= int_to_real(as_int(v1)) <= as_float(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == INT())
-  {
-    ret:= as_float(v1) <= int_to_real(as_int(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= as_float(v1) <= as_float(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == STRING() && TypeOf(v2) == STRING())
-  {
-    ret:= string_le(as_string(v1), as_string(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
-  {
-    ret:= List_le(as_ListAny(v1),as_ListAny(v2));
-    error := NoError ();
-  }
-  else
-  {
-    ret := false;
-    error := Undefined ("Operand Type is not defined");
-  }
-  }}}}}}}}}}
-};
-
-
-procedure PGt (v1: Any, v2: Any) returns (ret: bool, error: Error) {
-  if (TypeOf(v1) == BOOL() && TypeOf(v2) == BOOL())
-  {
-    ret:= bool_to_int(as_bool(v1)) > bool_to_int(as_bool(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == INT())
-  {
-    ret:= bool_to_int(as_bool(v1)) > as_int(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == BOOL())
-  {
-    ret:= as_int(v1) > bool_to_int(as_bool(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == FLOAT())
-  {
-    ret:= bool_to_real(as_bool(v1)) > as_float(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == BOOL())
-  {
-    ret:= as_float(v1) > bool_to_real(as_bool(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == INT())
-  {
-    ret:= as_int(v1) > as_int(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= int_to_real(as_int(v1)) > as_float(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == INT())
-  {
-    ret:= as_float(v1) > int_to_real(as_int(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= as_float(v1) > as_float(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == STRING() && TypeOf(v2) == STRING())
-  {
-    ret:= string_gt(as_string(v1), as_string(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
-  {
-    ret:= List_gt(as_ListAny(v1),as_ListAny(v2));
-    error := NoError ();
-  }
-  else
-  {
-    ret := false;
-    error := Undefined ("Operand Type is not defined");
-  }
-  }}}}}}}}}}
-};
-
-procedure PGe (v1: Any, v2: Any) returns (ret: bool, error: Error) {
-  if (TypeOf(v1) == BOOL() && TypeOf(v2) == BOOL())
-  {
-    ret:= bool_to_int(as_bool(v1)) >= bool_to_int(as_bool(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == INT())
-  {
-    ret:= bool_to_int(as_bool(v1)) >= as_int(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == BOOL())
-  {
-    ret:= as_int(v1) >= bool_to_int(as_bool(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == BOOL() && TypeOf(v2) == FLOAT())
-  {
-    ret:= bool_to_real(as_bool(v1)) >= as_float(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == BOOL())
-  {
-    ret:= as_float(v1) >= bool_to_real(as_bool(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == INT())
-  {
-    ret:= as_int(v1) >= as_int(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == INT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= int_to_real(as_int(v1)) >= as_float(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == INT())
-  {
-    ret:= as_float(v1) >= int_to_real(as_int(v2));
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == FLOAT() && TypeOf(v2) == FLOAT())
-  {
-    ret:= as_float(v1) >= as_float(v2);
-    error := NoError ();
-  }
-  else {if (TypeOf(v1) == STRING() && TypeOf(v2) == STRING())
-  {
-    ret:= string_ge(as_string(v1), as_string(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
-  {
-    ret:= List_ge(as_ListAny(v1),as_ListAny(v2));
-    error := NoError ();
-  }
-  else
-  {
-    ret := false;
-    error := Undefined ("Operand Type is not defined");
-  }
-  }}}}}}}}}}
-};
--/
