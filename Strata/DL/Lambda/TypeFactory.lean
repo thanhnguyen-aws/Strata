@@ -449,18 +449,20 @@ def destructorConcreteEval {T: LExprParams} [BEq T.Identifier] (d: LDatatype T.I
         then a[idx]? else none)
     | _ => none
 
+def destructorFuncName {IDMeta} (d: LDatatype IDMeta) (name: Identifier IDMeta) := d.name ++ ".." ++ name.name
+
 /--
 Generate destructor functions for a constructor, which extract the
 constructor components, e.g.
-`List$ConsProj0 (Cons h t) = h`
-`List$ConsProj1 (Cons h t) = t`
-These functions are partial, `List@ConsProj0 Nil` is undefined.
+`List..head (Cons h t) = h`
+`List..tail (Cons h t) = t`
+These functions are partial, `List..head Nil` is undefined.
 -/
 def destructorFuncs {T} [BEq T.Identifier] [Inhabited T.IDMeta]  (d: LDatatype T.IDMeta) (c: LConstr T.IDMeta) : List (LFunc T) :=
   c.args.mapIdx (fun i (name, ty) =>
     let arg := genArgName
     {
-      name := name,
+      name := destructorFuncName d name,
       typeArgs := d.typeArgs,
       inputs := [(arg, dataDefault d)],
       output := ty,

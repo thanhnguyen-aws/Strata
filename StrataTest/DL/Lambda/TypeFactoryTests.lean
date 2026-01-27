@@ -254,7 +254,7 @@ info: ((~isCons : (arrow (List int) bool)) (~l : (List int)))
 
 /--
 info: Annotated expression:
-((~hd : (arrow (List int) int)) (((~Cons : (arrow int (arrow (List int) (List int)))) #1) (~Nil : (List int))))
+((~List..hd : (arrow (List int) int)) (((~Cons : (arrow int (arrow (List int) (List int)))) #1) (~Nil : (List int))))
 
 ---
 info: #1
@@ -262,10 +262,10 @@ info: #1
 #guard_msgs in
 #eval format $
   typeCheckAndPartialEval #[[listTy]]  (Factory.default : @Factory TestParams)
-  ((LExpr.op () ("hd" : TestParams.Identifier) .none).mkApp () [cons (intConst () 1) nil])
+  ((LExpr.op () ("List..hd" : TestParams.Identifier) .none).mkApp () [cons (intConst () 1) nil])
 
 /--
-info: Annotated expression: ((~tl : (arrow (List int) (List int))) (((~Cons : (arrow int (arrow (List int) (List int)))) #1) (((~Cons : (arrow int (arrow (List int) (List int)))) #2) (~Nil : (List int)))))
+info: Annotated expression: ((~List..tl : (arrow (List int) (List int))) (((~Cons : (arrow int (arrow (List int) (List int)))) #1) (((~Cons : (arrow int (arrow (List int) (List int)))) #2) (~Nil : (List int)))))
 
 ---
 info: (((~Cons : (arrow int (arrow (List int) (List int)))) #2) (~Nil : (List int)))
@@ -273,19 +273,19 @@ info: (((~Cons : (arrow int (arrow (List int) (List int)))) #2) (~Nil : (List in
 #guard_msgs in
 #eval format $
   typeCheckAndPartialEval #[[listTy]]  (Factory.default : @Factory TestParams)
-  ((LExpr.op () ("tl" : TestParams.Identifier) .none).mkApp () [cons (intConst () 1) (cons (intConst () 2) nil)])
+  ((LExpr.op () ("List..tl" : TestParams.Identifier) .none).mkApp () [cons (intConst () 1) (cons (intConst () 2) nil)])
 
 -- Destructor does not evaluate on a different constructor
 
 /--
-info: Annotated expression: ((~tl : (arrow (List $__ty1) (List $__ty1))) (~Nil : (List $__ty1)))
+info: Annotated expression: ((~List..tl : (arrow (List $__ty1) (List $__ty1))) (~Nil : (List $__ty1)))
 
 ---
-info: ((~tl : (arrow (List $__ty1) (List $__ty1))) (~Nil : (List $__ty1)))-/
+info: ((~List..tl : (arrow (List $__ty1) (List $__ty1))) (~Nil : (List $__ty1)))-/
 #guard_msgs in
 #eval format $
   typeCheckAndPartialEval #[[listTy]]  (Factory.default : @Factory TestParams)
-  ((LExpr.op () ("tl" : TestParams.Identifier) .none).mkApp () [nil])
+  ((LExpr.op () ("List..tl" : TestParams.Identifier) .none).mkApp () [nil])
 
 
 -- Test 4: Multiple types and Factories
@@ -659,7 +659,7 @@ info: #true
 
 -- Test destructors
 /-- info: Annotated expression:
-((~val : (arrow (RoseTree int) int)) (((~Node : (arrow int (arrow (Forest int) (RoseTree int)))) #42) (~FNil : (Forest int))))
+((~RoseTree..val : (arrow (RoseTree int) int)) (((~Node : (arrow int (arrow (Forest int) (RoseTree int)))) #42) (~FNil : (Forest int))))
 
 ---
 info: #42
@@ -667,10 +667,10 @@ info: #42
 #guard_msgs in
 #eval format $
   typeCheckAndPartialEval #[roseForestBlock] (Factory.default : @Factory TestParams)
-    ((LExpr.op () ("val" : TestParams.Identifier) .none).mkApp () [node' (intConst () 42) fnil'])
+    ((LExpr.op () ("RoseTree..val" : TestParams.Identifier) .none).mkApp () [node' (intConst () 42) fnil'])
 
 /-- info: Annotated expression:
-((~head : (arrow (Forest int) (RoseTree int))) (((~FCons : (arrow (RoseTree int) (arrow (Forest int) (Forest int)))) (((~Node : (arrow int (arrow (Forest int) (RoseTree int)))) #7) (~FNil : (Forest int)))) (~FNil : (Forest int))))
+((~Forest..head : (arrow (Forest int) (RoseTree int))) (((~FCons : (arrow (RoseTree int) (arrow (Forest int) (Forest int)))) (((~Node : (arrow int (arrow (Forest int) (RoseTree int)))) #7) (~FNil : (Forest int)))) (~FNil : (Forest int))))
 
 ---
 info: (((~Node : (arrow int (arrow (Forest int) (RoseTree int)))) #7) (~FNil : (Forest int)))
@@ -678,7 +678,7 @@ info: (((~Node : (arrow int (arrow (Forest int) (RoseTree int)))) #7) (~FNil : (
 #guard_msgs in
 #eval format $
   typeCheckAndPartialEval #[roseForestBlock] (Factory.default : @Factory TestParams)
-    ((LExpr.op () ("head" : TestParams.Identifier) .none).mkApp () [fcons' (node' (intConst () 7) fnil') fnil'])
+    ((LExpr.op () ("Forest..head" : TestParams.Identifier) .none).mkApp () [fcons' (node' (intConst () 7) fnil') fnil'])
 
 ---------------------------------------------------------------------
 -- Test 10: Eliminator on mutually recursive types - computing tree size
