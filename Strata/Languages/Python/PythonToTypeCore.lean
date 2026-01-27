@@ -26,8 +26,7 @@ namespace Strata
 open Lambda.LTy.Syntax
 open Rat
 -- Some hard-coded things we'll need to fix later:
-
-
+#check Core.Statement
 def datetimeType : Core.Expression.Ty := .forAll [] (.tcons "Datetime" [])
 def dummyDatetime : Core.Expression.Expr := .fvar () "DUMMY_DATETIME" none
 
@@ -41,8 +40,9 @@ def ErrorTy : Core.Expression.Ty := .forAll [] (.tcons "Error" [])
 def ClassInstanceTy : Core.Expression.Ty := .forAll [] (.tcons "ClassInstance" [])
 
 def DictTy : Core.Expression.Ty := .forAll [] (.tcons "Dict" [])
+def FVar(name: String) : Core.Expression.Expr := .fvar () name none
 def exceptvar : Core.Expression.Expr := .fvar () "exceptvar" none
-
+def UndefinedError : Core.Expression.Expr := .app () (.op () "UndefinedError" none) (.strConst () "")
 
 -------------------------------------------------------------------------------
 
@@ -58,9 +58,9 @@ deriving Inhabited
 
 structure PythonFunctionDecl where
   name : String
-  args : List (String × String) -- Elements are (arg_name, arg_ty) where `arg_ty` is the string representation of the type in Python
+  args : List (String × String × Option (Python.expr SourceRange)) -- Elements are (arg_name, arg_ty) where `arg_ty` is the string representation of the type in Python
   ret : String
-deriving Repr, BEq, Inhabited
+deriving Repr, Inhabited
 
 structure PythonClassDecl where
   name : String
@@ -76,14 +76,16 @@ deriving Inhabited
 structure TranslationContext where
   signatures : Python.Signatures
   expectedType : Option (Lambda.LMonoTy) := none
-  variableTypes : List (String × Lambda.LMonoTy) := []
+  variableTypes : Std.HashMap String String:= {}
   currentTryBlock: Option TryBlockInfo
   func_infos : List PythonFunctionDecl := []
   class_infos : List PythonClassDecl := []
+  currentclassname : String := ""
+  classinstance_attributetype: Std.HashMap (String × String) String := {}
 deriving Inhabited
 
 def isVar_inContext (trans_ctx: TranslationContext) (varname: String) : Bool :=
-  varname ∈ trans_ctx.variableTypes.unzip.fst
+  varname ∈ trans_ctx.variableTypes.keys
 
 -------------------------------------------------------------------------------
 def getFunctions (decls: List Core.Decl) : List String :=
@@ -120,6 +122,7 @@ def getExceptProcedures (decls: List Core.Decl) : List String :=
 def PreludeProcedures : List String := getProcedures Core.Typeprelude.decls
 
 def PreludeExceptProcedures : List String := getExceptProcedures Core.Typeprelude.decls
+
 
 def IgnoredProcedures : List String := ["print", "import", "importFrom"]
 
@@ -182,8 +185,8 @@ def intToAny (i: Int) : Core.Expression.Expr :=
 def boolToAny (b: Bool) : Core.Expression.Expr :=
   .app () (.op () "from_bool" none) (.boolConst () b)
 
-def Any_asBool (b: Core.Expression.Expr) : Core.Expression.Expr :=
-  .app () (.op () "as_bool" none) b
+def Any_toBool (b: Core.Expression.Expr) : Core.Expression.Expr :=
+  .app () (.op () "Any_to_bool" none) b
 
 def strVarToAny (varname: String) : Core.Expression.Expr :=
   .app () (.op () "from_string" none) (.fvar () varname none)
@@ -286,7 +289,7 @@ partial def PyExprToString (e : Python.expr SourceRange) : String :=
     | "List" =>
       match slice with
       | .Name _ id _ => s!"List[{id.val}]"
-      | _ => panic! s!"Unsupported slice: {repr slice}"
+      | _ => "List[Any]"
     | _ => panic! s!"Unsupported subscript to string: {repr e}"
   | _ => panic! s!"Unhandled Expr: {repr e}"
 
@@ -304,7 +307,7 @@ def PyExprToMonoTy (e : Python.expr SourceRange) : Lambda.LMonoTy :=
     | "bool" => .tcons "bool" []
     | "int" => .tcons "int" []
     | "str" => .tcons "string" []
-    | "float" => .tcons "string" []
+    | "float" => .tcons "real" []
     | "Dict[str Any]" => .tcons "DictStrAny" []
     | "List[str]" => .tcons "ListStr" []
     | "datetime" => .tcons "Datetime" []
@@ -324,7 +327,7 @@ def PyExprToMonoTy (e : Python.expr SourceRange) : Lambda.LMonoTy :=
   | .Attribute _ _ _ _ => .tcons "Any" []
   | _ => panic! s!"Unhandled Expr: {repr e}"
 
-def AnyTy_var (var: String) := (var, Lambda.LMonoTy.tcons "Any" [])
+def AnyTy_var (var: String) := (var, "Any")
 
 def isFunctionWithException (funname: String) : Bool :=
   (funname ∈ PreludeExceptProcedures) || (¬ funname ∈ PreludeProcedures)
@@ -385,6 +388,24 @@ partial def collectVarDecls (stmts: Array (Python.stmt SourceRange)) : List Core
   let foo := dedup.map toCore
   foo.flatten
 
+partial def collectVars (stmts: Array (Python.stmt SourceRange)) : List (String × String) :=
+  let rec go (s : Python.stmt SourceRange) : List (String × String) :=
+    match s with
+    | .Assign _ lhs _ _ =>
+      let names := lhs.val.toList.map PyExprToString
+      names.map (λ n => (n, "Any"))
+    | .AnnAssign _ lhs ty _ _ =>
+      [(PyExprToString lhs, PyExprToString ty)]
+    | .If _ _ body _ => body.val.toList.flatMap go
+    | .For _ _ _ body _ _ => body.val.toList.flatMap go
+    | .Try _ body handlers _orelse finalbody =>
+        let handlers_bodies := handlers.val.toList.map (λ h => match h with
+          | .ExceptHandler _ _ _ body => body.val.toList)
+        (body.val.toList.flatMap go) ++ (handlers_bodies.flatten.flatMap go) ++ (finalbody.val.toList.flatMap go)
+    | _ => []
+  let dup := stmts.toList.flatMap go
+  dup
+
 def isCall (e: Python.expr SourceRange) : Bool :=
   match e with
   | .Call _ _ _ _ => true
@@ -408,7 +429,7 @@ def ErrTyToGuard (err_expr: Core.Expression.Expr) (errty: String) : Core.Express
   | "ZeroDivisionError" => .app () (.op () "Error..isUndefinedError" none) err_expr
   | "AssertionError" => .app () (.op () "Error..isAssertionError" none) err_expr
   | "Exception" => .app () (.op () "Bool.Not" none) (.app () (.op () "Error..isNoError" none) err_expr)
-  | _ => panic! ("Unsupport Error Type: " ++ errty)
+  | _ => .app () (.op () "Bool.Not" none) (.app () (.op () "Error..isNoError" none) err_expr)
 
 def create_ErrorHandle_stmt (err_expr: Core.Expression.Expr) (tryblockindex : String) (errtys : List String) : Core.Statement :=
   match errtys with
@@ -436,11 +457,12 @@ def addExceptionHandle (translation_ctx : TranslationContext) (callstmt: Core.St
   | .call lhs fnname args =>
       if isFunctionWithException fnname then
         let exceptionhandling_stmt := match translation_ctx.currentTryBlock with
-        | some tryblockinfo => create_ErrorHandle_stmt exceptvar tryblockinfo.TryBlockIndex tryblockinfo.ErrorTypes
-        | _ =>
+          | some tryblockinfo => create_ErrorHandle_stmt exceptvar tryblockinfo.TryBlockIndex tryblockinfo.ErrorTypes
+          | _ =>
               let nonerrassert : Core.Expression.Expr := .app () (.op () "Error..isNoError" none) exceptvar
               (.assert s!"safety_assert_{sr.start}_{sr.stop}" nonerrassert)
-        [.call (lhs ++ [⟨ "exceptvar", default⟩ ]) fnname args, exceptionhandling_stmt]
+        let exceptvarident : Core.Expression.Ident := "exceptvar"
+        [.call (lhs ++ [exceptvarident]) fnname args, exceptionhandling_stmt]
       else [callstmt]
   | _ => panic s!"Not a call statement "
 
@@ -451,10 +473,20 @@ partial def PyExprToCoreWithSubst (translation_ctx : TranslationContext)  (subst
 
 partial def PyKWordsToCore (kw : Python.keyword SourceRange) : (String × PyExprTranslated) :=
   match kw with
-  | .mk_keyword _ name expr =>
+  | .mk_keyword sr name expr =>
     match name.val with
     | some n => (n.val, PyExprToCore default expr)
-    | none => panic! "Keyword arg should have a name"
+    | none => panic! s!"Keyword arg should have a name {sr.start} {sr.stop}"
+
+partial def PyKWordsToHashMap (kwords : Array (Python.keyword SourceRange)) : Std.HashMap String (Python.expr SourceRange) :=
+  kwords.foldl (λ hashmap kw =>
+    match kw with
+      | .mk_keyword sr name expr =>
+        match name.val with
+        | some n => hashmap.insert n.val expr
+        | none => hashmap)
+    {}
+
 
 partial def kwargs_mk
     (kv: List (String × PyExprTranslated)) (acc: Core.Expression.Expr): Core.Expression.Expr :=
@@ -466,12 +498,48 @@ partial def kwargs_mk
       let dict_insert := .app () (.app () (.app () (.op () "kwargs_set" none) acc) key) val
       kwargs_mk t dict_insert
 
-partial def KwargsToCore  (kwords : Array (Python.keyword SourceRange)): PyExprTranslated :=
-  let kws_and_exprs := kwords.toList.map (PyKWordsToCore)
-  let ret := kwargs_mk  kws_and_exprs (.op () "kwargs_empty" none)
-  let stmts_all := (kws_and_exprs.map (λ (_, pe) => pe.stmts)).flatten
-  {stmts := stmts_all , expr := ret, args := []}
+partial def isDictKwargs (kwords : Array (Python.keyword SourceRange)) : Bool :=
+  if kwords.size == 0 then false else
+  match kwords[0]! with
+  | .mk_keyword _ name _ =>
+    match name.val with
+    | some _ => false
+    | none => true
 
+partial def DictKwargsToCore (kwords : Array (Python.keyword SourceRange)) : PyExprTranslated :=
+  match kwords[0]! with
+  | .mk_keyword _ name expr =>
+    match name.val with
+    | some _ => panic! s!"Keyword arg should be a Dict"
+    | none => PyExprToCore default expr
+
+partial def KwargsToCore  (kwords : Array (Python.keyword SourceRange)): PyExprTranslated :=
+  if isDictKwargs kwords then DictKwargsToCore kwords else
+    let kws_and_exprs := kwords.toList.map (PyKWordsToCore)
+    let ret := kwargs_mk  kws_and_exprs (.op () "kwargs_empty" none)
+    let stmts_all := (kws_and_exprs.map (λ (_, pe) => pe.stmts)).flatten
+    {stmts := stmts_all , expr := ret, args := []}
+
+partial def KwargsFilter (kwords : Array (Python.keyword SourceRange)) (funcdecl: PythonFunctionDecl) : Array (Python.keyword SourceRange) :=
+  kwords.filter (λ kw => match kw with
+    | .mk_keyword _ name _ =>
+      match name.val with
+        | some n => n.val ∉ funcdecl.args.unzip.fst
+        | none => True)
+
+partial def CombinePositionalAndKeywordArgs
+    (posargs: List (Python.expr SourceRange))
+    (kwords : Array (Python.keyword SourceRange))
+    (funcdecl: PythonFunctionDecl) : List (Python.expr SourceRange) :=
+  --let nondefaultargs := funcdecl.args.filter (λ (_, _, default) => default.isSome);
+  let kwords := PyKWordsToHashMap kwords
+  let posargs := funcdecl.args.unzip.fst.zip posargs
+  let funcdeclsargs := funcdecl.args.drop posargs.length
+  let args := funcdeclsargs.map (λ (name, _, default) =>
+    match kwords.get? name with
+    | some expr => (name, expr)
+    | none => match default with | .some default => (name, default) | _ => panic! "Must have a default")
+  posargs.unzip.snd ++ args.unzip.snd
 
 partial def Dict_mk (translation_ctx : TranslationContext) (substitution_records : Option (List SubstitutionRecord) := none)
     (kv: List ((Python.opt_expr SourceRange) × (Python.expr SourceRange))) (acc: Core.Expression.Expr): Core.Expression.Expr :=
@@ -480,7 +548,7 @@ partial def Dict_mk (translation_ctx : TranslationContext) (substitution_records
   | (k,v)::t =>
       let key := strToAny (PyOptExprToString k)
       let val := (PyExprToCore translation_ctx v substitution_records).expr
-      let dict_insert := .app () (.app () (.app () (.op () "Dict_insert" none) acc) key) val
+      let dict_insert := .app () (.app () (.app () (.op () "Dict_set_func" none) acc) key) val
       Dict_mk translation_ctx substitution_records t dict_insert
 
 partial def handleDict (translation_ctx : TranslationContext) (substitution_records : Option (List SubstitutionRecord) := none)
@@ -498,25 +566,91 @@ partial def List_mk (es: List Core.Expression.Expr) : Core.Expression.Expr := ma
 partial def handleList (elmts: Array (Python.expr SourceRange)) (translation_ctx : TranslationContext): PyExprTranslated :=
   let trans_elmts := elmts.toList.map (PyExprToCore translation_ctx)
   let stmts := (trans_elmts.map (λ x => x.stmts)).flatten
-  let expr := List_mk (trans_elmts.map (λ x => x.expr))
+  let expr := .app () (.op () "from_ListAny" none) (List_mk (trans_elmts.map (λ x => x.expr)))
   {stmts, expr}
+
+partial def Attribute_to_Listname (expr: Python.expr SourceRange): List String :=
+  match expr with
+  | .Name _ n _ => [n.val]
+  | .Attribute _ v attr _ => (Attribute_to_Listname v) ++ [attr.val]
+  | _ => []
+
+partial def getFunctionReturnType (translation_ctx : TranslationContext) (func: Python.expr SourceRange) : String :=
+  let fname := match func with
+    | .Name _ n _ => n.val
+    | .Attribute _ v attr _ =>
+        if (PyExprToString v) == "self" then translation_ctx.currentclassname ++ "_" ++ attr.val else
+        match v with
+        | .Attribute _ v1 attr1 _ =>
+          if (PyExprToString v1) == "self" then
+            match translation_ctx.classinstance_attributetype.get? (translation_ctx.currentclassname, attr1.val) with
+            | some ty =>
+              if ty == "Any" then "UnknownType" ++ "_" ++ attr.val else
+                  ty ++ "_" ++ attr.val
+            | none => "UnknownType" ++ "_" ++ attr.val
+          else
+            match translation_ctx.variableTypes.get? (PyExprGetRoot v)  with
+              | none => s!"{PyExprToString v}_{attr.val}"
+              | some x =>
+                  if x == "Any" then "UnknownType" ++ "_" ++ attr.val else
+                    x ++ "_" ++ attr.val
+        | _ =>  match translation_ctx.variableTypes.get? (PyExprToString v)  with
+              | none => s!"{PyExprToString v}_{attr.val}"
+              | some x =>
+                  if x == "Any" then "UnknownType" ++ "_" ++ attr.val else
+                    x ++ "_" ++ attr.val
+    | _ => panic! s!"{repr func} is not a function"
+  let fname := remapFname translation_ctx fname
+  --dbg_trace s!"{fname}"
+  --dbg_trace s!"{repr translation_ctx.func_infos}"
+  match translation_ctx.func_infos.find? (λ f => f.name == fname) with
+  | some funcinfo => funcinfo.ret
+  | _ => "UnknownType"
+
 
 partial def PyCallToCore  (translation_ctx : TranslationContext)
                             (func: Python.expr SourceRange) (sr: SourceRange)
                             (args: Ann (Array (Python.expr SourceRange)) SourceRange)
                             (kwords : Ann (Array (Python.keyword SourceRange)) SourceRange): PyExprTranslated:=
   let (fname, args) := match func with
-    | .Name _ n _ => (n.val, args.val.toList)
+    | .Name _ n _ =>
+      if n.val.endsWith "___init__" then
+        (n.val, args.val.toList.drop 1)
+      else (n.val, args.val.toList)
     | .Attribute _ v attr _ =>
-        if (PyExprGetRoot v) ∈ translation_ctx.variableTypes.unzip.1 then
-          (attr.val, [v] ++ args.val.toList)
-        else (s!"{PyExprToString v}_{attr.val}", args.val.toList)
+        if (PyExprToString v) == "self" then (translation_ctx.currentclassname ++ "_" ++ attr.val, [v] ++ args.val.toList) else
+        match v with
+        | .Attribute _ v1 attr1 _ =>
+          if (PyExprToString v1) == "self" then
+            match translation_ctx.classinstance_attributetype.get? (translation_ctx.currentclassname, attr1.val) with
+            | some ty =>
+              if ty == "Any" then ("UnknownType" ++ "_" ++ attr.val, [v] ++ args.val.toList) else
+                  (ty ++ "_" ++ attr.val, [v] ++ args.val.toList)
+            | none => ("UnknownType" ++ "_" ++ attr.val, [v] ++ args.val.toList)
+          else
+            match translation_ctx.variableTypes.get? (PyExprGetRoot v)  with
+              | none => (s!"{PyExprToString v}_{attr.val}", args.val.toList)
+              | some x =>
+                  if x == "Any" then ("UnknownType" ++ "_" ++ attr.val, [v] ++ args.val.toList) else
+                    (x ++ "_" ++ attr.val, [v] ++ args.val.toList)
+
+        | _ => match translation_ctx.variableTypes.get? (PyExprGetRoot v)  with
+                | none => (s!"{PyExprToString v}_{attr.val}", args.val.toList)
+                | some x =>
+                    if x == "Any" then ("UnknownType" ++ "_" ++ attr.val, [v] ++ args.val.toList) else
+                      (x ++ "_" ++ attr.val, [v] ++ args.val.toList)
     | _ => panic! s!"{repr func} is not a function"
   let fname := remapFname translation_ctx fname
+  let args := match translation_ctx.func_infos.find? (λ x => x.name == fname) with
+    | .some funcdecl => CombinePositionalAndKeywordArgs args kwords.val funcdecl
+    | _ => args
+  let kwords := match translation_ctx.func_infos.find? (λ x => x.name == fname) with
+    | .some funcdecl => KwargsFilter kwords.val funcdecl
+    | _ => kwords.val
   let trans_arg_exprs := (args.map (λ a => (PyExprToCore translation_ctx a none).expr))
   let trans_arg_stmts := (args.map (λ a => (PyExprToCore translation_ctx a none).stmts)).flatten
-  let trans_kwords := KwargsToCore kwords.val
-  let trans_kwords_exprs := if kwords.val.size == 0 then [] else [trans_kwords.expr]
+  let trans_kwords := KwargsToCore kwords
+  let trans_kwords_exprs := if kwords.size == 0 then [] else [trans_kwords.expr]
   let tempvarname := s!"tmpvar_{sr.start}_{sr.stop}"
   let fvar_expr : Core.Expression.Expr := .fvar () tempvarname none
   let inittemp  :=
@@ -581,9 +715,9 @@ partial def PyExprToCore (translation_ctx : TranslationContext) (e : Python.expr
       match n.val with
       | "AssertionError" | "Exception" => {stmts := [], expr := .strConst () n.val}
       | s =>
-        match translation_ctx.variableTypes.find? (λ p => p.fst == s) with
+        match translation_ctx.variableTypes.get? s with
         | .some p =>
-          if translation_ctx.expectedType == some (.tcons "bool" []) && p.snd == (.tcons "DictStrAny" []) then
+          if translation_ctx.expectedType == some (.tcons "bool" []) && p == "DictStrAny"  then
             let a := .fvar () n.val none
             let e := .app () (.op () "Bool.Not" none) (.eq () (.app () (.op () "dict_str_any_length" none) a) (.intConst () 0))
             {stmts := [], expr := e}
@@ -617,29 +751,18 @@ partial def PyExprToCore (translation_ctx : TranslationContext) (e : Python.expr
     | .UnaryOp sr op arg => match op with
       | .Not _ => PyUnOpToCore translation_ctx "PNot" sr arg
       | _ => panic! "Unsupported UnaryOp: {repr e}"
-    | .Subscript _ v slice _ =>
-      let l := PyExprToCore translation_ctx v
-      let k := PyExprToCore translation_ctx slice
-      -- TODO: we need to plumb the type of `v` here
-      match s!"{repr l.expr}" with
-      | "LExpr.fvar () { name := \"keys\", metadata := Core.Visibility.unres } none" =>
-          -- let access_check : Core.Statement := .assert "subscript_bounds_check" (.app () (.app () (.op () "str_in_dict_str_any" none) k.expr) l.expr)
-          {stmts := l.stmts ++ k.stmts, expr := .app () (.app () (.op () "list_str_get" none) l.expr) k.expr}
-      | "LExpr.fvar () { name := \"blended_cost\", metadata := Core.Visibility.unres } none" =>
-          -- let access_check : Core.Statement := .assert "subscript_bounds_check" (.app () (.app () (.op () "str_in_dict_str_any" none) k.expr) l.expr)
-          {stmts := l.stmts ++ k.stmts, expr := .app () (.app () (.op () "dict_str_any_get_str" none) l.expr) k.expr}
-      | _ =>
-        match translation_ctx.expectedType with
-        | .some (.tcons "ListStr" []) =>
-          let access_check : Core.Statement := .assert "subscript_bounds_check" (.app () (.app () (.op () "str_in_dict_str_any" none) k.expr) l.expr)
-          {stmts := l.stmts ++ k.stmts ++ [access_check], expr := .app () (.app () (.op () "dict_str_any_get_list_str" none) l.expr) k.expr}
-        | _ =>
-          let access_check : Core.Statement := .assert "subscript_bounds_check" (.app () (.app () (.op () "str_in_dict_str_any" none) k.expr) l.expr)
-          {stmts := l.stmts ++ k.stmts ++ [access_check], expr := .app () (.app () (.op () "dict_str_any_get" none) l.expr) k.expr}
+    | .Subscript sr v slice ctx =>
+      let sr := slice.toAst.ann
+      PyBinOpToCore translation_ctx "Any_get" sr v slice
     | .List _ elmts _ => handleList elmts.val translation_ctx
-    | .Attribute _ v attr _ =>
-        let vCore := (PyExprToCore translation_ctx v).expr
-        {stmts:= [], expr:= handleAttribute vCore attr.val}
+    | .Attribute sr v attr _ =>
+        let vCore := PyExprToCore translation_ctx v
+        let tmpvar := s!"tmpvar_{sr.start}_{sr.stop}"
+        let inittmpvar : Core.Statement := .init tmpvar AnyTy AnyNoneExpr
+        let getattributestmt : Core.Statement :=
+          .call [tmpvar] "ClassInstance_get_InstanceAttribute" [vCore.expr, .strConst () attr.val]
+        let getattributestmt := addExceptionHandle translation_ctx getattributestmt sr
+        {stmts:= vCore.stmts ++ [inittmpvar] ++ getattributestmt, expr:= FVar tmpvar}
     | _ => panic! s!"Unhandled Expr: {repr e}"
 
 partial def initTmpParam (p: Python.expr SourceRange × String) : List Core.Statement :=
@@ -692,85 +815,172 @@ partial def handleComprehension (lhs: Python.expr SourceRange) (gen: Array (Pyth
     res.stmts ++ [.ite guard then_ss else_ss]
 
 
-
 partial def handleFunctionCall
         (translation_ctx : TranslationContext)
-        (lhs:  List String)
         (call_expr: Python.expr SourceRange): List Core.Statement :=
   let call_trans := PyExprToCore translation_ctx call_expr
-  let lhs : List Core.Expression.Ident := if lhs.length == 0 then [] else [lhs[0]!]
   match call_expr with
   | (.Call sr _ _ _) =>
+      let lhs : List Core.Expression.Ident := []
       match call_trans.stmts.getLast! with
       | .call _ fn args =>
           let newcall := addExceptionHandle translation_ctx (.call lhs fn args) sr
-          call_trans.stmts.dropLast  ++ newcall
+          call_trans.stmts.dropLast.dropLast  ++ newcall
       | .ite _ _ _
       | .assert _ _ _
         => match call_trans.stmts.dropLast.getLast! with
           | .call _ fn args =>
               let newcall := addExceptionHandle translation_ctx (.call lhs fn args) sr
-              call_trans.stmts.dropLast.dropLast ++  newcall
+              call_trans.stmts.dropLast.dropLast.dropLast ++  newcall
           | _ => panic! s!"Expect a Call expr"
       | .init _ _ expr => call_trans.stmts.dropLast  ++  [.set lhs[0]! expr]
       | _ => panic! "expect a Call"
   | _ => panic! s!"Expect a Call expr, get {repr call_expr}"
 
+
+partial def get_tempvarname_of_call_trans  (call_trans: PyExprTranslated) : String :=
+  match call_trans.stmts.getLast! with
+      | .call tempvarname _ _ => tempvarname[0]!.name
+      | .ite _ _ _
+      | .assert _ _ _
+        => match call_trans.stmts.dropLast.getLast! with
+          | .call tempvarname _ _ =>tempvarname[0]!.name
+          | _ => panic! s!"Expect a Call expr"
+      | .init tempvarname _ _ => tempvarname.name
+      | _ => panic! "expect a Call"
+
+partial def handleAssignFunctionCall
+        (translation_ctx : TranslationContext)
+        (lhs:  Python.expr SourceRange)
+        (call_expr: Python.expr SourceRange): List Core.Statement :=
+  let call_trans := PyExprToCore translation_ctx call_expr
+  match call_expr with
+  | (.Call sr _ _ _) =>
+    match lhs with
+    | .Name _ n _ =>
+      let lhs : List Core.Expression.Ident := [n.val]
+      match call_trans.stmts.getLast! with
+      | .call _ fn args =>
+          let newcall := addExceptionHandle translation_ctx (.call lhs fn args) sr
+          call_trans.stmts.dropLast.dropLast  ++ newcall
+      | .ite _ _ _
+      | .assert _ _ _
+        => match call_trans.stmts.dropLast.getLast! with
+          | .call _ fn args =>
+              let newcall := addExceptionHandle translation_ctx (.call lhs fn args) sr
+              call_trans.stmts.dropLast.dropLast.dropLast ++  newcall
+          | _ => panic! s!"Expect a Call expr"
+      | .init _ _ expr => call_trans.stmts.dropLast  ++  [.set lhs[0]! expr]
+      | _ => panic! "expect a Call"
+    | .Subscript _ val slice _ =>
+      let dictvar := FVar (PyExprToString val)
+      let key := PyExprToCore translation_ctx slice
+      let tempvarname := get_tempvarname_of_call_trans call_trans
+      let dictset := Core.Statement.call [PyExprToString val] "Dict_set" [dictvar, key.expr, FVar tempvarname]
+      let newcall := addExceptionHandle translation_ctx dictset sr
+      call_trans.stmts ++ key.stmts ++ newcall
+    | .Attribute _ val att _ =>
+        let tempvarname := get_tempvarname_of_call_trans call_trans
+        let classvar := FVar (PyExprToString val)
+        let attr : Core.Expression.Expr := .strConst () att.val
+        call_trans.stmts ++ [.call [PyExprToString val, "exceptvar"] "ClassInstance_init_InstanceAttribute" [classvar, attr, FVar tempvarname]]
+    | _ => panic! s!"Unexpected LHS"
+  | _ => panic! s!"Expect a Call expr, get {repr call_expr}"
+
 partial def PyStmtToCore (translation_ctx : TranslationContext) (s : Python.stmt SourceRange)
         : List Core.Statement × TranslationContext :=
   --dbg_trace s!"Handling: {repr s}"
-  let trans_stmts: List Core.Statement × Option (String × Lambda.LMonoTy) := match s with
-    | .Import _ names =>
-      ([.call [] "import" [PyListStrToCore names.val]], none)
-    | .ImportFrom _ s names i =>
+  match s with
+    | .Import _ names => ([], translation_ctx)
+      --([.call [] "import" [PyListStrToCore names.val]], translation_ctx)
+    | .ImportFrom _ s names i => ([], translation_ctx)
+      /-
       let n := match s.val with
       | some s => [strToCoreExpr s.val]
       | none => []
       let i := match i.val with
       | some i => [intToCoreExpr (PyIntToInt i)]
       | none => []
-      ([.call [] "importFrom" (n ++ [PyListStrToCore names.val] ++ i)], none)
+      ([.call [] "importFrom" (n ++ [PyListStrToCore names.val] ++ i)], translation_ctx)
+      -/
     | .Expr _ (.Call sr func args kwords) =>
-      if (PyExprToString func) ∈ IgnoredProcedures then ([], none)
+      if (PyExprToString func) ∈ IgnoredProcedures then ([], translation_ctx)
       else
-        (handleFunctionCall translation_ctx [] (.Call sr func args kwords), none)
+        (handleFunctionCall translation_ctx (.Call sr func args kwords), translation_ctx)
     | .Expr _ (.Constant _ (.ConString _ _) _) =>
       -- TODO: Check that it's a doc string
-      ([], none) -- Doc string
+      ([], translation_ctx) -- Doc string
     | .Expr _ _ =>
       panic! s!"Can't handle Expr statements that aren't calls: {repr s}"
     | .Assign _ lhs (.Call sr func args kwords) _ =>
+      let fname := PyExprGetRoot func
       assert! lhs.val.size == 1
-      let lhs := PyExprToString lhs.val[0]!
-      let call_stmts := handleFunctionCall translation_ctx [lhs] (.Call sr func args kwords)
-      if isVar_inContext translation_ctx lhs then
-        (call_stmts, some (AnyTy_var lhs))
-      else
-        ([.init lhs AnyTy AnyNoneExpr] ++ call_stmts, some (AnyTy_var lhs))
+      let lhs := lhs.val[0]!
+      let vartype := match translation_ctx.class_infos.find? (λ i => i.name == fname) with
+        | .some _ => (PyExprGetRoot lhs, fname)
+        | _ => (AnyTy_var (PyExprGetRoot lhs))
+      let call_stmts := handleAssignFunctionCall translation_ctx lhs (.Call sr func args kwords)
+      match lhs with
+      | .Name _ val _ =>
+          let lhs := val.val
+          if isVar_inContext translation_ctx lhs then
+            (call_stmts, {translation_ctx with variableTypes := translation_ctx.variableTypes.insert vartype.fst vartype.snd})
+          else
+            ([.init lhs AnyTy AnyNoneExpr] ++ call_stmts,
+            {translation_ctx with variableTypes := translation_ctx.variableTypes.insert vartype.fst vartype.snd})
+      | .Subscript _ _ _ _ => (call_stmts, translation_ctx)
+      | .Attribute _ val att _ =>
+          (call_stmts,
+          {translation_ctx with classinstance_attributetype := translation_ctx.classinstance_attributetype.insert (translation_ctx.currentclassname, att.val) (getFunctionReturnType translation_ctx func)})
+      | _ => panic! s!"Invalid LHS"
     | .Assign _ lhs rhs _ =>
-      assert! lhs.val.size == 1
-      let lhs := PyExprToString lhs.val[0]!
       let res := PyExprToCore translation_ctx rhs
-      if isVar_inContext translation_ctx lhs then
-        (res.stmts ++ [(.set lhs res.expr)], some (AnyTy_var lhs))
-      else
-      (res.stmts ++ [(.init lhs AnyTy res.expr)], some (AnyTy_var lhs))
+      assert! lhs.val.size == 1
+      let lhs := lhs.val[0]!
+      match lhs with
+      | .Name _ val _ =>
+          let lhs := val.val
+          if isVar_inContext translation_ctx lhs then
+             (res.stmts ++ [(.set lhs res.expr)],
+             {translation_ctx with variableTypes := translation_ctx.variableTypes.insert lhs "Any"})
+          else
+            (res.stmts ++ [(.init lhs AnyTy res.expr)],
+            {translation_ctx with variableTypes := translation_ctx.variableTypes.insert lhs "Any"})
+      | .Subscript sr val slice _ =>
+          let dictvar := FVar (PyExprToString val)
+          let key := PyExprToCore translation_ctx slice
+          let dictset := Core.Statement.call [PyExprToString val] "Dict_set" [dictvar, key.expr, res.expr]
+          let dictset := addExceptionHandle translation_ctx dictset sr
+          (res.stmts ++ key.stmts ++ dictset, translation_ctx)
+      | .Attribute _ val att _ =>
+          let classvar := FVar (PyExprToString val)
+          let attr : Core.Expression.Expr := .strConst () att.val
+          (res.stmts ++ [.call [PyExprToString val, "exceptvar"] "ClassInstance_init_InstanceAttribute" [classvar, attr, res.expr]], translation_ctx)
+      | _ => panic! s!"Invalid LHS"
     | .AnnAssign _ lhs ty { ann := _ , val := (.some (.Call sr func args kwords))} _ =>
-      let lhs := PyExprToString lhs
-      let call_stmts := handleFunctionCall translation_ctx [lhs] (.Call sr func args kwords)
-      if isVar_inContext translation_ctx lhs then
-        (call_stmts, some (lhs, PyExprToMonoTy ty))
-      else
-        ([.init lhs AnyTy AnyNoneExpr] ++ call_stmts, some (lhs, PyExprToMonoTy ty))
-    | .AnnAssign _ lhs ty { ann := _ , val := (.some (.ListComp _ _ gen))} _ => ([], none)
+      let call_stmts := handleAssignFunctionCall translation_ctx lhs (.Call sr func args kwords)
+      match lhs with
+      | .Name _ val _ =>
+          let lhs := val.val
+          if isVar_inContext translation_ctx lhs then
+            (call_stmts,
+            {translation_ctx with variableTypes := translation_ctx.variableTypes.insert lhs "Any"})
+          else
+            ([.init lhs AnyTy AnyNoneExpr] ++ call_stmts,
+            {translation_ctx with variableTypes := translation_ctx.variableTypes.insert lhs (PyExprToString ty)})
+      | .Subscript _ _ _ _ => (call_stmts, translation_ctx)
+      | _ => panic! s!"Invalid LHS"
+    | .AnnAssign _ lhs ty { ann := _ , val := (.some (.ListComp _ _ gen))} _ => ([], translation_ctx)
     --  (handleComprehension lhs gen.val, some (PyExprToString lhs, PyExprToMonoTy ty))
     | .AnnAssign _ lhs ty {ann := _, val := (.some e)} _ =>
       let lhs := PyExprToString lhs
       let res := (PyExprToCore {translation_ctx with expectedType := PyExprToMonoTy ty} e)
       if isVar_inContext translation_ctx lhs then
-        (res.stmts ++ [(.set lhs res.expr)], some (lhs, PyExprToMonoTy ty))
+        (res.stmts ++ [(.set lhs res.expr)],
+        {translation_ctx with variableTypes := translation_ctx.variableTypes.insert lhs (PyExprToString ty)})
       else
-        (res.stmts ++ [(.init lhs AnyTy res.expr)], some (lhs, PyExprToMonoTy ty))
+        (res.stmts ++ [(.init lhs AnyTy res.expr)],
+        {translation_ctx with variableTypes := translation_ctx.variableTypes.insert lhs (PyExprToString ty)})
     | .Try sr body handlers _orelse finalbody =>
         let tryblockindex := s!"_{sr.start}_{sr.stop}"
         let tryblockname := "tryblock" ++ tryblockindex
@@ -780,39 +990,45 @@ partial def PyStmtToCore (translation_ctx : TranslationContext) (s : Python.stmt
         let except_handlers_blocks := handlers.val.toList.map (exceptHandlersToCoreBlock translation_ctx tryblockindex)
         let finalblockbody := finalbody.val.toList.flatMap (λ s => (PyStmtToCore translation_ctx s).fst)
         let finalblock :=.block finalblockname finalblockbody
-        let translation_ctx := {translation_ctx with currentTryBlock:= some curTryblock}
-        --let var_decls := collectVarDecls translation_ctx body.val
-        let tryblockbody := body.val.toList.flatMap (λ s => (PyStmtToCore translation_ctx s).fst) ++ [.goto finalblockname]
-        let tryblock := .block tryblockname tryblockbody
+        let new_translation_ctx := {translation_ctx with currentTryBlock:= some curTryblock}
+        let tryblockbody := ArrPyStmtToCore new_translation_ctx body.val
+        let tryblock := .block tryblockname tryblockbody.fst
         let stmts : List Core.Statement := [tryblock] ++ except_handlers_blocks ++ [finalblock]
-        (stmts ,none)
+        (stmts,
+        {translation_ctx with variableTypes := tryblockbody.snd.variableTypes})
     | .FunctionDef _ _ _ _ _ _ _ _ => panic! "Can't translate FunctionDef to Core statement"
     | .If _ test then_b else_b =>
       let guard_ctx := {translation_ctx with expectedType := some (.tcons "bool" [])}
-      ([.ite (Any_asBool (PyExprToCore guard_ctx test).expr) (ArrPyStmtToCore translation_ctx then_b.val).fst (ArrPyStmtToCore translation_ctx else_b.val).fst], none)
+      let guard := PyExprToCore guard_ctx test
+      let thenblock := ArrPyStmtToCore translation_ctx then_b.val
+      let elseblock := ArrPyStmtToCore translation_ctx else_b.val
+      (guard.stmts ++ [.ite (Any_toBool guard.expr) thenblock.fst elseblock.fst],
+      {translation_ctx with variableTypes := Std.HashMap.union thenblock.snd.variableTypes elseblock.snd.variableTypes})
     | .Return _ v =>
       match v.val with
-      | .some v => ([(.set "ret" (PyExprToCore translation_ctx v).expr), (.goto "end")], none) -- TODO: need to thread return value name here. For now, assume "ret"
-      | .none => ([(.goto "end")], none)
+      | .some v =>
+          let ret := (PyExprToCore translation_ctx v)
+          (ret.stmts ++ [(.set "ret" ret.expr), (.goto "end")], translation_ctx) -- TODO: need to thread return value name here. For now, assume "ret"
+      | .none => ([(.goto "end")], translation_ctx)
     | .For _ tgt itr body _ _ =>
       -- Do one unrolling:
       let guard := .app () (.op () "Bool.Not" none) (.eq () (.app () (.op () "dict_str_any_length" none) (PyExprToCore default itr).expr) (.intConst () 0))
       match tgt with
       | .Name _ n _ =>
         let assign_tgt := [(.init n.val AnyTy AnyNoneExpr)]
-        ([(.ite guard (assign_tgt ++ (ArrPyStmtToCore translation_ctx body.val).fst) [])], none)
+        ([(.ite guard (assign_tgt ++ (ArrPyStmtToCore translation_ctx body.val).fst) [])], translation_ctx)
       | _ => panic! s!"tgt must be single name: {repr tgt}"
       -- TODO: missing havoc
     | .While _ test body _ =>
       -- Do one unrolling:
       let guard := .app () (.op () "Bool.Not" none) (.eq () (.app () (.op () "dict_str_any_length" none) (PyExprToCore default test).expr) (.intConst () 0))
-      ([(.ite guard (ArrPyStmtToCore translation_ctx body.val).fst [])], none)
+      ([(.ite guard (ArrPyStmtToCore translation_ctx body.val).fst [])], translation_ctx)
       -- TODO: missing havoc
     | .Assert pos a _ =>
       let res := PyExprToCore translation_ctx a
       let assertname := s!"py_assertion_line_{pos.start}_col_{pos.stop}"
-      let assert_expr := Any_asBool res.expr
-      (res.stmts ++ [(.assert assertname assert_expr)], none)
+      let assert_expr := Any_toBool res.expr
+      (res.stmts ++ [(.assert assertname assert_expr)], translation_ctx)
     | .AugAssign _ lhs op rhs =>
       match op with
       | .Add _ =>
@@ -820,7 +1036,7 @@ partial def PyStmtToCore (translation_ctx : TranslationContext) (s : Python.stmt
         | .Name _ n _ =>
           let rhs := PyExprToCore translation_ctx rhs
           let new_lhs := (.strConst () "DUMMY_FLOAT")
-          (rhs.stmts ++ [(.set n.val new_lhs)], none)
+          (rhs.stmts ++ [(.set n.val new_lhs)], translation_ctx)
         | _ => panic! s!"Expected lhs to be name: {repr lhs}"
       | .FloorDiv _ =>
         match lhs with
@@ -828,15 +1044,13 @@ partial def PyStmtToCore (translation_ctx : TranslationContext) (s : Python.stmt
           let lhs := PyExprToCore translation_ctx lhs
           let rhs := PyExprToCore translation_ctx rhs
           let new_lhs := .app () (.app () (.op () "Int.Div" mty[int → (int → int)]) lhs.expr) rhs.expr
-          (rhs.stmts ++ [(.set n.val new_lhs)], none)
+          (rhs.stmts ++ [(.set n.val new_lhs)], translation_ctx)
         | _ => panic! s!"Expected lhs to be name: {repr lhs}"
       | _ => panic! s!"Unsupported AugAssign op: {repr op}"
-    | .Pass _ => ([], none)
+    | .Pass _ => ([], translation_ctx)
+    | .Raise _ _ _ => ([.set "exceptvar" UndefinedError], translation_ctx)
     | _ => panic! s!"Unsupported {repr s}"
-  let new_translation_ctx := match trans_stmts.snd with
-  | .some s => {translation_ctx with variableTypes := s :: translation_ctx.variableTypes}
-  | .none => translation_ctx
-  (trans_stmts.fst, new_translation_ctx)
+
 
 partial def ArrPyStmtToCore (translation_ctx: TranslationContext) (a : Array (Python.stmt SourceRange)) : (List Core.Statement × TranslationContext) :=
   a.foldl (fun (stmts, ctx) stmt =>
@@ -884,63 +1098,87 @@ def pyTyStrToLMonoTy (ty_str: String) : Lambda.LMonoTy :=
     if IsOrType ty_str then (.tcons "Any" []) else
       panic! s!"Unsupported type: {ty_str}"
 
-def arg_typecheck_assertion (var: String) (ty_str: String) : Core.Expression.Expr :=
-  match ty_str.toLower with
-  | "str" => .app () (.op () "isStr" none) (.fvar () var none)
-  | "int" => .app () (.op () "isInt" none) (.fvar () var none)
-  | "bool" => .app () (.op () "isBool" none) (.fvar () var none)
-  | "datetime" => .app () (.op () "isDatetime" none) (.fvar () var none)
-  | "none" => .app () (.op () "isNone" none) (.fvar () var none)
-  | _ => panic! s!"Unsupported type: {ty_str}"
+
+def arg_typecheck_assertion (var: String) (ty_str: String) (default: Option (Python.expr SourceRange)): Core.Expression.Expr :=
+  let constraint := match ty_str.toLower with
+  | "str" => .app () (.op () "Any..isfrom_string" none) (.fvar () var none)
+  | "int" => .app () (.op () "Any..isfrom_int" none) (.fvar () var none)
+  | "bool" => .app () (.op () "Any..isfrom_bool" none) (.fvar () var none)
+  | "datetime" => .app () (.op () "Any..isfrom_Datetime" none) (.fvar () var none)
+  | "none" => .app () (.op () "Any..isfrom_None" none) (.fvar () var none)
+  | _ => if ty_str.startsWith "Dict" then .app () (.op () "Any..isfrom_Dict" none) (.fvar () var none)
+      else if ty_str.startsWith "List" then .app () (.op () "Any..isfrom_ListAny" none) (.fvar () var none)
+      else .eq () (.app () (.op () "classname" none) (.fvar () var none)) (.strConst () ty_str)
+  match default with
+    |.some (.Constant _ (.ConNone _) _ ) =>
+      .app () (.app () (.op () "Bool.Or" none) constraint) (.app () (.op () "Any..isfrom_none" none) (.fvar () var none))
+    | _ => constraint
 
 def arg_typecheck_or_expr (var: String) (ty_strs: List String) : Core.Expression.Expr :=
   match ty_strs with
   | [] => panic! "ty_strs cannot be empty"
-  | [ty] => arg_typecheck_assertion var ty
-  | ty::tys => .app () (.app () (.op () "Bool.Or" none) (arg_typecheck_assertion var ty)) (arg_typecheck_or_expr var tys)
+  | [ty] => arg_typecheck_assertion var ty none
+  | ty::tys => .app () (.app () (.op () "Bool.Or" none) (arg_typecheck_assertion var ty none)) (arg_typecheck_or_expr var tys)
 
-def getArg_typecheck_assertions (var: String) (ty: String) : Core.Statement :=
+def getArg_typecheck_assertions (var: String) (ty: String) (default: Option (Python.expr SourceRange)): Core.Statement :=
   let typelist := ty.splitOn "Or"
   let assertionname := var ++ "_typeconstraint"
   if IsOrType ty then
     .assert assertionname (arg_typecheck_or_expr var typelist)
-  else .assert assertionname (arg_typecheck_assertion var ty)
+  else .assert assertionname (arg_typecheck_assertion var ty default)
 
-def getArgs_typecheck_assertions (args: List (String × String)) : List Core.Statement :=
+def getArgs_typecheck_assertions (args: List (String × String × Option (Python.expr SourceRange))) : List Core.Statement :=
   match args with
   | [] => []
-  | (var, typ)::t => (getArg_typecheck_assertions var typ) :: (getArgs_typecheck_assertions t)
+  | (var, typ, default)::t => (getArg_typecheck_assertions var typ default) :: (getArgs_typecheck_assertions t)
 
-def getArg_typecheck_precond (var: String) (ty: String) : (Core.CoreLabel × Core.Procedure.Check) :=
+def getArg_typecheck_precond (var: String) (ty: String) (default: Option (Python.expr SourceRange)): (Core.CoreLabel × Core.Procedure.Check) :=
   let typelist := ty.splitOn "Or"
   let assertionname := var ++ "_typeconstraint"
   if IsOrType ty then
     (assertionname, {expr:=arg_typecheck_or_expr var typelist})
-  else (assertionname, {expr:=arg_typecheck_assertion var ty})
+  else (assertionname, {expr:=arg_typecheck_assertion var ty default})
 
-def getArgs_typecheck_preconds (args: List (String × String)) : ListMap Core.CoreLabel Core.Procedure.Check :=
+def getArgs_typecheck_preconds (args: List (String × String × Option (Python.expr SourceRange))) : ListMap Core.CoreLabel Core.Procedure.Check :=
   match args with
   | [] => []
-  | (var, typ)::t => if typ == "Any" then (getArgs_typecheck_preconds t) else
-            (getArg_typecheck_precond var typ) :: (getArgs_typecheck_preconds t)
+  | (var, typ, default)::t => if typ == "Any" then (getArgs_typecheck_preconds t) else
+            (getArg_typecheck_precond var typ default) :: (getArgs_typecheck_preconds t)
 
-def pythonFuncToCore (name : String) (args: List (String × String)) (body: Array (Python.stmt SourceRange))
-      (ret : Option (Python.expr SourceRange)) (spec : Core.Procedure.Spec) (translation_ctx : TranslationContext) : Core.Procedure :=
-  let inputs : List (Lambda.Identifier Core.Visibility × Lambda.LMonoTy) := args.map (λ p => (p.fst, (.tcons "Any" [])))
-  --let varDecls := collectVarDecls translation_ctx body
-  --++ [(.init "exception_ty_matches" t[bool] (.boolConst () false)), (.havoc "exception_ty_matches")]
-  let arg_typecheck := getArgs_typecheck_preconds args
-  let newspec := {spec with preconditions:= arg_typecheck ++ spec.preconditions}
-  let stmts := (ArrPyStmtToCore translation_ctx body).fst
-  --let body := varDecls ++ stmts ++ [.block "end" []]
-  let body := stmts ++ [.block "end" []]
+def pythonFuncToCore (name : String) (args: List (String × String × Option (Python.expr SourceRange))) (body: Array (Python.stmt SourceRange))
+      (ret : Option (Python.expr SourceRange)) (spec : Core.Procedure.Spec) (translation_ctx : TranslationContext) : Core.Procedure × TranslationContext:=
   let constructor := name.endsWith "___init__"
+  let args := if constructor then args.tail else args
+  let inputs : List (Lambda.Identifier Core.Visibility × Lambda.LMonoTy) := args.map (λ p => (p.fst, (.tcons "Any" [])))
+  let arg_typecheck := getArgs_typecheck_preconds args
+  let stmts := (ArrPyStmtToCore translation_ctx body).fst
+  let newctx := (ArrPyStmtToCore translation_ctx body).snd
+  let body := [.set "exceptvar" (.op () "NoError" none)] ++ stmts
+  let body := if constructor then
+      [.init "self" AnyTy (emptyClassInstance translation_ctx.currentclassname)] ++ body ++ [.set "ret" (FVar "self")]
+    else body
+  let body := body ++ [.block "end" []]
+  let ret_typecheck : ListMap Core.CoreLabel Core.Procedure.Check :=
+    if constructor then
+      let class_ty_name := name.dropRight ("___init__".length)
+      [("ret_typeconstraint",
+        {expr:= .eq () (.app () (.op () "classname" none) (FVar "ret")) (strToCoreExpr class_ty_name)} )]
+    else
+      match ret with
+      | some ret =>
+       [("ret_typeconstraint",
+        {expr:= arg_typecheck_assertion "ret" (PyExprToString ret) none})]
+      | _ => []
+  let newspec := {spec with preconditions:= arg_typecheck ++ spec.preconditions
+                            postconditions:= ret_typecheck ++ spec.postconditions}
+  let outputs : Lambda.LMonoTySignature := [("ret", (.tcons "Any" [])), ("exceptvar", (.tcons "Error" []))]
+  /-
   let outputs : Lambda.LMonoTySignature := if not constructor then
     [("ret", (.tcons "Any" [])), ("exceptvar", (.tcons "Error" []))]
   else
     let class_ty_name := name.dropRight ("___init__".length)
-    [("ret", (.tcons s!"{class_ty_name}" [])), ("exceptvar", (.tcons "Error" []))]
-  {
+    [("ret", (.tcons s!"{class_ty_name}" [])), ("exceptvar", (.tcons "Error" []))]-/
+  let outproc := {
     header := {name,
                typeArgs := [],
                inputs,
@@ -948,86 +1186,113 @@ def pythonFuncToCore (name : String) (args: List (String × String)) (body: Arra
     spec:=newspec,
     body
   }
+  let newctx:= {translation_ctx with classinstance_attributetype:= newctx.classinstance_attributetype}
+  (outproc, newctx)
 
-def unpackPyArguments (args: Python.arguments SourceRange) : List (String × String) :=
+def unpackPyArguments (args: Python.arguments SourceRange) : List (String × String × Option (Python.expr SourceRange)) :=
 -- Python AST:
 -- arguments = (arg* posonlyargs, arg* args, arg? vararg, arg* kwonlyargs,
 --                  expr* kw_defaults, arg? kwarg, expr* defaults)
   match args with -- TODO: Error if any other types of args
-  | .mk_arguments _ _ args _ _ _ _ _ =>
-    let combined := args.val
-    combined.toList.filterMap (λ a =>
-    match a with
-    | .mk_arg _ name oty _ =>
-      if name.val == "self" then
-        none
-      else
-        match oty.val with
-        | .some ty => some (name.val, PyExprToString ty)
-        | _ => some (name.val, "Any"))
+    | .mk_arguments _ _ args _ _ _ _ defaults =>
+      let argscount := args.val.size
+      let defaultscount := defaults.val.size;
+      let listdefaults := (List.range (argscount - defaultscount)).map (λ _ => none)
+                        ++ defaults.val.toList.map (λ x => some x)
+      let argsinfo := args.val.toList.zip listdefaults
+      let argtypes :=
+        argsinfo.map (λ a: Python.arg SourceRange × Option (Python.expr SourceRange) =>
+        match a.fst with
+          | .mk_arg _ name oty _ =>
+            match oty.val with
+              | .some ty => (name.val, PyExprToString ty, a.snd)
+              | _ => (name.val, "Any", a.snd))
+      argtypes
 
-def PyFuncDefToCore (s: Python.stmt SourceRange) (translation_ctx: TranslationContext) : List Core.Decl × PythonFunctionDecl :=
+
+
+def PyFuncDefToCore (s: Python.stmt SourceRange) (translation_ctx: TranslationContext) : List Core.Decl × TranslationContext :=
   match s with
   | .FunctionDef _ name args body _ ret _ _ =>
     let args := unpackPyArguments args
-    ([.proc (pythonFuncToCore name.val args body.val ret.val default translation_ctx)], {name := name.val, args, ret := s!"{repr ret}"})
+    let retty := match ret.val with
+    | none => "UnknownType"
+    | some ty => PyExprToString ty
+    let funcdecl := {name := name.val, args, ret := retty}
+    ([.proc (pythonFuncToCore name.val args body.val ret.val default translation_ctx).fst],
+      {translation_ctx with func_infos:= translation_ctx.func_infos ++ [funcdecl]})
   | _ => panic! s!"Expected function def: {repr s}"
 
-def PyClassDefToCore (s: Python.stmt SourceRange) (translation_ctx: TranslationContext) : List Core.Decl × PythonClassDecl :=
+def PyClassDefToCore (s: Python.stmt SourceRange) (translation_ctx: TranslationContext) : List Core.Decl × TranslationContext :=
   match s with
   | .ClassDef _ c_name _ _ body _ _ =>
     let member_fn_defs := body.val.toList.filterMap (λ s => match s with
       | .FunctionDef _ name args body _ ret _ _ => some (name, args, body, ret)
       | _ => none)
-    (member_fn_defs.map (λ f =>
-      let name := f.fst.val
+    let funcinfos : List PythonFunctionDecl := member_fn_defs.map (λ f =>
+      let name := c_name.val++"_" ++ f.fst.val
+      let args := unpackPyArguments f.snd.fst
+      let args := if name.endsWith "___init__" then args.drop 1 else args
+      let ret := f.snd.snd.snd.val
+      let ret := match ret with
+        | none => "UnknownType"
+        | some ty => PyExprToString ty
+      {name := name, args, ret := ret})
+    let translation_ctx := {translation_ctx with func_infos:= translation_ctx.func_infos ++ funcinfos,
+                                                  currentclassname := c_name.val}
+    let getattributetype := match member_fn_defs.find? (λ f => f.fst.val.endsWith "init__") with
+      | some f =>
+          let name := c_name.val++"_" ++ f.fst.val
+          let args := unpackPyArguments f.snd.fst
+          let body := f.snd.snd.fst.val
+          let ret := f.snd.snd.snd.val
+          (pythonFuncToCore name args body ret default translation_ctx).snd
+      | none => panic! s!"require a constructor {c_name.val}"
+    let translation_ctx := {translation_ctx with classinstance_attributetype:= getattributetype.classinstance_attributetype}
+    let funcdecls : List Core.Decl := member_fn_defs.map (λ f =>
+      let name := c_name.val++"_" ++ f.fst.val
       let args := unpackPyArguments f.snd.fst
       let body := f.snd.snd.fst.val
       let ret := f.snd.snd.snd.val
-      .proc (pythonFuncToCore (c_name.val++"_"++name) args body ret default translation_ctx)), {name := c_name.val})
+      .proc (pythonFuncToCore name args body ret default translation_ctx).fst)
+    let classdecl:=  {name := c_name.val}
+    (funcdecls,
+      {translation_ctx with class_infos := translation_ctx.class_infos ++ [classdecl], currentclassname:= ""})
   | _ => panic! s!"Expected function def: {repr s}"
+
+mutual
+partial def PythonDefToCore (pydef: Python.stmt SourceRange) (translation_ctx: TranslationContext): List Core.Decl × TranslationContext :=
+  match pydef with
+  | .FunctionDef _ _ _ _ _ _ _ _ => PyFuncDefToCore pydef translation_ctx
+  | .ClassDef _ _ _ _ _ _ _ => PyClassDefToCore pydef translation_ctx
+  | _ => ([], translation_ctx)
+
+partial def PythonDefsToCore (a : Array (Python.stmt SourceRange)) (translation_ctx: TranslationContext)  : (List Core.Decl × TranslationContext) :=
+  a.foldl (fun (decls, ctx) pydef =>
+    let (newdecls, newCtx) := PythonDefToCore pydef ctx
+    (decls ++ newdecls, newCtx))
+  ([], translation_ctx)
+
+end
 
 def pythonToCore (pgm: Strata.Program): Core.Program :=
   let pyCmds := toPyCommands pgm.commands
   assert! pyCmds.size == 1
   let insideMod := unwrapModule pyCmds[0]!
-  let func_defs := insideMod.filter (λ s => match s with
+  let func_and_class_defs := insideMod.filter (λ s => match s with
   | .FunctionDef _ _ _ _ _ _ _ _ => true
-  | _ => false)
-
-  let class_defs := insideMod.filter (λ s => match s with
   | .ClassDef _ _ _ _ _ _ _ => true
   | _ => false)
+  let (decls, translation_ctx) := PythonDefsToCore func_and_class_defs default
 
   let non_func_blocks := insideMod.filter (λ s => match s with
   | .FunctionDef _ _ _ _ _ _ _ _ => false
   | .ClassDef _ _ _ _ _ _ _ => false
   | _ => true)
 
-  let globals := [(.var "__name__" (.forAll [] mty[string]) (.strConst () "__main__"))]
-
-  let rec helper {α : Type} (f : Python.stmt SourceRange → TranslationContext → List Core.Decl × α)
-               (update : TranslationContext → α → TranslationContext)
-               (acc : TranslationContext) :
-               List (Python.stmt SourceRange) → List Core.Decl × TranslationContext
-  | [] => ([], acc)
-  | x :: xs =>
-    let (y, info) := f x acc
-    let new_acc := update acc info
-    let (ys, acc'') := helper f update new_acc xs
-    (y ++ ys, acc'')
-
-  let func_defs_and_infos := helper PyFuncDefToCore (fun acc info => {acc with func_infos := info :: acc.func_infos}) default func_defs.toList
-  let func_defs := func_defs_and_infos.fst
-  let func_infos := func_defs_and_infos.snd
-
-  let class_defs_and_infos := helper PyClassDefToCore (fun acc info => {acc with class_infos := info :: acc.class_infos}) func_infos class_defs.toList
-  let class_defs := class_defs_and_infos.fst
-  let class_infos := class_defs_and_infos.snd
-  let class_ty_decls := [(.type (.con {name := "LatencyAnalyzer", numargs := 0})) ]
-
-  {decls := globals ++ class_ty_decls ++ func_defs ++ class_defs ++ [.proc (pythonFuncToCore "__main__" [] non_func_blocks none default class_infos)]}
-
+  let globals := [(.var "__name__" AnyTy (strToAny "__main__"))]
+  let mainfunction := Core.Decl.proc (pythonFuncToCore "__main__" [] non_func_blocks none default translation_ctx).fst
+  {decls := globals ++ decls ++  [mainfunction]}
 
 def exitFailure {α} (message : String) : IO α := do
   IO.eprintln (message  ++ "\n\nRun strata --help for additional help.")
@@ -1045,14 +1310,16 @@ def readPythonStrata (path : String) : IO Strata.Program := do
 def getCoreProgram (path : String) : IO Core.Program := do
   let pgm ← readPythonStrata path
   let bpgm := Strata.pythonToCore pgm
-  return bpgm
+  --IO.print s!"{bpgm.decls.length}"
+  let newPgm : Core.Program := { decls := bpgm.decls}
+  return newPgm
 
 
 def verifyCoreProgram (path : String) : IO Unit := do
   let pgm ← readPythonStrata path
   let preludePgm := Core.Typeprelude
   let bpgm := Strata.pythonToCore pgm
-  let newPgm : Core.Program := { decls := preludePgm.decls ++ bpgm.decls }
+  let newPgm : Core.Program := { decls := preludePgm.decls ++ bpgm.decls.take 9 }
   IO.print newPgm
   let verboseMode := VerboseMode.ofBool false
   let vcResults ← IO.FS.withTempDir (fun tempDir =>
@@ -1070,7 +1337,7 @@ def verifyInliningCoreProgram (path : String) : IO Unit := do
   let pgm ← readPythonStrata path
   let preludePgm := Core.Typeprelude
   let bpgm := Strata.pythonToCore pgm
-  let newPgm : Core.Program := { decls := preludePgm.decls ++ bpgm.decls }
+  let newPgm : Core.Program := { decls := preludePgm.decls ++ bpgm.decls}
   let newPgm :=  runInlineCall newPgm
   let filterdecls := newPgm.decls.filter (λ d => ! d.name.name ∈ Strata.PyOps)
   let newPgm: Core.Program := { decls := filterdecls}
@@ -1087,6 +1354,17 @@ def verifyInliningCoreProgram (path : String) : IO Unit := do
     s := s ++ s!"\n{vcResult.obligation.label}: {Std.format vcResult.result}\n"
   IO.println s
 
+def typecheckCoreProgram (path : String) : IO Unit := do
+  let pgm ← readPythonStrata path
+  let preludePgm := Core.Typeprelude
+  let bpgm := Strata.pythonToCore pgm
+  let newPgm : Core.Program := { decls := preludePgm.decls ++ bpgm.decls.take 12 }
+  let options := { Options.default with stopOnFirstError := false, verbose:= VerboseMode.ofBool true, removeIrrelevantAxioms := false}
+  let peval := Core.typeCheck options newPgm
+  match peval with
+  | .ok pval => IO.println s!"{pval}"
+  | _ => IO.println s!"partial evaluation failed"
+
 def partialEvalCoreProgram (path : String) : IO Unit := do
   let pgm ← readPythonStrata path
   let preludePgm := Core.Typeprelude
@@ -1095,7 +1373,7 @@ def partialEvalCoreProgram (path : String) : IO Unit := do
   let options := { Options.default with stopOnFirstError := false, verbose:= VerboseMode.ofBool true, removeIrrelevantAxioms := false}
   let peval := Core.typeCheckAndPartialEval options newPgm
   match peval with
-  | .ok pval => IO.println s!"{pval[1]!.fst}"
+  | .ok pval => IO.println s!"{pval[0]!.fst}"
   | _ => IO.println s!"partial evaluation failed"
 
 def partialEvalInliningCoreProgram (path : String) : IO Unit := do

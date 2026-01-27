@@ -15,16 +15,6 @@ def CoreTypePrelude :=
 #strata
 program Core;
 
-datatype Error () {
-  NoError (),
-  TypeError (Type_msg : string),
-  AttributeError (Attribute_msg : string),
-  AssertionError (Assertion_msg : string),
-  UnimplementedError (Unimplement_msg : string),
-  UndefinedError (Undefined_msg : string)
-};
-
-
 type Datetime;
 
 // Class type
@@ -36,17 +26,128 @@ type Dict;
 // Any and ListAny types
 type ListAny;
 
+
 datatype Any () {
   from_none (),
   from_bool (as_bool : bool),
   from_int (as_int : int),
   from_float (as_float : real),
   from_string (as_string : string),
-  from_datetime (as_datetime : Datetime),
+  from_Datetime (as_datetime : Datetime),
   from_Dict (as_Dict: Dict),
   from_ListAny (as_ListAny : ListAny),
   from_ClassInstance (classname : string, instance_attributes: InstanceAttributes)
 };
+
+// Accessible to users
+inline function isBool (v: Any) : Any {
+  from_bool (Any..isfrom_bool(v))
+}
+
+inline function isInt (v: Any) : Any {
+  from_bool (Any..isfrom_int(v))
+}
+
+inline function isFloat (v: Any) : Any {
+  from_bool (Any..isfrom_float(v))
+}
+
+inline function isString (v: Any) : Any {
+  from_bool (Any..isfrom_string(v))
+}
+
+inline function isDatetime (v: Any) : Any {
+  from_bool (Any..isfrom_Datetime(v))
+}
+
+inline function isDict (v: Any) : Any {
+  from_bool (Any..isfrom_Dict(v))
+}
+
+inline function isList (v: Any) : Any {
+  from_bool (Any..isfrom_ListAny(v))
+}
+
+inline function isClassIntance (v: Any) : Any {
+  from_bool (Any..isfrom_ClassInstance(v))
+}
+
+inline function is_instance_of_Class (v: Any, cn: string) : Any {
+  from_bool (Any..isfrom_ClassInstance(v) && classname(v) == cn)
+}
+
+inline function isInstance_of_Int (v: Any) : Any {
+  from_bool (Any..isfrom_int(v) || Any..isfrom_bool(v))
+}
+
+inline function isInstance_of_Float (v: Any) : Any {
+  from_bool (Any..isfrom_float(v) || Any..isfrom_int(v) || Any..isfrom_bool(v))
+}
+
+inline function Any_to_bool (v: Any) : bool {
+  if (Any..isfrom_bool(v)) then as_bool(v) else
+  if (Any..isfrom_none(v)) then false else
+  if (Any..isfrom_string(v)) then !(as_string(v) == "") else
+  if (Any..isfrom_int(v)) then !(as_int(v) == 0) else
+  false
+  //TOBE MORE
+}
+
+
+// ListAny functions
+function List_contains (l : ListAny, x: Any) : bool;
+function List_len (l : ListAny) : int;
+function List_extend (l1 : ListAny, l2: ListAny) : ListAny;
+function List_append (l: ListAny, x: Any) : ListAny;
+function List_get_func (l : ListAny, i : int) : Any;
+function List_reverse (l: ListAny) : ListAny;
+function List_index! (l: ListAny, v: Any): int;
+function List_index (l: ListAny, v: Any): int;
+function List_repeat (l: ListAny, n: int): ListAny;
+function List_insert (l: ListAny, i: int, v: Any): ListAny;
+function List_remove (l: ListAny, v: Any): ListAny;
+function List_pop (l: ListAny, i: int): ListAny;
+function List_lt (l1: ListAny, L2: ListAny): bool;
+function List_le (l1: ListAny, L2: ListAny): bool;
+function List_gt (l1: ListAny, L2: ListAny): bool;
+function List_ge (l1: ListAny, L2: ListAny): bool;
+
+
+datatype Error () {
+  NoError (),
+  TypeError (Type_msg : string),
+  AttributeError (Attribute_msg : string),
+  AssertionError (Assertion_msg : string),
+  UnimplementedError (Unimplement_msg : string),
+  UndefinedError (Undefined_msg : string),
+  IndexError (IndexError_msg : string)
+};
+
+// Accessible to users
+inline function isTypeError (e: Error) : Any {
+  from_bool (Error..isTypeError(e))
+}
+
+inline function isAttributeError (e: Error) : Any {
+  from_bool (Error..isTypeError(e))
+}
+
+inline function isAssertionError (e: Error) : Any {
+  from_bool (Error..isAssertionError(e))
+}
+
+inline function isUnimplementedError (e: Error) : Any {
+  from_bool (Error..isUnimplementedError(e))
+}
+
+inline function isUndefinedError (e: Error) : Any {
+  from_bool (Error..isUndefinedError(e))
+}
+
+inline function isError (e: Error) : Any {
+  from_bool (! Error..isNoError(e))
+}
+
 
 
 // Types of Any
@@ -77,7 +178,7 @@ function TypeOf (v : Any) : PyType {
     FLOAT ()
   else if Any..isfrom_string (v) then
     STRING ()
-  else if Any..isfrom_datetime (v) then
+  else if Any..isfrom_Datetime (v) then
     DATETIME ()
   else if Any..isfrom_Dict (v) then
     DICT ()
@@ -86,29 +187,7 @@ function TypeOf (v : Any) : PyType {
   else CLASS(classname(v))
 }
 
-inline function isTypeError (e: Error) : Any {
-  from_bool (Error..isTypeError(e))
-}
 
-inline function isAttributeError (e: Error) : Any {
-  from_bool (Error..isTypeError(e))
-}
-
-inline function isAssertionError (e: Error) : Any {
-  from_bool (Error..isAssertionError(e))
-}
-
-inline function isUnimplementedError (e: Error) : Any {
-  from_bool (Error..isUnimplementedError(e))
-}
-
-inline function isUndefinedError (e: Error) : Any {
-  from_bool (Error..isUndefinedError(e))
-}
-
-inline function isError (e: Error) : Any {
-  from_bool (! Error..isNoError(e))
-}
 
 //Dup type for ListAny, to be remove when mutual recursive datatype is supported
 datatype ListAnyDup () {
@@ -122,6 +201,15 @@ axiom [List_constr_destr_cancel]: forall l: ListAnyDup :: {ListAny_to_ListAnyDup
 axiom [List_destr_constr_cancel]: forall l: ListAny :: {ListAny_from_ListAnyDup(ListAny_to_ListAnyDup(l))}
   ListAny_from_ListAnyDup(ListAny_to_ListAnyDup(l)) == l;
 // End of ListAnyDup
+
+inline function ListAny_nil () : ListAny {
+  ListAny_from_ListAnyDup (nil())
+}
+
+inline function ListAny_cons (h: Any, t: ListAny) : ListAny {
+  ListAny_from_ListAnyDup (cons(h, ListAny_to_ListAnyDup(t)))
+}
+
 
 //Dup type for ListPType, to be remove when mutual recursive datatype is supported
 datatype ListPTypeDup () {
@@ -207,21 +295,6 @@ function hasAttribute(ci: Any, attribute: string): bool {
   else false
 }
 
-// isSubType functions
-// mutual
-function isSubTypes (t1: ListPType, t2: ListPType) : bool;
-function isSubType (t1: PyType, t2: PyType) : bool {
-  if t1 == t2 then true
-  else if PyType..isFLOAT(t2) && (PyType..isBOOL(t1) || PyType..isINT(t1)) then true
-  else if PyType..isLIST(t1) && PyType..isLIST(t2) && isSubTypes(listtype(t1), listtype(t2)) then true
-  else false
-}
-// end mutal
-
-// isInstance function:
-function isInstance (v: Any, vt: PyType) : bool {
-  isSubType(TypeOf(v), vt)
-}
 
 function is_IntReal (v: Any) : bool;
 function Any_real_to_int (v: Any) : int;
@@ -243,20 +316,20 @@ axiom [Dict_destr_constr_cancel]: forall d: Dict :: {Dict_from_DictDup(Dict_to_D
   Dict_from_DictDup(Dict_to_DictDup(d)) == d;
 
 
-function Dict_insert (d: Dict, k: Any, v: Any) : Dict {
+inline function Dict_set_func (d: Dict, k: Any, v: Any) : Dict {
   Dict_from_DictDup(Dict_to_DictDup(d)[normalize_any(k):= v])
 }
 
-function Dict_get (d: Dict, k: Any) : Any {
+inline function Dict_get_func (d: Dict, k: Any) : Any {
   Dict_to_DictDup(d)[normalize_any(k)]
 }
 
-function Dict_remove (d: Dict, k: Any) : Dict {
+function Dict_remove_func (d: Dict, k: Any) : Dict {
   Dict_from_DictDup(Dict_to_DictDup(d)[normalize_any(k):= from_none()])
 }
 
 inline function Dict_contains (d: Dict, k: Any) : bool {
-  Dict_get (d,k) != from_none()
+  Dict_get_func (d,k) != from_none()
 }
 
 function Any_to_DictDup (d: Any): DictDup {
@@ -267,6 +340,97 @@ inline function Any_in_Dict (a: Any, d: Any) : Any {
   from_bool(Any_to_DictDup(d)[a]!= from_none())
 }
 
+function Dict_empty() : Dict;
+axiom [emptydict_def]: forall k: Any :: {Dict_get_func (Dict_empty(),k)} Dict_get_func (Dict_empty(),k) == from_none();
+
+procedure Dict_set (d: Any, k: Any, v: Any) returns (ret: Any, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_Dict(d)) {
+    error := NoError();
+    ret := from_Dict(Dict_set_func (Dict_from_DictDup(Any_to_DictDup(d)), k , v));
+  } else
+  {
+    error := TypeError("Not a Dict type");
+    ret := d;
+  }
+};
+
+procedure Dict_get (d: Any, k: Any) returns (ret: Any, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_Dict(d)) {
+    ret := Dict_get_func (Dict_from_DictDup(Any_to_DictDup(d)), k);
+    if (!Any..isfrom_none(ret))
+    {
+      error := IndexError("Key not in Dict");
+    } else
+    {
+      error := NoError();
+    }
+  } else
+  {
+    error := TypeError("Not a Dict type");
+    ret := from_none();
+  }
+};
+
+procedure List_get (l: Any, k: Any) returns (ret: Any, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_ListAny(l) && Any..isfrom_int(k)) {
+    if (as_int(k) < List_len(as_ListAny(l)))
+    {
+      ret := List_get_func (as_ListAny(k), as_int(k));
+      error := NoError();
+    }
+    else
+    {
+      error := IndexError("Index out of bound");
+      ret:= from_none();
+    }
+
+  } else
+  {
+    error := TypeError("List index type error");
+    ret := from_none();
+  }
+};
+
+procedure Any_get (l: Any, k: Any) returns (ret: Any, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_ListAny(l)){
+    call ret, error := List_get (l,k);
+  }
+  else { if (Any..isfrom_Dict(l))
+  {
+    call ret, error := Dict_get (l,k);
+  }
+  else {
+    error := TypeError("Undefined subscription type");
+    ret := from_none();
+  }
+  }
+};
+
+procedure Dummy () returns ()
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+};
 
 type kwargs := Map string Any;
 //Dictionary functions
@@ -282,23 +446,7 @@ function kwargs_contains (d: kwargs, k: string) : bool {
   kwargs_get (d,k) != from_none()
 }
 
-// ListAny functions
-function List_contains (l : ListAny, x: Any) : bool;
-function List_len (l : ListAny) : int;
-function List_extend (l1 : ListAny, l2: ListAny) : ListAny;
-function List_append (l: ListAny, x: Any) : ListAny;
-function List_get (l : ListAny, i : int) : Any;
-function List_reverse (l: ListAny) : ListAny;
-function List_index! (l: ListAny, v: Any): int;
-function List_index (l: ListAny, v: Any): int;
-function List_repeat (l: ListAny, n: int): ListAny;
-function List_insert (l: ListAny, i: int, v: Any): ListAny;
-function List_remove (l: ListAny, v: Any): ListAny;
-function List_pop (l: ListAny, i: int): ListAny;
-function List_lt (l1: ListAny, L2: ListAny): bool;
-function List_le (l1: ListAny, L2: ListAny): bool;
-function List_gt (l1: ListAny, L2: ListAny): bool;
-function List_ge (l1: ListAny, L2: ListAny): bool;
+
 
 
 function int_to_real (i: int) : real;
@@ -913,9 +1061,10 @@ spec {
   }
 };
 
-function PEq (v: Any, v': Any) : bool {
-  normalize_any(v) == normalize_any (v')
+function PEq (v: Any, v': Any) : Any {
+  from_bool(normalize_any(v) == normalize_any (v'))
 }
+
 
 
 
