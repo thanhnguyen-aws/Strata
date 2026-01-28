@@ -36,6 +36,7 @@ def dummyTimedelta : Core.Expression.Expr := .fvar () "DUMMY_Timedelta" none
 
 
 def AnyTy : Core.Expression.Ty := .forAll [] (.tcons "Any" [])
+def KwargsTy : Core.Expression.Ty := .forAll [] (.tcons "kwargs" [])
 def ErrorTy : Core.Expression.Ty := .forAll [] (.tcons "Error" [])
 def ClassInstanceTy : Core.Expression.Ty := .forAll [] (.tcons "ClassInstance" [])
 
@@ -534,7 +535,9 @@ partial def CombinePositionalAndKeywordArgs
   --let nondefaultargs := funcdecl.args.filter (λ (_, _, default) => default.isSome);
   let kwords := PyKWordsToHashMap kwords
   let posargs := funcdecl.args.unzip.fst.zip posargs
-  let funcdeclsargs := funcdecl.args.drop posargs.length
+  let funcdeclsargs:= funcdecl.args
+  let funcdeclsargs := if funcdeclsargs.getLast!.fst == "kw" then funcdeclsargs.dropLast else funcdeclsargs
+  let funcdeclsargs := funcdeclsargs.drop posargs.length
   let args := funcdeclsargs.map (λ (name, _, default) =>
     match kwords.get? name with
     | some expr => (name, expr)
@@ -1142,14 +1145,15 @@ def getArg_typecheck_precond (var: String) (ty: String) (default: Option (Python
 def getArgs_typecheck_preconds (args: List (String × String × Option (Python.expr SourceRange))) : ListMap Core.CoreLabel Core.Procedure.Check :=
   match args with
   | [] => []
-  | (var, typ, default)::t => if typ == "Any" then (getArgs_typecheck_preconds t) else
+  | (var, typ, default)::t => if (typ == "Any"  || typ == "kwargs") then (getArgs_typecheck_preconds t) else
             (getArg_typecheck_precond var typ default) :: (getArgs_typecheck_preconds t)
 
 def pythonFuncToCore (name : String) (args: List (String × String × Option (Python.expr SourceRange))) (body: Array (Python.stmt SourceRange))
       (ret : Option (Python.expr SourceRange)) (spec : Core.Procedure.Spec) (translation_ctx : TranslationContext) : Core.Procedure × TranslationContext:=
   let constructor := name.endsWith "___init__"
   let args := if constructor then args.tail else args
-  let inputs : List (Lambda.Identifier Core.Visibility × Lambda.LMonoTy) := args.map (λ p => (p.fst, (.tcons "Any" [])))
+  let inputs : List (Lambda.Identifier Core.Visibility × Lambda.LMonoTy) :=
+      args.map (λ p => if p.snd.fst == "kwargs" then (p.fst, (.tcons "kwargs" [])) else (p.fst, (.tcons "Any" [])))
   let arg_typecheck := getArgs_typecheck_preconds args
   let stmts := (ArrPyStmtToCore translation_ctx body).fst
   let newctx := (ArrPyStmtToCore translation_ctx body).snd
@@ -1194,7 +1198,7 @@ def unpackPyArguments (args: Python.arguments SourceRange) : List (String × Str
 -- arguments = (arg* posonlyargs, arg* args, arg? vararg, arg* kwonlyargs,
 --                  expr* kw_defaults, arg? kwarg, expr* defaults)
   match args with -- TODO: Error if any other types of args
-    | .mk_arguments _ _ args _ _ _ _ defaults =>
+    | .mk_arguments _ _ args _ _ _ kwargs defaults =>
       let argscount := args.val.size
       let defaultscount := defaults.val.size;
       let listdefaults := (List.range (argscount - defaultscount)).map (λ _ => none)
@@ -1207,7 +1211,9 @@ def unpackPyArguments (args: Python.arguments SourceRange) : List (String × Str
             match oty.val with
               | .some ty => (name.val, PyExprToString ty, a.snd)
               | _ => (name.val, "Any", a.snd))
-      argtypes
+      match kwargs.val with
+      | .none => argtypes
+      | _ => argtypes ++ [("kw", "kwargs", none)]
 
 
 
@@ -1294,6 +1300,39 @@ def pythonToCore (pgm: Strata.Program): Core.Program :=
   let mainfunction := Core.Decl.proc (pythonFuncToCore "__main__" [] non_func_blocks none default translation_ctx).fst
   {decls := globals ++ decls ++  [mainfunction]}
 
+def get_proc_body (pname: String) (decls: List Core.Decl) : List Core.Statement:=
+  match decls.find? (λ d => d.name.name == pname) with
+  | none => []
+  | .some proc => match proc.getProc? with
+                    | .none => panic!"Expect a procedure"
+                    | .some proc  => proc.body
+
+
+
+mutual
+partial def get_dependence_proc_from_stmt (st: Core.Statement) (p: Core.Program) (acc: List String): List String  := match st with
+  | .cmd cmd =>
+    match cmd with
+    | .call _ pname _ _ =>
+        if  pname ∈ acc then acc else
+        get_dependence_proc_from_stmts (get_proc_body pname p.decls) p (acc ++ [pname])
+    | _ => acc
+  | .goto _ _ => acc
+  | .block _ bss _ => get_dependence_proc_from_stmts bss p acc
+  | .ite _ tbss ebss _ =>
+      let thenb := get_dependence_proc_from_stmts tbss p acc
+      get_dependence_proc_from_stmts ebss p thenb
+  | .loop _ _ _ bss  _ => get_dependence_proc_from_stmts bss p acc
+
+
+partial def get_dependence_proc_from_stmts (st: List Core.Statement) (p: Core.Program) (acc: List String): List String  := match st with
+  | [] => acc
+  | h :: t =>
+    let proc_h := get_dependence_proc_from_stmt h p acc
+    get_dependence_proc_from_stmts t p proc_h
+
+end
+
 def exitFailure {α} (message : String) : IO α := do
   IO.eprintln (message  ++ "\n\nRun strata --help for additional help.")
   IO.Process.exit 1
@@ -1310,7 +1349,14 @@ def readPythonStrata (path : String) : IO Strata.Program := do
 def getCoreProgram (path : String) : IO Core.Program := do
   let pgm ← readPythonStrata path
   let bpgm := Strata.pythonToCore pgm
-  --IO.print s!"{bpgm.decls.length}"
+  let preludePgm := Core.Typeprelude
+  let newPgm : Core.Program := { decls := preludePgm.decls ++ bpgm.decls}
+  let mainprocbody := match bpgm.decls.getLast!.getProc? with
+  | .some proc => proc.body
+  | _ => panic! "Expect a proc"
+  let depend_proc := get_dependence_proc_from_stmts mainprocbody newPgm []
+  let declfilter:= newPgm.decls.filter (λ d => d.getProc?.isNone || d.name.name ∈ depend_proc)
+  IO.print s!"{depend_proc}"
   let newPgm : Core.Program := { decls := bpgm.decls}
   return newPgm
 
@@ -1319,8 +1365,13 @@ def verifyCoreProgram (path : String) : IO Unit := do
   let pgm ← readPythonStrata path
   let preludePgm := Core.Typeprelude
   let bpgm := Strata.pythonToCore pgm
-  let newPgm : Core.Program := { decls := preludePgm.decls ++ bpgm.decls.take 9 }
-  IO.print newPgm
+  let newPgm : Core.Program := { decls := preludePgm.decls ++ bpgm.decls}
+  let mainprocbody := match bpgm.decls.getLast!.getProc? with
+  | .some proc => proc.body
+  | _ => panic! "Expect a proc"
+  let depend_proc := get_dependence_proc_from_stmts mainprocbody newPgm []
+  let declfilter:= newPgm.decls.filter (λ d => d.getProc?.isNone || d.name.name ∈ depend_proc)
+  let newPgm : Core.Program := { decls := declfilter}
   let verboseMode := VerboseMode.ofBool false
   let vcResults ← IO.FS.withTempDir (fun tempDir =>
           EIO.toIO
