@@ -16,8 +16,6 @@ import Strata.Languages.Python.PyFactory
 import Strata.Languages.Python.FunctionSignatures
 import Strata.Languages.Python.CoreTypePrelude
 import StrataTest.Transform.ProcedureInlining
-import StrataTest.Internal.InternalCorePrelude
-import StrataTest.Internal.InternalFunctionSignatures
 import Strata.Languages.Core.Verifier
 import Strata.DDM.Ion
 import Strata.Util.IO
@@ -1111,7 +1109,7 @@ def arg_typecheck_assertion (var: String) (ty_str: String) (default: Option (Pyt
   | "none" => .app () (.op () "Any..isfrom_None" none) (.fvar () var none)
   | _ => if ty_str.startsWith "Dict" then .app () (.op () "Any..isfrom_Dict" none) (.fvar () var none)
       else if ty_str.startsWith "List" then .app () (.op () "Any..isfrom_ListAny" none) (.fvar () var none)
-      else .eq () (.app () (.op () "classname" none) (.fvar () var none)) (.strConst () ty_str)
+      else .eq () (.app () (.op () "Any..classname" none) (.fvar () var none)) (.strConst () ty_str)
   match default with
     |.some (.Constant _ (.ConNone _) _ ) =>
       .app () (.app () (.op () "Bool.Or" none) constraint) (.app () (.op () "Any..isfrom_none" none) (.fvar () var none))
@@ -1166,7 +1164,7 @@ def pythonFuncToCore (name : String) (args: List (String × String × Option (Py
     if constructor then
       let class_ty_name := name.dropRight ("___init__".length)
       [("ret_typeconstraint",
-        {expr:= .eq () (.app () (.op () "classname" none) (FVar "ret")) (strToCoreExpr class_ty_name)} )]
+        {expr:= .eq () (.app () (.op () "Any..classname" none) (FVar "ret")) (strToCoreExpr class_ty_name)} )]
     else
       match ret with
       | some ret =>
