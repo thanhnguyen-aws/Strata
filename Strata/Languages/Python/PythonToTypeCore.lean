@@ -19,7 +19,6 @@ import StrataTest.Transform.ProcedureInlining
 import Strata.Languages.Core.Verifier
 import Strata.DDM.Ion
 import Strata.Util.IO
-import Strata.Languages.Python.PySimp
 
 namespace Strata
 open Lambda.LTy.Syntax
