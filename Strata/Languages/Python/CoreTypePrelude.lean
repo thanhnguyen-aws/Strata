@@ -25,9 +25,10 @@ type Dict;
 
 // Any and ListAny types
 
+forward type ListAny;
+forward type Any;
 
-type ListAny;
-
+mutual
 datatype Any () {
   from_none (),
   from_bool (as_bool : bool),
@@ -39,6 +40,13 @@ datatype Any () {
   from_ListAny (as_ListAny : ListAny),
   from_ClassInstance (classname : string, instance_attributes: InstanceAttributes)
 };
+
+datatype ListAny () {
+  ListAny_nil (),
+  ListAny_cons (h: Any, t: ListAny)
+};
+
+end;
 
 // Accessible to users
 inline function isBool (v: Any) : Any {
@@ -94,12 +102,6 @@ inline function Any_to_bool (v: Any) : bool {
   //TOBE MORE
 }
 
-procedure datetime_now () returns (ret: Any) {
-  var d: int;
-  havoc d;
-  ret:= from_datetime(d);
-};
-
 inline function timedelta_mk(days: Any, seconds: Any, microseconds: Any, milliseconds: Any, minutes: Any, hours: Any, weeks: Any) : Any
 {
   from_int(
@@ -108,10 +110,14 @@ inline function timedelta_mk(days: Any, seconds: Any, microseconds: Any, millise
   Any..as_int(weeks) * 7 * 24 * 3600000000)
 }
 
+function Any_len (v: Any) : int;
+function Any_len_to_Any (v: Any) : Any {
+  from_int(Any_len(v))
+}
 
 function to_string(a: Any) : string;
 
-inline function to_string_any(a: Any) : Any {
+function to_string_any(a: Any) : Any {
   from_string(to_string(a))
 }
 
@@ -176,26 +182,6 @@ inline function isError (e: Error) : Any {
 }
 
 
-//Dup type for ListAny, to be remove when mutual recursive datatype is supported
-datatype ListAnyDup () {
-  nil (),
-  cons (head: Any, tail: ListAnyDup)
-};
-function ListAny_from_ListAnyDup(l: ListAnyDup): ListAny;
-function ListAny_to_ListAnyDup(l: ListAny): ListAnyDup;
-axiom [List_constr_destr_cancel]: forall l: ListAnyDup :: {ListAny_to_ListAnyDup(ListAny_from_ListAnyDup(l))}
-  ListAny_to_ListAnyDup(ListAny_from_ListAnyDup(l)) == l;
-axiom [List_destr_constr_cancel]: forall l: ListAny :: {ListAny_from_ListAnyDup(ListAny_to_ListAnyDup(l))}
-  ListAny_from_ListAnyDup(ListAny_to_ListAnyDup(l)) == l;
-// End of ListAnyDup
-
-inline function ListAny_nil () : ListAny {
-  ListAny_from_ListAnyDup (nil())
-}
-
-inline function ListAny_cons (h: Any, t: ListAny) : ListAny {
-  ListAny_from_ListAnyDup (cons(h, ListAny_to_ListAnyDup(t)))
-}
 
 
 // Class types
@@ -217,11 +203,15 @@ inline function ClassInstance_empty (c: string) : Any {
   from_ClassInstance(c,InstanceAttributes_empty())
 }
 
+function InstanceAttributes_init_func (d: InstanceAttributes, k: string, v: Any) : InstanceAttributes;
 
-procedure ClassInstance_init_InstanceAttribute(ci: Any, attribute: string, v: Any) returns (ret: Any, error: Error)
+function InstanceAttributes_get_func (d: InstanceAttributes, k: string) : Any;
+
+
+procedure init_InstanceAttribute(ci: Any, attribute: string, v: Any) returns (ret: Any, error: Error)
 {
   if (Any..isfrom_ClassInstance(ci)) {
-    ret := from_ClassInstance(Any..classname(ci), InstanceAttributes_from_Dup(InstanceAttributes_to_Dup(Any..instance_attributes(ci))[attribute := v]));
+    ret := from_ClassInstance(Any..classname(ci), InstanceAttributes_init_func(Any..instance_attributes(ci), attribute, v));
     error := NoError ();
   }
   else {
@@ -230,10 +220,10 @@ procedure ClassInstance_init_InstanceAttribute(ci: Any, attribute: string, v: An
   }
 };
 
-procedure ClassInstance_get_InstanceAttribute(ci: Any, attribute: string) returns (ret: Any, error: Error) {
+procedure get_InstanceAttribute(ci: Any, attribute: string) returns (ret: Any, error: Error) {
   if (Any..isfrom_ClassInstance(ci))
   {
-    ret := InstanceAttributes_to_Dup(Any..instance_attributes(ci))[attribute];
+    ret := InstanceAttributes_get_func(Any..instance_attributes(ci), attribute);
     if (Any..isfrom_none(ret)) {
       error := AttributeError("Attribute not in ClassInstance Attributes");
     } else {
@@ -245,16 +235,16 @@ procedure ClassInstance_get_InstanceAttribute(ci: Any, attribute: string) return
   }
 };
 
-procedure ClassInstance_set_InstanceAttribute(ci: Any, attribute: string, v: Any) returns (ret: Any, error: Error)
+procedure set_InstanceAttribute(ci: Any, attribute: string, v: Any) returns (ret: Any, error: Error)
 {
   var attval : Any;
   if (Any..isfrom_ClassInstance(ci))
   {
-    attval := InstanceAttributes_to_Dup(Any..instance_attributes(ci))[attribute];
+    attval := InstanceAttributes_get_func(Any..instance_attributes(ci), attribute);
     if (Any..isfrom_none(attval)) {
       error := AttributeError("Attribute not in ClassInstance Attributes");
     } else {
-      ret := from_ClassInstance(Any..classname(ci), InstanceAttributes_from_Dup(InstanceAttributes_to_Dup(Any..instance_attributes(ci))[attribute := v]));
+      ret := from_ClassInstance(Any..classname(ci), InstanceAttributes_init_func(Any..instance_attributes(ci), attribute, v));
       error := NoError ();
     }
   } else {
@@ -290,11 +280,11 @@ axiom [Dict_destr_constr_cancel]: forall d: Dict :: {Dict_from_DictDup(Dict_to_D
   Dict_from_DictDup(Dict_to_DictDup(d)) == d;
 
 
-inline function Dict_set_func (d: Dict, k: Any, v: Any) : Dict {
+function Dict_set_func (d: Dict, k: Any, v: Any) : Dict {
   Dict_from_DictDup(Dict_to_DictDup(d)[normalize_any(k):= v])
 }
 
-inline function Dict_get_func (d: Dict, k: Any) : Any {
+function Dict_get_func (d: Dict, k: Any) : Any {
   Dict_to_DictDup(d)[normalize_any(k)]
 }
 
@@ -325,7 +315,7 @@ spec {
 {
   if (Any..isfrom_Dict(d)) {
     error := NoError();
-    ret := from_Dict(Dict_set_func (Dict_from_DictDup(Any_to_DictDup(d)), k , v));
+    ret := from_Dict(Dict_set_func (Any..as_Dict(d), k , v));
   } else
   {
     error := TypeError("Not a Dict type");
@@ -340,7 +330,7 @@ spec {
 }
 {
   if (Any..isfrom_Dict(d)) {
-    ret := Dict_get_func (Dict_from_DictDup(Any_to_DictDup(d)), k);
+    ret := Dict_get_func (Any..as_Dict(d), k);
     if (!Any..isfrom_none(ret))
     {
       error := IndexError("Key not in Dict");
@@ -404,6 +394,10 @@ spec {
     ret := from_none();
   }
 };
+
+function Any_sets_func (c: Any, keys: ListAny, val: Any) : Any;
+function Any_gets_func (c: Any, keys: ListAny) : Any;
+
 
 procedure Any_get (l: Any, k: Any) returns (ret: Any, error: Error)
 spec {
@@ -1111,27 +1105,41 @@ spec {
   }
 };
 
+inline function PAnd (v1: Any, v2: Any) : Any
+{
+  from_bool(Any_to_bool (v1) && Any_to_bool (v2))
+}
+
+inline function POr (v1: Any, v2: Any) : Any
+{
+  from_bool(Any_to_bool (v1) || Any_to_bool (v2))
+}
+
+
 inline function PEq (v: Any, v': Any) : Any {
   from_bool(normalize_any(v) == normalize_any (v'))
 }
 
-// Python proc
+inline function PNEq (v: Any, v': Any) : Any {
+  from_bool(normalize_any(v) != normalize_any (v'))
+}
 
-procedure datetime_date(d: Any) returns (ret: Any, error: Error)
+inline function PPow (v1: Any, v2: Any) : Any
 {
-  var timedt: int;
-  if (Any..isfrom_datetime(d)) {
-    havoc timedt;
-    assume [timedt_le]: timedt <= Any..as_datetime(d);
-    ret := from_datetime(timedt);
-    error := NoError();
-  }
-  else {
-    ret := from_none();
-    error := TypeError("Input must be datetime");
-  }
-};
+  from_none()
+}
 
+inline function PDiv (v1: Any, v2: Any) : Any
+{
+  from_none()
+}
+
+inline function sum (v1: Any) : Any
+{
+  from_none()
+}
+
+function Any_to_kwargs (d: Any) : kwargs ;
 
 
 //Test
@@ -1140,7 +1148,7 @@ procedure datetime_date(d: Any) returns (ret: Any, error: Error)
 
 #end
 
---#eval verify "cvc5" CoreTypePrelude
+#eval verify "cvc5" CoreTypePrelude
 --#eval boogieTypePrelude.format
 
 def PyOps := ["PNot", "PNeg", "PAdd", "PMul", "PSub", "PLt", "PLe", "PGt", "PGe", "PIn"]
