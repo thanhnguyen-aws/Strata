@@ -121,6 +121,12 @@ function to_string_any(a: Any) : Any {
   from_string(to_string(a))
 }
 
+function to_int(a: Any) : int;
+
+function to_int_any(a: Any) : Any {
+  from_int(to_int(a))
+}
+
 function datetime_strptime(dtstring: Any, format: Any) : Any;
 
 axiom [datetime_tostring_cancel]: forall dt: Any, format: Any ::{datetime_strptime(to_string_any(dt), format)}
@@ -1105,6 +1111,29 @@ spec {
   }
 };
 
+procedure PNotIn (v1: Any, v2: Any) returns (ret: Any, error: Error)
+spec {
+  free requires [dummy]: true;
+  free ensures [dummy]: true;
+}
+{
+  if (Any..isfrom_Dict(v2))
+  {
+    ret:= from_bool(!Any..as_bool(Any_in_Dict(v1, v2)));
+    error := NoError ();
+  }
+  else { if (Any..isfrom_ListAny(v2))
+  {
+    ret := from_bool(!List_contains(Any..as_ListAny(v2), v1));
+    error := NoError ();
+  }
+  else {
+    ret := from_bool(true);
+    error := UndefinedError ("Operand type not supported");
+  }
+  }
+};
+
 inline function PAnd (v1: Any, v2: Any) : Any
 {
   from_bool(Any_to_bool (v1) && Any_to_bool (v2))
@@ -1134,6 +1163,11 @@ inline function PDiv (v1: Any, v2: Any) : Any
   from_none()
 }
 
+inline function PMod (v1: Any, v2: Any) : Any
+{
+  from_none()
+}
+
 inline function sum (v1: Any) : Any
 {
   from_none()
@@ -1141,10 +1175,49 @@ inline function sum (v1: Any) : Any
 
 function Any_to_kwargs (d: Any) : kwargs ;
 
+// Python proc
+
+procedure datetime_date(d: Any) returns (ret: Any, error: Error)
+{
+  var timedt: int;
+  if (Any..isfrom_datetime(d)) {
+    havoc timedt;
+    assume [timedt_le]: timedt <= Any..as_datetime(d);
+    ret := from_datetime(timedt);
+    error := NoError();
+  }
+  else {
+    ret := from_none();
+    error := TypeError("Input must be datetime");
+  }
+};
+
+
+
+procedure string_split(s: Any, s1:Any) returns (ret: Any)
+{
+  var lany: ListAny;
+  havoc lany;
+  ret := from_ListAny(lany);
+};
+
+
+procedure UnknownType_startswith (s: Any, p: Any) returns (ret: Any)
+{
+  var b: bool;
+  havoc b;
+  ret := from_bool(b);
+};
+
+
 
 //Test
-
-
+function sys_argv () : Any;
+function logging_INFO () : Any;
+function zipfile_ZIP_DEFLATED () : Any;
+function set () : Any;
+function str_lower (s: Any) : Any;
+function timezone_utc () : Any;
 
 #end
 
