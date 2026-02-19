@@ -331,9 +331,33 @@ spec {
   assume [assume_maybe_except_none]: (ExceptOrNone..isExceptOrNone_mk_none(maybe_except));
 };
 
-datatype PyAnyType () {
-  PyAnyType_Inhabitant()
+forward type ListAny;
+forward type Any;
+
+mutual
+datatype Any () {
+  from_none (),
+  from_bool (as_bool : bool),
+  from_int (as_int : int),
+  from_float (as_float : real),
+  from_string (as_string : string),
+  from_datetime (as_datetime : int),
+  from_Dict (as_Dict: DictStrAny),
+  from_ListAny (as_ListAny : ListAny),
+  from_ClassInstance (classname : string, instance_attributes: DictStrAny)
 };
+
+datatype ListAny () {
+  ListAny_nil (),
+  ListAny_cons (h: Any, t: ListAny)
+};
+
+end;
+
+function TypeOf (v: Any) : string;
+function DictStrAny_empty () : DictStrAny;
+function DictStrAny_insert (d: DictStrAny, key: string, v: Any) : DictStrAny;
+
 
 #end
 
