@@ -341,6 +341,14 @@ function TypeOf (v: Any) : string;
 function DictStrAny_empty () : DictStrAny;
 function DictStrAny_insert (d: DictStrAny, key: string, v: Any) : DictStrAny;
 
+inline function Any_to_bool (v: Any) : bool {
+  if (Any..isfrom_bool(v)) then Any..as_bool(v) else
+  if (Any..isfrom_none(v)) then false else
+  if (Any..isfrom_string(v)) then !(Any..as_string(v) == "") else
+  if (Any..isfrom_int(v)) then !(Any..as_int(v) == 0) else
+  false
+  //TOBE MORE
+}
 
 #end
 

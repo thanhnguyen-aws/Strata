@@ -183,6 +183,12 @@ def PackageTy := mkCoreType "Package"
 def intTy := mkHighTypeMd HighType.TInt
 def boolTy := mkHighTypeMd HighType.TBool
 def strTy := mkHighTypeMd HighType.TString
+def strToAny (s: String) := mkStmtExprMd (.StaticCall "from_string" [mkStmtExprMd (StmtExpr.LiteralString s)])
+def intToAny (i: Int) := mkStmtExprMd (.StaticCall "from_int" [mkStmtExprMd (StmtExpr.LiteralInt i)])
+def boolToAny (b: Bool) := mkStmtExprMd (.StaticCall "from_bool" [mkStmtExprMd (StmtExpr.LiteralBool b)])
+def AnyNone := mkStmtExprMd (.StaticCall "from_none" [])
+def Any_to_bool (b: StmtExprMd) := mkStmtExprMd (.StaticCall "Any_to_bool" [b])
+
 
 def HighTypeToString (ty: HighType) : String :=
   match ty with
@@ -205,17 +211,16 @@ def mkNoneForType (typeName : String) : StmtExprMd :=
 def OptionNone : StmtExprMd := mkStmtExprMd (StmtExpr.StaticCall "None" [])
 
 def DictStrAny_mk_aux
-    (kv: List (String × String × StmtExprMd)) (acc: StmtExprMd): StmtExprMd :=
+    (kv: List (String × StmtExprMd)) (acc: StmtExprMd): StmtExprMd :=
   match kv with
   | [] => acc
-  | (k,ty,v)::t =>
-      let v_to_any := mkStmtExprMd (StmtExpr.StaticCall s!"from_{ty}" [v])
-      let dict_insert := StmtExpr.StaticCall "DictStrAny_insert" [acc, mkStmtExprMd (StmtExpr.LiteralString k), v_to_any]
+  | (k,v)::t =>
+      let dict_insert := StmtExpr.StaticCall "DictStrAny_insert" [acc, mkStmtExprMd (StmtExpr.LiteralString k), v]
       DictStrAny_mk_aux t (mkStmtExprMd dict_insert)
 
 def DictStrAny_empty:= mkStmtExprMd (StmtExpr.StaticCall "DictStrAny_empty" [])
 
-def DictStrAny_mk (kv: List (String × String × StmtExprMd)) := DictStrAny_mk_aux kv DictStrAny_empty
+def DictStrAny_mk (kv: List (String × StmtExprMd)) := DictStrAny_mk_aux kv DictStrAny_empty
 
 
 /-! ## Expression Translation -/
@@ -231,23 +236,13 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
     : Except TranslationError StmtExprMd := do
   match e with
   -- Integer literals
-  | .Constant _ (.ConPos _ n) _ =>
-    return mkStmtExprMd (StmtExpr.LiteralInt n.val)
-
-  | .Constant _ (.ConNeg _ n) _ =>
-    return mkStmtExprMd (StmtExpr.LiteralInt (-n.val))
-
+  | .Constant _ (.ConPos _ n) _ => return intToAny n.val
+  | .Constant _ (.ConNeg _ n) _ => return intToAny (-n.val)
   -- String literals
-  | .Constant _ (.ConString _ s) _ =>
-    return mkStmtExprMd (StmtExpr.LiteralString s.val)
-
+  | .Constant _ (.ConString _ s) _ => return strToAny s.val
   -- Boolean literals
-  | .Constant _ (.ConTrue _) _ =>
-    return mkStmtExprMd (StmtExpr.LiteralBool true)
-
-  | .Constant _ (.ConFalse _) _ =>
-    return mkStmtExprMd (StmtExpr.LiteralBool false)
-
+  | .Constant _ (.ConTrue _) _ => return boolToAny true
+  | .Constant _ (.ConFalse _) _ => return boolToAny false
   | .Constant _ (.ConNone _) _ =>
     return OptionNone
 
@@ -426,13 +421,12 @@ partial def refineFunctionCallExpr (ctx : TranslationContext) (func: Python.expr
 
 --Kwargs can be a single Dict variable: func_call (**var) or a normal Kwargs (key1 = val1, key2 =val2 ...)
 partial def translateDictKWords (ctx : TranslationContext) (kw : Python.keyword SourceRange)
-    : Except TranslationError (String × String × StmtExprMd) := do
+    : Except TranslationError (String × StmtExprMd) := do
   match kw with
   | .mk_keyword _ name expr =>
-    let exprTy := inferExprtype ctx expr
     let expr ← translateExpr ctx expr
     match name.val with
-    | some n => return (n.val, exprTy, expr)
+    | some n => return (n.val, expr)
     | none => throw (.internalError "Expected keyname for Dict Kwargs")
 
 partial def PyKWordsToHashMap (kwords : List (Python.keyword SourceRange)) : Std.HashMap String (Python.expr SourceRange) :=
@@ -559,7 +553,7 @@ partial def translateAssign  (ctx : TranslationContext)
           | none => .ok infertype
           | some annotation =>
                translateType ctx (pyExprToString annotation)
-          let initStmt := mkStmtExprMd (StmtExpr.LocalVariable n.val type none)
+          let initStmt := mkStmtExprMd (StmtExpr.LocalVariable n.val AnyTy none)
           let newctx := {ctx with variableTypes:=(n.val, type)::ctx.variableTypes}
           return (newctx, [initStmt, assignStmt])
     | .Subscript _ _ _ _ =>
@@ -606,7 +600,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     else do
       let (_, elseStmts) ← translateStmtList bodyCtx orelse.val.toList
       .ok (some (mkStmtExprMd (StmtExpr.Block elseStmts none)))
-    let ifStmt := mkStmtExprMd (StmtExpr.IfThenElse condExpr bodyBlock elseBlock)
+    let ifStmt := mkStmtExprMd (StmtExpr.IfThenElse (condExpr) bodyBlock elseBlock)
     return (bodyCtx, [ifStmt])
 
   -- While loop
@@ -631,7 +625,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   -- Assert statement
   | .Assert _ test _msg => do
     let condExpr ← translateExpr ctx test
-    let assertStmt := mkStmtExprMdWithLoc (StmtExpr.Assert condExpr) md
+    let assertStmt := mkStmtExprMdWithLoc (StmtExpr.Assert (condExpr)) md
     return (ctx, [assertStmt])
 
   -- Expression statement (e.g., function call)
@@ -766,9 +760,9 @@ def translateFunction (ctx : TranslationContext) (f : Python.stmt SourceRange)
 
     let funcdecl ←  pyFuncDef_to_PythonFunctionDecl f
 
-    inputs ← funcdecl.args.mapM (fun (name, type, _) => do
-        let paramType ← translateType ctx type
-        return { name := name, type := paramType })
+    inputs ← funcdecl.args.mapM (fun (name, _, _) => do
+        --let paramType ← translateType ctx type
+        return { name := name, type := AnyTy })
     if funcdecl.has_kwargs then
       let paramType ← translateType ctx "DictStrAny"
       inputs:= inputs ++ [{ name := "kwargs", type := paramType }]
@@ -783,7 +777,7 @@ def translateFunction (ctx : TranslationContext) (f : Python.stmt SourceRange)
     let outputs : List Parameter :=
       match returnType.val with
       | HighType.TVoid => []
-      | _ => [{ name := "result", type := returnType },
+      | _ => [{ name := "result", type := AnyTy },
       { name := "error", type := (mkCoreType "ExceptOrNone") }]
 
     -- Translate function body
@@ -894,7 +888,7 @@ def pythonToLaurel (prelude: Core.Program) (pyModule : Python.Command SourceRang
 
     let (_, bodyStmts) ← translateStmtList ctx otherStmts
     let bodyStmts := prependExceptHandlingHelper bodyStmts
-    let bodyStmts := mkStmtExprMd (.LocalVariable "__name__" (mkHighTypeMd .TString) (some <| mkStmtExprMd (.LiteralString "__main__"))) :: bodyStmts
+    let bodyStmts := mkStmtExprMd (.LocalVariable "__name__" AnyTy (some <| strToAny "__main__")) :: bodyStmts
     let bodyBlock := mkStmtExprMd (StmtExpr.Block bodyStmts none)
 
     let mainProc : Procedure := {
