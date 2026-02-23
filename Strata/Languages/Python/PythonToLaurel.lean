@@ -210,6 +210,8 @@ def mkNoneForType (typeName : String) : StmtExprMd :=
 
 def OptionNone : StmtExprMd := mkStmtExprMd (StmtExpr.StaticCall "None" [])
 
+def NoError : StmtExprMd := mkStmtExprMd (StmtExpr.StaticCall "NoError" [])
+
 def DictStrAny_mk_aux
     (kv: List (String × StmtExprMd)) (acc: StmtExprMd): StmtExprMd :=
   match kv with
@@ -243,8 +245,7 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
   -- Boolean literals
   | .Constant _ (.ConTrue _) _ => return boolToAny true
   | .Constant _ (.ConFalse _) _ => return boolToAny false
-  | .Constant _ (.ConNone _) _ =>
-    return OptionNone
+  | .Constant _ (.ConNone _) _ => return AnyNone
 
   -- Variable references
   | .Name _ name _ =>
@@ -254,16 +255,16 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
   | .BinOp _ left op right => do
     let leftExpr ← translateExpr ctx left
     let rightExpr ← translateExpr ctx right
-    let laurelOp ← match op with
+    let preludeOpnames ← match op with
       -- Arithmetic
-      | .Add _ => .ok Operation.Add
-      | .Sub _ => .ok Operation.Sub
-      | .Mult _ => .ok Operation.Mul
-      | .FloorDiv _ => .ok Operation.Div  -- Python // maps to Laurel Div
-      | .Mod _ => .ok Operation.Mod
+      | .Add _ => .ok "PAdd"
+      | .Sub _ => .ok "PSub"
+      | .Mult _ => .ok "PMul"
+      | .FloorDiv _ => .ok "PDiv"  -- Python // maps to Laurel Div
+      | .Mod _ => .ok "PMod"
       -- Unsupported for now
       | _ => throw (.unsupportedConstruct s!"Binary operator not yet supported: {repr op}" (toString (repr e)))
-    return mkStmtExprMd (StmtExpr.PrimitiveOp laurelOp [leftExpr, rightExpr])
+    return mkStmtExprMd (StmtExpr.StaticCall preludeOpnames [leftExpr, rightExpr])
 
   -- Comparison operations
   | .Compare _ left ops comparators => do
@@ -273,23 +274,23 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
       throw (.unsupportedConstruct "Chained comparisons not yet supported" (toString (repr e)))
     let leftExpr ← translateExpr ctx left
     let rightExpr ← translateExpr ctx comparators.val[0]!
-    let laurelOp ← match ops.val[0]! with
-      | .Eq _ => .ok Operation.Eq
-      | .NotEq _ => .ok Operation.Neq
-      | .Lt _ => .ok Operation.Lt
-      | .LtE _ => .ok Operation.Leq
-      | .Gt _ => .ok Operation.Gt
-      | .GtE _ => .ok Operation.Geq
+    let preludeOpnames ← match ops.val[0]! with
+      | .Eq _ => .ok "PEq"
+      | .NotEq _ => .ok "PNeq"
+      | .Lt _ => .ok "PLt"
+      | .LtE _ => .ok "PLe"
+      | .Gt _ => .ok "PGt"
+      | .GtE _ => .ok "PGe"
       | _ => throw (.unsupportedConstruct s!"Comparison operator not yet supported: {repr ops.val[0]!}" (toString (repr e)))
-    return mkStmtExprMd (StmtExpr.PrimitiveOp laurelOp [leftExpr, rightExpr])
+    return mkStmtExprMd (StmtExpr.StaticCall preludeOpnames [leftExpr, rightExpr])
 
   -- Boolean operations
   | .BoolOp _ op values => do
     if values.val.size < 2 then
       throw (.internalError "BoolOp must have at least 2 operands")
-    let laurelOp ← match op with
-      | .And _ => .ok Operation.And
-      | .Or _ => .ok Operation.Or
+    let preludeOpnames ← match op with
+      | .And _ => .ok "PAnd"
+      | .Or _ => .ok "POr"
     -- Translate all operands
     let mut exprs : List StmtExprMd := []
     for val in values.val do
@@ -298,17 +299,17 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
     -- Chain binary operations: a && b && c becomes (a && b) && c
     let mut result := exprs[0]!
     for i in [1:exprs.length] do
-      result := mkStmtExprMd (StmtExpr.PrimitiveOp laurelOp [result, exprs[i]!])
+      result := mkStmtExprMd (StmtExpr.StaticCall preludeOpnames [result, exprs[i]!])
     return result
 
   -- Unary operations
   | .UnaryOp _ op operand => do
     let operandExpr ← translateExpr ctx operand
-    let laurelOp ← match op with
-      | .Not _ => .ok Operation.Not
-      | .USub _ => .ok Operation.Neg
+    let preludeOpnames ← match op with
+      | .Not _ => .ok "PNot"
+      | .USub _ => .ok "PNeg"
       | _ => throw (.unsupportedConstruct s!"Unary operator not yet supported: {repr op}" (toString (repr e)))
-    return mkStmtExprMd (StmtExpr.PrimitiveOp laurelOp [operandExpr])
+    return mkStmtExprMd (StmtExpr.StaticCall preludeOpnames [operandExpr])
 
   -- JoinedStr (f-strings) - return first part until we have string concat
   | .JoinedStr _ values =>
@@ -526,7 +527,7 @@ These functions are mutually recursive.
 
 def withException (ctx : TranslationContext) (funcname: String) : Bool :=
   match ctx.preludeProcedures.lookup funcname with
-  | some sig => sig.outputs.length > 0 && sig.outputs.getLast! == "ExceptOrNone"
+  | some sig => sig.outputs.length > 0 && sig.outputs.getLast! == "Error"
   | _ => true
 
 def maybe_except_var := mkStmtExprMd (.Identifier "maybe_except")
@@ -553,7 +554,7 @@ partial def translateAssign  (ctx : TranslationContext)
           | none => .ok infertype
           | some annotation =>
                translateType ctx (pyExprToString annotation)
-          let initStmt := mkStmtExprMd (StmtExpr.LocalVariable n.val AnyTy none)
+          let initStmt := mkStmtExprMd (StmtExpr.LocalVariable n.val AnyTy AnyNone)
           let newctx := {ctx with variableTypes:=(n.val, type)::ctx.variableTypes}
           return (newctx, [initStmt, assignStmt])
     | .Subscript _ _ _ _ =>
@@ -584,7 +585,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
       -- Declaration without initializer (not allowed in pure context, but OK in procedures)
       let varType ← translateType ctx (pyExprToString annotation)
       let varName := pyExprToString target
-      let declStmt := mkStmtExprMd (StmtExpr.LocalVariable varName varType none)
+      let declStmt := mkStmtExprMd (StmtExpr.LocalVariable varName varType AnyNone)
       let newctx := {ctx with variableTypes:=(varName, varType)::ctx.variableTypes}
       return (newctx, [declStmt])
 
@@ -600,7 +601,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     else do
       let (_, elseStmts) ← translateStmtList bodyCtx orelse.val.toList
       .ok (some (mkStmtExprMd (StmtExpr.Block elseStmts none)))
-    let ifStmt := mkStmtExprMd (StmtExpr.IfThenElse (condExpr) bodyBlock elseBlock)
+    let ifStmt := mkStmtExprMd (StmtExpr.IfThenElse (Any_to_bool condExpr) bodyBlock elseBlock)
     return (bodyCtx, [ifStmt])
 
   -- While loop
@@ -609,7 +610,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     let condExpr ← translateExpr ctx test
     let (loopCtx, bodyStmts) ← translateStmtList ctx body.val.toList
     let bodyBlock := mkStmtExprMd (StmtExpr.Block bodyStmts none)
-    let whileStmt := mkStmtExprMd (StmtExpr.While condExpr [] none bodyBlock)
+    let whileStmt := mkStmtExprMd (StmtExpr.While (Any_to_bool condExpr) [] none bodyBlock)
     return (loopCtx, [whileStmt])
 
   -- Return statement
@@ -625,7 +626,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   -- Assert statement
   | .Assert _ test _msg => do
     let condExpr ← translateExpr ctx test
-    let assertStmt := mkStmtExprMdWithLoc (StmtExpr.Assert (condExpr)) md
+    let assertStmt := mkStmtExprMdWithLoc (StmtExpr.Assert (Any_to_bool condExpr)) md
     return (ctx, [assertStmt])
 
   -- Expression statement (e.g., function call)
@@ -646,7 +647,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     -- Insert exception checks after each statement in try body
     let bodyStmtsWithChecks := bodyStmts.flatMap fun stmt =>
       -- Check if maybe_except is an exception and exit to handlers if so
-      let isException := mkStmtExprMd (StmtExpr.StaticCall "ExceptOrNone..isExceptOrNone_mk_code"
+      let isException := mkStmtExprMd (StmtExpr.StaticCall "isError"
         [mkStmtExprMd (StmtExpr.Identifier "maybe_except")])
       let exitToHandler := mkStmtExprMd (StmtExpr.IfThenElse isException
         (mkStmtExprMd (StmtExpr.Exit handlerLabel)) none)
@@ -684,7 +685,7 @@ partial def translateStmtList (ctx : TranslationContext) (stmts : List (Python.s
 end
 
 def prependExceptHandlingHelper (l: List StmtExprMd) : List StmtExprMd :=
-  mkStmtExprMd (.LocalVariable "maybe_except" (mkCoreType "ExceptOrNone") (some OptionNone)) :: l
+  mkStmtExprMd (.LocalVariable "maybe_except" (mkCoreType "Error") (some NoError)) :: l
 
 partial def breakdown_nested_Subscript (expr:  Python.expr SourceRange) : List ( Python.expr SourceRange) :=
   match expr with
@@ -778,7 +779,7 @@ def translateFunction (ctx : TranslationContext) (f : Python.stmt SourceRange)
       match returnType.val with
       | HighType.TVoid => []
       | _ => [{ name := "result", type := AnyTy },
-      { name := "error", type := (mkCoreType "ExceptOrNone") }]
+      { name := "error", type := (mkCoreType "Error") }]
 
     -- Translate function body
     let (_, bodyStmts) ← translateStmtList localCtx body.val.toList
@@ -838,7 +839,7 @@ def preludeSignature_to_PythonFunctionDecl (prelude : Core.Program) : List Pytho
       --let outputnames := proc.header.outputs.keys
       some {
         name:= proc.header.name.name
-        args:= (inputnames.zip inputtypes).map (λ(n,t) => if t.endsWith "OrNone" then (n,t,noneexpr) else (n,t,none))
+        args:= (inputnames.zip inputtypes).map (λ(n,t) => (n,t,noneexpr))
         has_kwargs := false
         ret := if outputtypes.length == 0 then none else outputtypes[0]!
       }
