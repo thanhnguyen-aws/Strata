@@ -355,5 +355,30 @@ inline function Any_to_bool (v: Any) : bool {
 def Core.prelude : Core.Program :=
    Core.getProgram corePrelude |>.fst
 
+def getFunctions (decls: List Core.Decl) : List String :=
+  match decls with
+  | [] => []
+  | decl::t => match decl.kind with
+        |.func => decl.name.name::getFunctions t
+        | _ => getFunctions t
+
+def Any_testers := ["Any..isfrom_none", "Any..isfrom_bool", "Any..isfrom_int", "Any..isfrom_float",
+       "Any..isfrom_string", "Any..isfrom_datetime", "Any..isfrom_ListAny", "Any..isfrom_Dict",
+       "Any..isfrom_ClassInstance"]
+
+def Any_constructors := ["from_none", "from_bool", "from_int", "from_float",
+       "from_string", "from_datetime", "from_ListAny", "from_Dict", "from_ClassInstance"]
+
+def Any_destructors := ["Any..as_none", "Any..as_bool", "Any..as_int", "Any..as_float",
+       "Any..as_string", "Any..as_datetime", "Any..as_ListAny", "Any..as_Dict",
+       "Any..classname", "Any..instance_attributes"]
+
+def Option_functions := ["None", "Some"]
+def get_preludeFunctions (prelude: Core.Program) : List String := (getFunctions prelude.decls) ++ Any_testers
+                    ++ Any_constructors ++ Any_destructors ++ Option_functions
+
+def CorePrelude_functions := get_preludeFunctions Core.prelude
+
+
 end Python
 end Strata

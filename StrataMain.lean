@@ -404,17 +404,17 @@ def pyAnalyzeLaurelCommand : Command where
     let sourcePathForMetadata := match pySourceOpt with
       | some (pyPath, _) => pyPath
       | none => filePath
-    let laurelPgm := Strata.Python.pythonToLaurel prelude cmds[0]! sourcePathForMetadata
+    let laurelPgm := Strata.Python.pythonToLaurel prelude cmds[0]! none sourcePathForMetadata
     match laurelPgm with
       | .error e =>
         exitFailure s!"Python to Laurel translation failed: {e}"
-      | .ok laurelProgram =>
+      | .ok (laurelProgram, _)  =>
         if verbose then
           IO.println "\n==== Laurel Program ===="
           IO.println f!"{laurelProgram}"
 
         -- Translate Laurel to Core
-        match Strata.Laurel.translate laurelProgram with
+        match Strata.Laurel.translate laurelProgram Strata.Python.CorePrelude_functions with
         | .error diagnostics =>
           exitFailure s!"Laurel to Core translation failed: {diagnostics}"
         | .ok coreProgram =>
@@ -513,7 +513,7 @@ def laurelAnalyzeCommand : Command where
           types := combinedProgram.types ++ laurelProgram.types
         }
 
-    let diagnostics ← Strata.Laurel.verifyToDiagnosticModels combinedProgram
+    let diagnostics ← Strata.Laurel.verifyToDiagnosticModels combinedProgram Strata.Python.CorePrelude_functions
 
     IO.println s!"==== DIAGNOSTICS ===="
     for diag in diagnostics do

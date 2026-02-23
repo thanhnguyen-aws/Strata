@@ -435,7 +435,7 @@ def translateProcedureToFunction (constants : List Constant) (proc : Procedure) 
 /--
 Translate Laurel Program to Core Program
 -/
-def translate (program : Program) : Except (Array DiagnosticModel) (Core.Program × Array DiagnosticModel) := do
+def translate (program : Program) (preludeFunctionNames: List Identifier) : Except (Array DiagnosticModel) (Core.Program × Array DiagnosticModel) := do
   let program := heapParameterization program
   let (program, modifiesDiags) := modifiesClausesTransform program
   dbg_trace "===  Program after heapParameterization + modifiesClausesTransform ==="
@@ -448,7 +448,7 @@ def translate (program : Program) : Except (Array DiagnosticModel) (Core.Program
   -- Separate procedures that can be functions from those that must be procedures
   let (funcProcs, procProcs) := program.staticProcedures.partition canBeBoogieFunction
   -- Build the set of function names for use during translation
-  let funcNames : FunctionNames := funcProcs.map (·.name)
+  let funcNames : FunctionNames := funcProcs.map (·.name) ++ preludeFunctionNames
   let procedures := procProcs.map (translateProcedure program.constants funcNames)
   let procDecls := procedures.map (fun p => Core.Decl.proc p .empty)
   let laurelFuncDecls := funcProcs.map (translateProcedureToFunction program.constants)
@@ -459,10 +459,10 @@ def translate (program : Program) : Except (Array DiagnosticModel) (Core.Program
 /--
 Verify a Laurel program using an SMT solver
 -/
-def verifyToVcResults (program : Program)
+def verifyToVcResults (program : Program) (preludeFunctionNames: List Identifier)
     (options : Options := Options.default)
     : IO (Except (Array DiagnosticModel) VCResults) := do
-  let (strataCoreProgram, translateDiags) ← match translate program with
+  let (strataCoreProgram, translateDiags) ← match translate program preludeFunctionNames with
     | .error translateErrorDiags => return .error translateErrorDiags
     | .ok result => pure result
 
@@ -484,16 +484,16 @@ def verifyToVcResults (program : Program)
     return .error (translateDiags ++ ioResult.filterMap toDiagnosticModel)
 
 
-def verifyToDiagnostics (files: Map Strata.Uri Lean.FileMap) (program : Program)
+def verifyToDiagnostics (files: Map Strata.Uri Lean.FileMap) (program : Program) (preludeFunctionNames: List Identifier)
     (options : Options := Options.default): IO (Array Diagnostic) := do
-  let results <- verifyToVcResults program options
+  let results <- verifyToVcResults program preludeFunctionNames options
   match results with
   | .error errors => return errors.map (fun dm => dm.toDiagnostic files)
   | .ok results => return results.filterMap (fun dm => dm.toDiagnostic files)
 
 
-def verifyToDiagnosticModels (program : Program) (options : Options := Options.default) : IO (Array DiagnosticModel) := do
-  let results <- verifyToVcResults program options
+def verifyToDiagnosticModels (program : Program) (preludeFunctionNames: List Identifier) (options : Options := Options.default) : IO (Array DiagnosticModel) := do
+  let results <- verifyToVcResults program preludeFunctionNames options
   match results with
   | .error errors => return errors
   | .ok results => return results.filterMap toDiagnosticModel
