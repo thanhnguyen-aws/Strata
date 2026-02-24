@@ -75,11 +75,8 @@ info: [Strata.Core] Type checking succeeded.
 VCs:
 Label: test
 Property: assert
-Assumptions:
-
-
-Proof Obligation:
-(~fooAliasVal == ~fooVal)
+Obligation:
+fooAliasVal == fooVal
 
 ---
 info: ok: [(type Foo (a0 : Type, a1 : Type);
@@ -108,7 +105,11 @@ info: ok: [(type Foo (a0 : Type, a1 : Type);
   func Int.Sub :  ((x : int) (y : int)) → int;
   func Int.Mul :  ((x : int) (y : int)) → int;
   func Int.Div :  ((x : int) (y : int)) → int;
+  func Int.SafeDiv :  ((x : int) (y : int)) → int
+    requires ((~Bool.Not : (arrow bool bool)) ((y : int) == #0));
   func Int.Mod :  ((x : int) (y : int)) → int;
+  func Int.SafeMod :  ((x : int) (y : int)) → int
+    requires ((~Bool.Not : (arrow bool bool)) ((y : int) == #0));
   func Int.DivT :  ((x : int) (y : int)) → int;
   func Int.ModT :  ((x : int) (y : int)) → int;
   func Int.Neg :  ((x : int)) → int;
@@ -321,10 +322,10 @@ def outOfScopeVarProg : Program := { decls := [
               body := [
                 Statement.set "y" eb[((~Bool.Or x) x)],
                 .ite eb[(x == #true)]
-                  [Statement.init "q" t[int] eb[#0],
+                  [Statement.init "q" t[int] (some eb[#0]),
                            Statement.set "q" eb[#1],
                            Statement.set "y" eb[#true]]
-                  [Statement.init "q" t[int] eb[#0],
+                  [Statement.init "q" t[int] (some eb[#0]),
                            Statement.set "q" eb[#2],
                            Statement.set "y" eb[#true]],
                 Statement.assert "y_check" eb[y == #true],
@@ -364,7 +365,7 @@ def polyFuncProg : Program := { decls := [
                     postconditions := [] },
           body := [
             -- var m : Map int bool;
-            Statement.init "m" (.forAll [] (.tcons "Map" [.tcons "int" [], .tcons "bool" []])) eb[init_m_0],
+            Statement.init "m" (.forAll [] (.tcons "Map" [.tcons "int" [], .tcons "bool" []])) none,
             -- m := makePair(identity(42), identity(true));
             Statement.set "m" eb[((~makePair (~identity #42)) (~identity #true))]
           ]

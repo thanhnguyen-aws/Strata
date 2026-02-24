@@ -43,26 +43,23 @@ VCs:
 Label: g_gt_10_internal
 Property: assert
 Assumptions:
-(g_eq_15, ($__g0 == #15))
-
-Proof Obligation:
-(~Int.Gt $__g0 #10)
+g_eq_15: $__g1 == 15
+Obligation:
+$__g1 > 10
 
 Label: g_lt_10
 Property: assert
 Assumptions:
-(g_eq_15, ($__g0 == #15))
-
-Proof Obligation:
-#true
+g_eq_15: $__g1 == 15
+Obligation:
+true
 
 Label: g_eq_15_internal
 Property: assert
 Assumptions:
-((Origin_Proc_Ensures)g_lt_10, (~Int.Lt $__g2 #10))
-
-Proof Obligation:
-($__g2 == #15)
+(Origin_Proc_Ensures)g_lt_10: $__g3 < 10
+Obligation:
+$__g3 == 15
 
 
 
@@ -70,7 +67,7 @@ Result: Obligation: g_eq_15_internal
 Property: assert
 Result: ❌ fail
 Model:
-($__g2, 0)
+($__g3, 0)
 
 
 [DEBUG] Evaluated program:
@@ -81,15 +78,15 @@ spec {
   free requires [g_eq_15]: g == 15;
   free ensures [g_lt_10]: g < 10;
   } {
-  assume [g_eq_15]: $__g0 == 15;
-  assert [g_gt_10_internal]: $__g0 > 10;
-  g := $__g0 + 1;
+  assume [g_eq_15]: $__g1 == 15;
+  assert [g_gt_10_internal]: $__g1 > 10;
+  g := $__g1 + 1;
   assert [g_lt_10]: true;
   };
 procedure ProcCaller () returns (x : int)
 {
   call  := Proc();
-  assert [g_eq_15_internal]: $__g2 == 15;
+  assert [g_eq_15_internal]: $__g3 == 15;
   };
 
 ---
@@ -106,7 +103,7 @@ Obligation: g_eq_15_internal
 Property: assert
 Result: ❌ fail
 Model:
-($__g2, 0)
+($__g3, 0)
 -/
 #guard_msgs in
 #eval verify freeReqEnsPgm

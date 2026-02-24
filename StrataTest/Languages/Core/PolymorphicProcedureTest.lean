@@ -42,19 +42,13 @@ info: [Strata.Core] Type checking succeeded.
 VCs:
 Label: (Origin_Extract_Requires)Extract_requires_0
 Property: assert
-Assumptions:
-
-
-Proof Obligation:
-(~List..isCons $__xs2)
+Obligation:
+List..isCons($__xs3)
 
 Label: Test_ensures_0
 Property: assert
-Assumptions:
-
-
-Proof Obligation:
-#true
+Obligation:
+true
 
 
 
@@ -62,7 +56,7 @@ Result: Obligation: (Origin_Extract_Requires)Extract_requires_0
 Property: assert
 Result: ❌ fail
 Model:
-($__xs2, (as Nil (List Int))
+($__xs3, (as Nil (List Int))
 
 
 [DEBUG] Evaluated program:
@@ -94,7 +88,7 @@ Obligation: (Origin_Extract_Requires)Extract_requires_0
 Property: assert
 Result: ❌ fail
 Model:
-($__xs2, (as Nil (List Int))
+($__xs3, (as Nil (List Int))
 
 Obligation: Test_ensures_0
 Property: assert
@@ -125,36 +119,33 @@ procedure Test() returns () spec { ensures true; }
 };
 #end
 
-/-- info: [Strata.Core] Type checking succeeded.
+/--
+info: [Strata.Core] Type checking succeeded.
 
 
 VCs:
 Label: MkCons_ensures_0
 Property: assert
-Assumptions:
-
-
-Proof Obligation:
-#true
+Obligation:
+true
 
 Label: assert_0
 Property: assert
 Assumptions:
-((Origin_MkCons_Ensures)MkCons_ensures_0, (~List..isCons $__r2))
-
-Proof Obligation:
-(~List..isCons $__r2)
+(Origin_MkCons_Ensures)MkCons_ensures_0: List..isCons($__r3)
+Obligation:
+List..isCons($__r3)
 
 Label: Test_ensures_0
 Property: assert
 Assumptions:
-((Origin_MkCons_Ensures)MkCons_ensures_0, (~List..isCons $__r2))
-
-Proof Obligation:
-#true
+(Origin_MkCons_Ensures)MkCons_ensures_0: List..isCons($__r3)
+Obligation:
+true
 
 ---
-info: Obligation: MkCons_ensures_0
+info:
+Obligation: MkCons_ensures_0
 Property: assert
 Result: ✅ pass
 
@@ -164,7 +155,8 @@ Result: ✅ pass
 
 Obligation: Test_ensures_0
 Property: assert
-Result: ✅ pass-/
+Result: ✅ pass
+-/
 #guard_msgs in
 #eval verify polyPostPgm
 

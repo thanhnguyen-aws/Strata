@@ -21,23 +21,20 @@ datatype Any () {
 procedure test () returns ()
 {
   var b: bool;
-  havoc b;
   assert [constr_tester_cancel]: Any..isfrom_bool(from_bool(b));
 };
 
 #end
 
-/-- info: [Strata.Core] Type checking succeeded.
+/--
+info: [Strata.Core] Type checking succeeded.
 
 
 VCs:
 Label: constr_tester_cancel
 Property: assert
-Assumptions:
-
-
-Proof Obligation:
-#true
+Obligation:
+true
 
 ---
 info:
@@ -61,23 +58,22 @@ datatype Any () {
 procedure test () returns ()
 {
   var b: bool;
-  havoc b;
   assume (b == true);
   assert [constr_destr_cancel]: Any..as_bool(from_bool(b));
 };
 
 #end
 
-/-- info: [Strata.Core] Type checking succeeded.
+/--
+info: [Strata.Core] Type checking succeeded.
 
 
 VCs:
 Label: constr_destr_cancel
 Property: assert
 Assumptions:
-(assume_0, ($__b0 == #true))
-
-Proof Obligation:
+assume_0: $__b0 == true
+Obligation:
 $__b0
 
 ---

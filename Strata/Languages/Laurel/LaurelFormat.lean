@@ -10,6 +10,7 @@ namespace Strata
 namespace Laurel
 
 open Std (Format)
+open Std.Format
 
 def formatOperation : Operation → Format
   | .Eq => "=="
@@ -53,6 +54,7 @@ def formatHighTypeVal : HighType → Format
   | .Pure base => "pure(" ++ formatHighType base ++ ")"
   | .Intersection types =>
       Format.joinSep (types.map formatHighType) " & "
+  | .TCore s => s!"Core({s})"
   termination_by t => sizeOf t
   decreasing_by all_goals term_by_mem
 end
@@ -71,7 +73,7 @@ def formatStmtExprVal (s : StmtExpr) : Format :=
       | none => ""
       | some e => " else " ++ formatStmtExpr e
   | .Block stmts _ =>
-      "{ " ++ Format.joinSep (stmts.map formatStmtExpr) "; " ++ " }"
+      group $ "{" ++ nestD (line ++ joinSep (stmts.map formatStmtExpr) (";" ++ line)) ++ line ++ "}"
   | .LocalVariable name ty init =>
       "var " ++ Format.text name ++ ": " ++ formatHighType ty ++
       match init with
@@ -107,6 +109,7 @@ def formatStmtExprVal (s : StmtExpr) : Format :=
       formatStmtExpr a ++ " " ++ formatOperation op ++ " " ++ formatStmtExpr b
   | .PrimitiveOp op args =>
       formatOperation op ++ "(" ++ Format.joinSep (args.map formatStmtExpr) ", " ++ ")"
+  | .New name => "new " ++ Format.text name
   | .This => "this"
   | .ReferenceEquals lhs rhs =>
       formatStmtExpr lhs ++ " === " ++ formatStmtExpr rhs

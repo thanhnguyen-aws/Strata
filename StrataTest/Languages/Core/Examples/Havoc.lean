@@ -46,11 +46,8 @@ info: [Strata.Core] Type checking succeeded.
 VCs:
 Label: x_eq_1
 Property: assert
-Assumptions:
-
-
-Proof Obligation:
-($__x0 == #1)
+Obligation:
+$__x1 == 1
 
 
 
@@ -58,7 +55,7 @@ Result: Obligation: x_eq_1
 Property: assert
 Result: ❌ fail
 Model:
-($__x0, 0)
+($__x1, 0)
 
 
 [DEBUG] Evaluated program:
@@ -67,7 +64,7 @@ procedure S () returns ()
   var x : int;
   x := 1;
   havoc x;
-  assert [x_eq_1]: $__x0 == 1;
+  assert [x_eq_1]: $__x1 == 1;
   };
 
 ---
@@ -76,7 +73,7 @@ Obligation: x_eq_1
 Property: assert
 Result: ❌ fail
 Model:
-($__x0, 0)
+($__x1, 0)
 -/
 #guard_msgs in
 #eval verify havocPgm

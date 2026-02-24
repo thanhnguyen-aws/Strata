@@ -39,10 +39,11 @@ def translateType (ty : HighTypeMd) : LMonoTy :=
   | .TBool => LMonoTy.bool
   | .TString => LMonoTy.string
   | .TVoid => LMonoTy.bool -- Using bool as placeholder for void
-  | .THeap => Core.mapTy (.tcons "Composite" []) (Core.mapTy (.tcons "Field" []) (.tcons "Box" []))
+  | .THeap => .tcons "Heap" []
   | .TTypedField _ => .tcons "Field" []
   | .TSet elementType => Core.mapTy (translateType elementType) LMonoTy.bool
   | .UserDefined _ => .tcons "Composite" []
+  | .TCore s => .tcons s []
   | _ => panic s!"unsupported type {ToFormat.format ty}"
 termination_by ty.val
 decreasing_by cases elementType; term_by_mem
@@ -60,7 +61,8 @@ abbrev FunctionNames := List Identifier
 
 def isCoreFunction (funcNames : FunctionNames) (name : Identifier) : Bool :=
   -- readField, updateField, and Box constructors/destructors are always functions
-  name == "readField" || name == "updateField" ||
+  name == "readField" || name == "updateField" || name == "increment" ||
+  name == "MkHeap" || name == "Heap..data" || name == "Heap..nextReference" ||
   name == "BoxInt" || name == "BoxBool" || name == "BoxFloat64" || name == "BoxComposite" ||
   name == "Box..intVal" || name == "Box..boolVal" || name == "Box..float64Val" || name == "Box..compositeVal" ||
   funcNames.contains name
@@ -87,7 +89,7 @@ def translateExpr (constants : List Constant) (env : TypeEnv) (expr : StmtExprMd
       | none =>
           -- Check if this is a constant (field constant) or local variable
           if isConstant constants name then
-            let ident := Core.CoreIdent.glob name
+            let ident := Core.CoreIdent.unres name
             .op () ident none
           else
             let ident := Core.CoreIdent.locl name
@@ -145,6 +147,7 @@ def translateExpr (constants : List Constant) (env : TypeEnv) (expr : StmtExprMd
       -- Field selects should have been eliminated by heap parameterization
       -- If we see one here, it's an error in the pipeline
       panic! s!"FieldSelect should have been eliminated by heap parameterization: {Std.ToFormat.format target}#{fieldName}"
+  | .Hole => .fvar () (Core.CoreIdent.locl s!"DUMMY_VAR_{env.length}") none -- TODO: don't do this
   | _ => panic! Std.Format.pretty (Std.ToFormat.format expr)
   termination_by expr
   decreasing_by
@@ -153,6 +156,18 @@ def translateExpr (constants : List Constant) (env : TypeEnv) (expr : StmtExprMd
 def getNameFromMd (md : Imperative.MetaData Core.Expression): String :=
   let fileRange := (Imperative.getFileRange md).getD (panic "getNameFromMd bug")
   s!"({fileRange.range.start})"
+
+def defaultExprForType (ty : HighTypeMd) : Core.Expression.Expr :=
+  match ty.val with
+  | .TInt => .const () (.intConst 0)
+  | .TBool => .const () (.boolConst false)
+  | .TString => .const () (.strConst "")
+  | _ =>
+    -- For types without a natural default (arrays, composites, etc.),
+    -- use a fresh free variable. This is only used when the value is
+    -- immediately overwritten by a procedure call.
+    let coreTy := translateType ty
+    .fvar () (Core.CoreIdent.locl "$default") (some coreTy)
 
 /--
 Translate Laurel StmtExpr to Core Statements
@@ -184,28 +199,20 @@ def translateStmt (constants : List Constant) (funcNames : FunctionNames) (env :
           if isCoreFunction funcNames callee then
             -- Translate as expression (function application)
             let boogieExpr := translateExpr constants env (⟨ .StaticCall callee args, callMd ⟩)
-            (env', [Core.Statement.init ident boogieType boogieExpr md])
+            (env', [Core.Statement.init ident boogieType (some boogieExpr) md])
           else
             -- Translate as: var name; call name := callee(args)
             let boogieArgs := args.map (translateExpr constants env)
-            let defaultExpr := match ty.val with
-                              | .TInt => .const () (.intConst 0)
-                              | .TBool => .const () (.boolConst false)
-                              | .TString => .const () (.strConst "")
-                              | _ => .const () (.intConst 0)
-            let initStmt := Core.Statement.init ident boogieType defaultExpr
+            let defaultExpr := defaultExprForType ty
+            let initStmt := Core.Statement.init ident boogieType (some defaultExpr)
             let callStmt := Core.Statement.call [ident] callee boogieArgs
             (env', [initStmt, callStmt])
       | some initExpr =>
           let boogieExpr := translateExpr constants env initExpr
-          (env', [Core.Statement.init ident boogieType boogieExpr])
+          (env', [Core.Statement.init ident boogieType (some boogieExpr)])
       | none =>
-          let defaultExpr := match ty.val with
-                            | .TInt => .const () (.intConst 0)
-                            | .TBool => .const () (.boolConst false)
-                            | .TString => .const () (.strConst "")
-                            | _ => .const () (.intConst 0)
-          (env', [Core.Statement.init ident boogieType defaultExpr])
+          let defaultExpr := defaultExprForType ty
+          (env', [Core.Statement.init ident boogieType (some defaultExpr)])
   | .Assign targets value =>
       match targets with
       | [⟨ .Identifier name, _ ⟩] =>
@@ -351,7 +358,7 @@ def translateConstant (c : Constant) : Core.Decl :=
   match c.type.val with
   | .TTypedField _ =>
       .func {
-        name := Core.CoreIdent.glob c.name
+        name := Core.CoreIdent.unres c.name
         typeArgs := []
         inputs := []
         output := .tcons "Field" []
@@ -360,7 +367,7 @@ def translateConstant (c : Constant) : Core.Decl :=
   | _ =>
       let ty := translateType c.type
       .func {
-        name := Core.CoreIdent.glob c.name
+        name := Core.CoreIdent.unres c.name
         typeArgs := []
         inputs := []
         output := ty
@@ -382,6 +389,7 @@ def isPureExpr(expr: StmtExprMd): Bool :=
   | .IfThenElse c t none => isPureExpr c && isPureExpr t
   | .IfThenElse c t (some e) => isPureExpr c && isPureExpr t && isPureExpr e
   | .StaticCall _ args => args.attach.all (fun ⟨a, _⟩ => isPureExpr a)
+  | .New _ => false
   | .ReferenceEquals e1 e2 => isPureExpr e1 && isPureExpr e2
   | .Block [single] _ => isPureExpr single
   | _ => false
@@ -430,10 +438,13 @@ Translate Laurel Program to Core Program
 def translate (program : Program) : Except (Array DiagnosticModel) (Core.Program × Array DiagnosticModel) := do
   let program := heapParameterization program
   let (program, modifiesDiags) := modifiesClausesTransform program
-  let program := liftExpressionAssignments program
-  dbg_trace "===  Program after heapParameterization + modifiesClausesTransform + liftExpressionAssignments ==="
+  dbg_trace "===  Program after heapParameterization + modifiesClausesTransform ==="
   dbg_trace (toString (Std.Format.pretty (Std.ToFormat.format program)))
   dbg_trace "================================="
+  let program := liftExpressionAssignments program
+  -- dbg_trace "===  Program after heapParameterization + modifiesClausesTransform + liftExpressionAssignments ==="
+  -- dbg_trace (toString (Std.Format.pretty (Std.ToFormat.format program)))
+  -- dbg_trace "================================="
   -- Separate procedures that can be functions from those that must be procedures
   let (funcProcs, procProcs) := program.staticProcedures.partition canBeBoogieFunction
   -- Build the set of function names for use during translation
@@ -473,7 +484,8 @@ def verifyToVcResults (program : Program)
     return .error (translateDiags ++ ioResult.filterMap toDiagnosticModel)
 
 
-def verifyToDiagnostics (files: Map Strata.Uri Lean.FileMap) (program : Program) (options : Options := Options.default): IO (Array Diagnostic) := do
+def verifyToDiagnostics (files: Map Strata.Uri Lean.FileMap) (program : Program)
+    (options : Options := Options.default): IO (Array Diagnostic) := do
   let results <- verifyToVcResults program options
   match results with
   | .error errors => return errors.map (fun dm => dm.toDiagnostic files)
