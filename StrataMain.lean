@@ -425,7 +425,7 @@ def buildPySpecPrelude (pyspecPaths : Array String) : IO PySpecPrelude := do
       let existing := allOverloads.getD funcName {}
       allOverloads := allOverloads.insert funcName
         (overloads.fold (init := existing) fun acc k v => acc.insert k v)
-    match Strata.Laurel.translate result.program with
+    match Strata.Laurel.translate result.program Strata.Python.CorePrelude_functions with
     | .error diagnostics =>
       exitFailure s!"PySpec Laurel to Core translation failed for {ionPath}: {diagnostics}"
     | .ok (coreSpec, _modifiesDiags) =>
@@ -490,8 +490,7 @@ def pyAnalyzeLaurelCommand : Command where
     let sourcePathForMetadata := match pySourceOpt with
       | some (pyPath, _) => pyPath
       | none => filePath
-    let laurelPgm := Strata.Python.pythonToLaurel prelude cmds[0]! none sourcePathForMetadata
-    let laurelPgm := Strata.Python.pythonToLaurel pyPrelude cmds[0]!
+    let laurelPgm := Strata.Python.pythonToLaurel pyPrelude cmds[0]! none
       sourcePathForMetadata allOverloads
     match laurelPgm with
       | .error e =>
