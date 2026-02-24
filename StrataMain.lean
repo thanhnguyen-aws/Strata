@@ -15,6 +15,7 @@ import Strata.Languages.Python.Specs.ToLaurel
 import Strata.Languages.Laurel.LaurelFormat
 import Strata.Transform.ProcedureInlining
 import Strata.Languages.Python.CorePrelude
+import Strata.Languages.Python.PythonLaurelCorePrelude
 
 def exitFailure {α} (message : String) (hint : String := "strata --help") : IO α := do
   IO.eprintln s!"Exception: {message}\n\nRun {hint} for additional help."
@@ -409,7 +410,7 @@ def buildPySpecPrelude (pyspecPaths : Array String) : IO PySpecPrelude := do
   -- Accumulate into an Array for efficient appending; build Core.Program at the end.
   let laurelPreludeSize := Strata.Laurel.corePrelude.decls.length
   let mut preludeDecls : Array Core.Decl :=
-    Strata.Python.Core.prelude.decls.toArray ++ Strata.Laurel.corePrelude.decls.toArray
+    Strata.Python.Core.PythonLaurelPrelude.decls.toArray ++ Strata.Laurel.corePrelude.decls.toArray
   let mut existingNames : Std.HashSet String :=
     preludeDecls.foldl (init := {}) fun s d =>
       (Core.Decl.names d).foldl (init := s) fun s n => s.insert n.name

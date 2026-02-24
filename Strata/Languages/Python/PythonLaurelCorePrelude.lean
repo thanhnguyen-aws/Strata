@@ -1132,7 +1132,7 @@ spec {
 
 #end
 
-def Core.PythonLaurelrelude : Core.Program :=
+def Core.PythonLaurelPrelude : Core.Program :=
    Core.getProgram coreLaurelPrelude |>.fst
 
 def getFunctions (decls: List Core.Decl) : List String :=
@@ -1161,7 +1161,7 @@ def getDatatypeFunctions (decls: List Core.Decl) : List String :=
 
 def get_preludeFunctions (prelude: Core.Program) : List String := (getFunctions prelude.decls) ++ (getDatatypeFunctions prelude.decls)
 
-def CorePrelude_functions := get_preludeFunctions Core.PythonLaurelrelude
+def CorePrelude_functions := get_preludeFunctions Core.PythonLaurelPrelude
 
 
 end Python
