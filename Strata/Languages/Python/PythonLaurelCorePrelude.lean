@@ -6,250 +6,20 @@
 
 import Strata.DDM.Elab
 import Strata.DDM.AST
-import Strata.Languages.Core.DDMTransform.Grammar
+--import Strata.Languages.Core.DDMTransform.Parse
 import Strata.Languages.Core.Verifier
+import StrataTest.Transform.ProcedureInlining
 
 namespace Strata
 namespace Python
 
-def coreLaurelPrelude :=
+def PyThonLaurelprelude :=
 #strata
 program Core;
 
-datatype PNone () {
-  None_none()
-};
-
-datatype Option (a: Type) {Some (unwrap: a), None ()};
-
-type Object;
-function Object_len(x : Object) : int;
-axiom [Object_len_ge_zero]: (forall x : Object :: Object_len(x) >= 0);
-
-function inheritsFrom(child : string, parent : string) : (bool);
-axiom [inheritsFrom_refl]: (forall s: string :: {inheritsFrom(s, s)} inheritsFrom(s, s));
-
-// /////////////////////////////////////////////////////////////////////////////////////
-
-// Exceptions
-// TODO: Formalize the exception hierarchy here:
-// https://docs.python.org/3/library/exceptions.html#exception-hierarchy
-// We use the name "Error" to stand for Python's Exceptions +
-// our own special indicator, Unimplemented which is an artifact of
-// Strata that indicates that our models is partial.
-
-
-datatype Error () {
-  NoError (),
-  TypeError (Type_msg : string),
-  AttributeError (Attribute_msg : string),
-  AssertionError (Assertion_msg : string),
-  UnimplementedError (Unimplement_msg : string),
-  UndefinedError (Undefined_msg : string),
-  IndexError (IndexError_msg : string),
-  RePatternError(RePatternError_msg: string)
-};
-
-// /////////////////////////////////////////////////////////////////////////////////////
-// /////////////////////////////////////////////////////////////////////////////////////
-// Regular Expressions
-
-datatype Except (err : Type, ok : Type) {
-  Except_mkOK(Except_getOK: ok),
-  Except_mkErr(Except_getErr: err)
-};
-
-type ExceptErrorRegex := Except Error regex;
-
-// NOTE: `re.match` returns a `Re.Match` object, but for now, we are interested
-// only in match/nomatch, which is why we return `bool` here.
-function PyReMatchRegex(pattern : regex, str : string, flags : int) : bool;
-// We only support Re.Match when flags == 0.
-axiom [PyReMatchRegex_def_noFlg]:
-  (forall pattern : regex, str : string :: {PyReMatchRegex(pattern, str, 0)}
-    PyReMatchRegex(pattern, str, 0) == str.in.re(str, pattern));
-
-// Unsupported/uninterpreted: eventually, this would first call PyReCompile and if there's
-// no exception, call PyReMatchRegex.
-function PyReMatchStr(pattern : string, str : string, flags : int) : Except Error bool;
-
-// /////////////////////////////////////////////////////////////////////////////////////
-
-// List of strings
-datatype ListStr () {
-  ListStr_nil(),
-  ListStr_cons(head: string, tail: ListStr)
-};
-
-// /////////////////////////////////////////////////////////////////////////////////////
-
-// Temporary Types
-
-type StrOrNone := Option (string);
-type IntOrNone := Option (int);
-
-function strOrNone_toObject(v : StrOrNone) : Object;
-// Injectivity axiom: different StrOrNone map to different objects.
-axiom (forall s1:StrOrNone, s2: StrOrNone :: {strOrNone_toObject(s1), strOrNone_toObject(s2)}
-        s1 != s2 ==>
-        strOrNone_toObject(s1) != strOrNone_toObject(s2));
-
-//https://github.com/strata-org/Strata/issues/460
-//axiom (forall s : StrOrNone :: {Some (s)}
-//        Option..isSome (s) ==>
-//        Object_len(strOrNone_toObject(s)) == str.len(Option..unwrap(s)));
-
-datatype BoolOrStrOrNone () {
-  BoolOrStrOrNone_mk_bool(bool_val: bool),
-  BoolOrStrOrNone_mk_str(str_val: string),
-  BoolOrStrOrNone_mk_none(none_val: PNone)
-};
-
-datatype DictStrStrOrNone () {
-  DictStrStrOrNone_mk_str(str_val: string),
-  DictStrStrOrNone_mk_none(none_val: PNone)
-};
-
-datatype BytesOrStrOrNone () {
-  BytesOrStrOrNone_mk_none(none_val: PNone),
-  BytesOrStrOrNone_mk_str(str_val: string)
-};
-
 type DictStrAny;
-function DictStrAny_mk(s : string) : (DictStrAny);
 
-type ListDictStrAny;
-function ListDictStrAny_nil() : (ListDictStrAny);
-
-datatype Client () {
-  Client_S3(),
-  Client_CW()
-};
-
-// /////////////////////////////////////////////////////////////////////////////////////
-// Datetime
-
-////// 1. Timedelta.
-
-// According to http://docs.python.org/3/library/datetime.html,
-// ""
-//  Only days, seconds and microseconds are stored internally. Arguments are
-//  converted to those units:
-//  - A millisecond is converted to 1000 microseconds.
-//  - A minute is converted to 60 seconds.
-//  - An hour is converted to 3600 seconds.
-//  - A week is converted to 7 days.
-//  and days, seconds and microseconds are then normalized so that the
-//  representation is unique, with
-//  - 0 <= microseconds < 1000000
-//  - 0 <= seconds < 3600*24 (the number of seconds in one day)
-//  - -999999999 <= days <= 999999999
-// ""
-
-// In the Strata Core representation, an int type that corresponds to the full
-// milliseconds is simply used. See Timedelta_mk.
-
-
-
-function Timedelta_mk(days : int, seconds : int, microseconds : int): int {
-  ((days * 3600 * 24) + seconds) * 1000000 + microseconds
-}
-
-function Timedelta_get_days(timedelta : int) : int;
-function Timedelta_get_seconds(timedelta : int) : int;
-function Timedelta_get_microseconds(timedelta : int) : int;
-
-axiom [Timedelta_deconstructors]:
-    (forall days0 : int, seconds0 : int, msecs0 : int,
-            days : int, seconds : int, msecs : int
-            :: {(Timedelta_mk(days0, seconds0, msecs0))}
-      Timedelta_mk(days0, seconds0, msecs0) ==
-          Timedelta_mk(days, seconds, msecs) &&
-      0 <= msecs && msecs < 1000000 &&
-      0 <= seconds && seconds < 3600 * 24 &&
-      -999999999 <= days && days <= 999999999
-      ==> Timedelta_get_days(Timedelta_mk(days0, seconds0, msecs0)) == days &&
-          Timedelta_get_seconds(Timedelta_mk(days0, seconds0, msecs0)) == seconds &&
-          Timedelta_get_microseconds(Timedelta_mk(days0, seconds0, msecs0)) == msecs);
-
-
-////// Datetime.
-// Datetime is abstractly defined as a pair of (base time, relative timedelta).
-// datetime.now() returns (<the curent datetime>, 0).
-// Adding or subtracting datetime.timedelta updates
-type Datetime;
-type Datetime_base;
-
-function Datetime_get_base(d : Datetime) : Datetime_base;
-function Datetime_get_timedelta(d : Datetime) : int;
-
-// now() returns an abstract, fresh current datetime.
-// This abstract now() does not guarantee monotonic increase of time, and this
-// means subtracting an 'old' timestamp from a 'new' timestamp may return
-// a negative difference.
-
-
-
-
-// Comparison of Datetimes is abstractly defined so that the result is
-// meaningful only if the two datetimes have same base.
-function Datetime_lt(d1:Datetime, d2:Datetime):bool;
-
-axiom [Datetime_lt_ax]:
-    (forall d1:Datetime, d2:Datetime :: {}
-        Datetime_get_base(d1) == Datetime_get_base(d2)
-        ==> Datetime_lt(d1, d2) ==
-            (Datetime_get_timedelta(d1) < Datetime_get_timedelta(d2)));
-
-
-type Date;
-
-
-/////////////////////////////////////////////////////////////////////////////////////
-
-
-// /////////////////////////////////////////////////////////////////////////////////////
-
-// Uninterpreted procedures
-procedure importFrom(module : string, names : ListStr, level : int) returns ();
-procedure import(names : ListStr) returns ();
-procedure print(msg : string, opt : StrOrNone) returns ();
-
-procedure json_dumps(msg : DictStrAny, opt_indent : IntOrNone) returns (s: string, maybe_except: Error)
-spec{};
-
-procedure json_loads(msg : string) returns (d: DictStrAny, maybe_except: Error)
-spec{};
-
-procedure input(msg : string) returns (result: string, maybe_except: Error)
-spec{};
-
-procedure random_choice(l : ListStr) returns (result: string, maybe_except: Error)
-spec{};
-
-function str_in_list_str(s : string, l: ListStr) : bool;
-
-function str_in_dict_str_any(s : string, l: DictStrAny) : bool;
-
-function list_str_get(l : ListStr, i: int) : string;
-
-function str_len(s : string) : int;
-
-function dict_str_any_get(d : DictStrAny, k: string) : DictStrAny;
-
-function dict_str_any_get_list_str(d : DictStrAny, k: string) : ListStr;
-
-function dict_str_any_get_str(d : DictStrAny, k: string) : string;
-
-function dict_str_any_length(d : DictStrAny) : int;
-
-procedure str_to_float(s : string) returns (result: string, maybe_except: Error)
-;
-
-function Float_gt(lhs : string, rhs: string) : bool;
-
-// /////////////////////////////////////////////////////////////////////////////////////
-
+// Any and ListAny types
 
 forward type ListAny;
 forward type Any;
@@ -274,6 +44,78 @@ datatype ListAny () {
 
 end;
 
+// Accessible to users
+inline function isBool (v: Any) : Any {
+  from_bool (Any..isfrom_bool(v))
+}
+
+inline function isInt (v: Any) : Any {
+  from_bool (Any..isfrom_int(v))
+}
+
+inline function isFloat (v: Any) : Any {
+  from_bool (Any..isfrom_float(v))
+}
+
+inline function isString (v: Any) : Any {
+  from_bool (Any..isfrom_string(v))
+}
+
+inline function isdatetime (v: Any) : Any {
+  from_bool (Any..isfrom_datetime(v))
+}
+
+inline function isDict (v: Any) : Any {
+  from_bool (Any..isfrom_Dict(v))
+}
+
+inline function isList (v: Any) : Any {
+  from_bool (Any..isfrom_ListAny(v))
+}
+
+inline function isClassIntance (v: Any) : Any {
+  from_bool (Any..isfrom_ClassInstance(v))
+}
+
+inline function is_instance_of_Class (v: Any, cn: string) : Any {
+  from_bool (Any..isfrom_ClassInstance(v) && Any..classname(v) == cn)
+}
+
+inline function isInstance_of_Int (v: Any) : Any {
+  from_bool (Any..isfrom_int(v) || Any..isfrom_bool(v))
+}
+
+inline function isInstance_of_Float (v: Any) : Any {
+  from_bool (Any..isfrom_float(v) || Any..isfrom_int(v) || Any..isfrom_bool(v))
+}
+
+inline function Any_to_bool (v: Any) : bool {
+  if (Any..isfrom_bool(v)) then Any..as_bool(v) else
+  if (Any..isfrom_none(v)) then false else
+  if (Any..isfrom_string(v)) then !(Any..as_string(v) == "") else
+  if (Any..isfrom_int(v)) then !(Any..as_int(v) == 0) else
+  false
+  //TOBE MORE
+}
+
+function to_string(a: Any) : string;
+
+function to_string_any(a: Any) : Any {
+  from_string(to_string(a))
+}
+
+function to_int(a: Any) : int;
+
+function to_int_any(a: Any) : Any {
+  from_int(to_int(a))
+}
+
+function datetime_strptime(dtstring: Any, format: Any) : Any;
+
+axiom [datetime_tostring_cancel]: forall dt: Any, format: Any ::{datetime_strptime(to_string_any(dt), format)}
+  datetime_strptime(to_string_any(dt), format) == dt;
+
+// ListAny functions
 function List_contains (l : ListAny, x: Any) : bool;
 function List_len (l : ListAny) : int;
 function List_extend (l1 : ListAny, l2: ListAny) : ListAny;
@@ -292,6 +134,16 @@ function List_le (l1: ListAny, L2: ListAny): bool;
 function List_gt (l1: ListAny, L2: ListAny): bool;
 function List_ge (l1: ListAny, L2: ListAny): bool;
 
+
+datatype Error () {
+  NoError (),
+  TypeError (Type_msg : string),
+  AttributeError (Attribute_msg : string),
+  AssertionError (Assertion_msg : string),
+  UnimplementedError (Unimplement_msg : string),
+  UndefinedError (Undefined_msg : string),
+  IndexError (IndexError_msg : string)
+};
 
 // Accessible to users
 inline function isTypeError (e: Error) : Any {
@@ -318,29 +170,20 @@ inline function isError (e: Error) : Any {
   from_bool (! Error..isNoError(e))
 }
 
-function TypeOf (v: Any) : string;
-function DictStrAny_empty () : DictStrAny;
-function DictStrAny_insert (d: DictStrAny, key: string, v: Any) : DictStrAny;
-
-inline function Any_to_bool (v: Any) : bool {
-  if (Any..isfrom_bool(v)) then Any..as_bool(v) else
-  if (Any..isfrom_none(v)) then false else
-  if (Any..isfrom_string(v)) then !(Any..as_string(v) == "") else
-  if (Any..isfrom_int(v)) then !(Any..as_int(v) == 0) else
-  false
-  //TOBE MORE
-}
-
 function is_IntReal (v: Any) : bool;
 function Any_real_to_int (v: Any) : int;
 // to be extended
-function normalize_any (v : Any) : Any {
+inline function normalize_any (v : Any) : Any {
   if v == from_bool(true) then from_int(1)
   else (if v == from_bool(false) then from_int(0) else
         if Any..isfrom_float(v) && is_IntReal(v) then from_int(Any_real_to_int(v)) else
         v)
 }
 
+
+function TypeOf (v: Any) : string;
+function DictStrAny_empty () : DictStrAny;
+function DictStrAny_insert (d: DictStrAny, key: string, v: Any) : DictStrAny;
 
 
 function int_to_real (i: int) : real;
@@ -964,53 +807,6 @@ spec {
   }}}}}}}}}}}
 };
 
-function Any_in_Dict (a: Any, d: Any) : Any;
-
-procedure PIn (v1: Any, v2: Any) returns (ret: Any, error: Error)
-spec {
-  free requires [dummy]: true;
-  free ensures [dummy]: true;
-}
-{
-  if (Any..isfrom_Dict(v2))
-  {
-    ret:= Any_in_Dict(v1, v2);
-    error := NoError ();
-  }
-  else { if (Any..isfrom_ListAny(v2))
-  {
-    ret := from_bool(List_contains(Any..as_ListAny(v2), v1));
-    error := NoError ();
-  }
-  else {
-    ret := from_bool(false);
-    error := UndefinedError ("Operand type not supported");
-  }
-  }
-};
-
-procedure PNotIn (v1: Any, v2: Any) returns (ret: Any, error: Error)
-spec {
-  free requires [dummy]: true;
-  free ensures [dummy]: true;
-}
-{
-  if (Any..isfrom_Dict(v2))
-  {
-    ret:= from_bool(!Any..as_bool(Any_in_Dict(v1, v2)));
-    error := NoError ();
-  }
-  else { if (Any..isfrom_ListAny(v2))
-  {
-    ret := from_bool(!List_contains(Any..as_ListAny(v2), v1));
-    error := NoError ();
-  }
-  else {
-    ret := from_bool(true);
-    error := UndefinedError ("Operand type not supported");
-  }
-  }
-};
 
 inline function PAnd (v1: Any, v2: Any) : Any
 {
@@ -1021,7 +817,6 @@ inline function POr (v1: Any, v2: Any) : Any
 {
   from_bool(Any_to_bool (v1) || Any_to_bool (v2))
 }
-
 
 inline function PEq (v: Any, v': Any) : Any {
   from_bool(normalize_any(v) == normalize_any (v'))
@@ -1046,28 +841,32 @@ inline function PMod (v1: Any, v2: Any) : Any
   from_none()
 }
 
-// Class functions
 
-function Attributes_set (c: Any, attrs: ListStr, val: Any) : Any;
-function Attribute_set (c: Any, attr: string, val: Any) : Any;
-function Attributes_get (c: Any, attrs: ListStr) : Any;
-function Attribute_get (c: Any, attr: string) : Any;
+// Python proc
 
-//Python functions
+procedure datetime_date(d: Any) returns (ret: Any, error: Error)
+{
+  var timedt: int;
+  if (Any..isfrom_datetime(d)) {
+    havoc timedt;
+    assume [timedt_le]: timedt <= Any..as_datetime(d);
+    ret := from_datetime(timedt);
+    error := NoError();
+  }
+  else {
+    ret := from_none();
+    error := TypeError("Input must be datetime");
+  }
+};
+
+
+//Test
 
 procedure datetime_now() returns (ret: Any)
 {
   var d: int;
   havoc d;
   ret := from_datetime(d);
-};
-
-procedure datetime_utcnow() returns (d:Datetime, maybe_except: Error)
-spec {
-  ensures (Datetime_get_timedelta(d) == Timedelta_mk(0,0,0));
-}
-{
-  assume [assume_datetime_now]: (Datetime_get_timedelta(d) == Timedelta_mk(0,0,0));
 };
 
 procedure timedelta(days: Any, hours: Any) returns (delta : Any, maybe_except: Error)
@@ -1082,40 +881,8 @@ spec{
   if (Any..isfrom_int(hours)) {
         hours_i := Any..as_int(hours);
   }
-  assume [assume_timedelta_sign_matches]: (Any..as_int(delta) == (((days_i * 24) + hours_i) * 3600) * 1000000);
+  delta := from_int ((((days_i * 24) + hours_i) * 3600) * 1000000);
 };
-
-procedure datetime_date(dt: Any) returns (d : Any, maybe_except: Error)
-spec{};
-
-function datetime_to_str(dt : Datetime) : string;
-
-function datetime_to_int() : int;
-
-function to_string(a: Any) : string;
-
-function to_string_any(a: Any) : Any {
-  from_string(to_string(a))
-}
-
-function to_int(a: Any) : int;
-
-function to_int_any(a: Any) : Any {
-  from_int(to_int(a))
-}
-
-
-procedure datetime_strptime(time: Any, format: Any) returns (ret : Any, maybe_except: Error)
-spec{
-  requires [req_format_str]: (format == from_string("%Y-%m-%d"));
-  ensures [ensures_str_strp_reverse]: (forall dt : Any :: {ret == dt} ((time == to_string_any(dt)) <==> (ret == dt)));
-}
-{
-  assume [assume_str_strp_reverse]: (forall dt : Any :: {ret == dt} ((time == to_string_any(dt)) <==> (ret == dt)));
-};
-
-
-
 
 procedure test_helper_procedure(req_name : Any, opt_name : Any) returns (ret : Any, maybe_except: Error)
 spec {
@@ -1133,7 +900,7 @@ spec {
 #end
 
 def Core.PythonLaurelPrelude : Core.Program :=
-   Core.getProgram coreLaurelPrelude |>.fst
+   Core.getProgram PyThonLaurelprelude |>.fst
 
 def getFunctions (decls: List Core.Decl) : List String :=
   match decls with
@@ -1157,7 +924,6 @@ def getDatatypeFunctions (decls: List Core.Decl) : List String :=
           | _ => getDatatypeFunctions t
         | _ => getDatatypeFunctions t
 
---#eval (getDatatypeFunctions Core.prelude.decls).filter (fun x => x.startsWith "None")
 
 def get_preludeFunctions (prelude: Core.Program) : List String := (getFunctions prelude.decls) ++ (getDatatypeFunctions prelude.decls)
 
