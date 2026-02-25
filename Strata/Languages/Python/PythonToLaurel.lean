@@ -74,6 +74,8 @@ structure TranslationContext where
   functionSignatures : List PythonFunctionDecl := []
   /-- Map from prelude procedure names to their full signatures -/
   preludeProcedures : List (String × CoreProcedureSignature) := []
+  /-- Map from prelude procedure names to their full signatures -/
+  preludeFunctions : List String := []
   /-- Names of user-defined functions -/
   userFunctions : List String := []
   /-- Names of user-defined classes -/
@@ -570,6 +572,7 @@ These functions are mutually recursive.
 -/
 
 def withException (ctx : TranslationContext) (funcname: String) : Bool :=
+  if funcname ∈ ctx.preludeFunctions then false else
   match ctx.preludeProcedures.lookup funcname with
   | some sig => sig.outputs.length > 0 && sig.outputs.getLast! == "Error"
   | _ => true
@@ -791,7 +794,6 @@ def pyFuncDef_to_PythonFunctionDecl  (ctx : TranslationContext) (f : Python.stmt
     }
   | _ => throw (.internalError "Expected FunctionDef")
 
-
 /-- Translate Python function to Laurel Procedure -/
 def translateFunction (ctx : TranslationContext) (funcdecl : PythonFunctionDecl) (body: List (Python.stmt SourceRange))
     : Except TranslationError (Laurel.Procedure × TranslationContext) := do
@@ -810,17 +812,13 @@ def translateFunction (ctx : TranslationContext) (funcdecl : PythonFunctionDecl)
 
 
     -- Determine outputs based on return type
-    let outputs : List Parameter := [{ name := "result", type := AnyTy },
+    let outputs : List Parameter := [{ name := "LaurelResult", type := AnyTy },
       { name := "error", type := (mkCoreType "Error") }]
 
     -- Translate function body
     let inputtypes := funcdecl.args.map (λ (name, type, _) => (name, type))
     let ctx := {ctx with current_function:= funcdecl.name, variableTypes:= ("nullcall_ret", "Any")::inputtypes}
     let (newctx, bodyStmts) ← translateStmtList ctx body
-    let bodyStmts := if funcdecl.name.endsWith "___init__" then
-        (mkStmtExprMd (.LocalVariable "self" AnyTy (some AnyNone)))::bodyStmts ++
-        [mkStmtExprMd (.Assign [FreeVar "result"] (FreeVar "self"))]
-      else bodyStmts
     let bodyStmts := prependExceptHandlingHelper bodyStmts
     let bodyStmts := (mkStmtExprMd (.LocalVariable "nullcall_ret" AnyTy (some AnyNone))) :: bodyStmts
     let bodyBlock := mkStmtExprMd (StmtExpr.Block bodyStmts none)
@@ -880,10 +878,7 @@ def preludeSignature_to_PythonFunctionDecl (prelude : Core.Program) : List Pytho
         has_kwargs := false
         ret := if outputtypes.length == 0 then none else outputtypes[0]!
       }
-
-
     | none => none
-
 
 /-- Translate Python module to Laurel Program -/
 def pythonToLaurel (prelude: Core.Program)
@@ -911,6 +906,7 @@ def pythonToLaurel (prelude: Core.Program)
       current_class := "",
       preludeProcedures := preludeProcedures,
       functionSignatures := preludeSignature_to_PythonFunctionDecl prelude
+      preludeFunctions := get_preludeFunctions prelude
       preludeTypes := preludeTypes,
       userFunctions := userFunctions,
       overloadTable := overloadTable,
@@ -931,9 +927,11 @@ def pythonToLaurel (prelude: Core.Program)
       | _ =>
         otherStmts := otherStmts ++ [stmt]
 
+    ctx := {ctx with current_function:= "__main__", variableTypes:= [("nullcall_ret", "Any")]}
     let (_, bodyStmts) ← translateStmtList ctx otherStmts
     let bodyStmts := prependExceptHandlingHelper bodyStmts
     let bodyStmts := mkStmtExprMd (.LocalVariable "__name__" AnyTy (some <| strToAny "__main__")) :: bodyStmts
+    let bodyStmts := (mkStmtExprMd (.LocalVariable "nullcall_ret" AnyTy (some AnyNone))) :: bodyStmts
     let bodyBlock := mkStmtExprMd (StmtExpr.Block bodyStmts none)
 
     let mainProc : Procedure := {
@@ -948,7 +946,7 @@ def pythonToLaurel (prelude: Core.Program)
       }
 
     let program : Laurel.Program := {
-      staticProcedures := mainProc :: procedures
+      staticProcedures := procedures ++ [mainProc]
       staticFields := []
       types := []
       constants := []

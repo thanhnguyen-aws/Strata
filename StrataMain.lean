@@ -507,13 +507,13 @@ def pyAnalyzeLaurelCommand : Command where
     match laurelPgm with
       | .error e =>
         exitFailure s!"Python to Laurel translation failed: {e}"
-      | .ok (laurelProgram, _)  =>
+      | .ok (laurelProgram, ctx)  =>
         if verbose then
           IO.println "\n==== Laurel Program ===="
           IO.println f!"{laurelProgram}"
 
         -- Translate Laurel to Core
-        match Strata.Laurel.translate laurelProgram Strata.Python.CorePrelude_functions with
+        match Strata.Laurel.translate laurelProgram ctx.preludeFunctions with
         | .error diagnostics =>
           exitFailure s!"Laurel to Core translation failed: {diagnostics}"
         | .ok (coreProgramDecls, modifiesDiags) =>
