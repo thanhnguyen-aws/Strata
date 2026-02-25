@@ -575,6 +575,7 @@ def withException (ctx : TranslationContext) (funcname: String) : Bool :=
   | _ => true
 
 def maybe_except_var := mkStmtExprMd (.Identifier "maybe_except")
+def nullcall_var := mkStmtExprMd (.Identifier "nullcall_ret")
 
 partial def translateAssign  (ctx : TranslationContext)
                              (lhs: Python.expr SourceRange)
@@ -676,8 +677,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
 
   -- Expression statement (e.g., function call)
   | .Expr _ value => do
-    let expr ← translateExpr ctx value
-    return (ctx, [expr])
+    translateAssign ctx (.Name default (Ann.mk default "nullcall_ret") default) none value
 
   | .Import _ _ | .ImportFrom _ _ _ _ |.Pass _ => return (ctx, [mkStmtExprMd .Hole])
 
@@ -815,13 +815,14 @@ def translateFunction (ctx : TranslationContext) (funcdecl : PythonFunctionDecl)
 
     -- Translate function body
     let inputtypes := funcdecl.args.map (λ (name, type, _) => (name, type))
-    let ctx := {ctx with current_function:= funcdecl.name, variableTypes:= inputtypes}
+    let ctx := {ctx with current_function:= funcdecl.name, variableTypes:= ("nullcall_ret", "Any")::inputtypes}
     let (newctx, bodyStmts) ← translateStmtList ctx body
     let bodyStmts := if funcdecl.name.endsWith "___init__" then
         (mkStmtExprMd (.LocalVariable "self" AnyTy (some AnyNone)))::bodyStmts ++
         [mkStmtExprMd (.Assign [FreeVar "result"] (FreeVar "self"))]
       else bodyStmts
     let bodyStmts := prependExceptHandlingHelper bodyStmts
+    let bodyStmts := (mkStmtExprMd (.LocalVariable "nullcall_ret" AnyTy (some AnyNone))) :: bodyStmts
     let bodyBlock := mkStmtExprMd (StmtExpr.Block bodyStmts none)
 
     -- Create procedure with transparent body (no contracts for now)
