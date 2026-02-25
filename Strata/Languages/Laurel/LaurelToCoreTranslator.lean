@@ -482,8 +482,6 @@ def translate (program : Program) (preludeFunctionNames: List Identifier) : Exce
   let (funcProcs, procProcs) := program.staticProcedures.partition canBeBoogieFunction
   -- Build the set of function names for use during translation
   let funcNames : FunctionNames := funcProcs.map (·.name) ++ preludeFunctionNames
-  let procedures := procProcs.map (translateProcedure program.constants funcNames)
-  let funcNames : FunctionNames := funcProcs.map (·.name)
   let procedures := procProcs.map (translateProcedure fieldNames funcNames)
   let procDecls := procedures.map (fun p => Core.Decl.proc p .empty)
   let laurelFuncDecls := funcProcs.map (translateProcedureToFunction fieldNames)
@@ -537,13 +535,12 @@ def verifyToVcResults (program : Program) (preludeFunctionNames: List Identifier
 
 def verifyToDiagnostics (files: Map Strata.Uri Lean.FileMap) (program : Program) (preludeFunctionNames: List Identifier)
     (options : Options := Options.default): IO (Array Diagnostic) := do
-  let results <- verifyToVcResults program preludeFunctionNames options
   -- Validate for diamond-inherited field accesses before translation
   let uri := files.keys.head!
   let diamondErrors := validateDiamondFieldAccesses uri program
   if !diamondErrors.isEmpty then
     return diamondErrors.map (fun dm => dm.toDiagnostic files)
-  let results <- verifyToVcResults program options
+  let results <- verifyToVcResults program preludeFunctionNames options
   match results with
   | .error errors => return errors.map (fun dm => dm.toDiagnostic files)
   | .ok results => return results.filterMap (fun dm => dm.toDiagnostic files)
