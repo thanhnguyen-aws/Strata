@@ -6,7 +6,6 @@
 
 import Strata.DDM.Elab
 import Strata.DDM.AST
---import Strata.Languages.Core.DDMTransform.Parse
 import Strata.Languages.Core.Verifier
 import StrataTest.Transform.ProcedureInlining
 
@@ -16,6 +15,16 @@ namespace Python
 def PyThonLaurelprelude :=
 #strata
 program Core;
+
+datatype Error () {
+  NoError (),
+  TypeError (Type_msg : string),
+  AttributeError (Attribute_msg : string),
+  AssertionError (Assertion_msg : string),
+  UnimplementedError (Unimplement_msg : string),
+  UndefinedError (Undefined_msg : string),
+  IndexError (IndexError_msg : string)
+};
 
 type DictStrAny;
 
@@ -34,7 +43,8 @@ datatype Any () {
   from_datetime (as_datetime : int),
   from_Dict (as_Dict: DictStrAny),
   from_ListAny (as_ListAny : ListAny),
-  from_ClassInstance (classname : string, instance_attributes: DictStrAny)
+  from_ClassInstance (classname : string, instance_attributes: DictStrAny),
+  exception (get_error: Error)
 };
 
 datatype ListAny () {
@@ -135,16 +145,6 @@ function List_gt (l1: ListAny, L2: ListAny): bool;
 function List_ge (l1: ListAny, L2: ListAny): bool;
 
 
-datatype Error () {
-  NoError (),
-  TypeError (Type_msg : string),
-  AttributeError (Attribute_msg : string),
-  AssertionError (Assertion_msg : string),
-  UnimplementedError (Unimplement_msg : string),
-  UndefinedError (Undefined_msg : string),
-  IndexError (IndexError_msg : string)
-};
-
 // Accessible to users
 inline function isTypeError (e: Error) : Any {
   from_bool (Error..isTypeError(e))
@@ -193,73 +193,35 @@ inline function bool_to_real (b: bool) : real {if b then 1.0 else 0.0}
 function string_repeat (s: string, i: int) : string;
 
 // Unary operations
-procedure PNeg (v: Any) returns (ret: Any, error: Error)
-spec {
-  free requires [dummy]: true;
-  free ensures [dummy]: true;
-}
+inline function PNeg (v: Any) : Any
 {
-  if (Any..isfrom_bool(v))
-  {
-    ret:= from_int(- bool_to_int(Any..as_bool(v)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v))
-  {
-    ret:= from_int(- Any..as_int(v));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v))
-  {
-    ret:= from_float(- Any..as_float(v));
-    error := NoError ();
-  }
+  if Any..isexception(v) then v
+  else if (Any..isfrom_bool(v)) then
+    from_int(- bool_to_int(Any..as_bool(v)))
+  else if (Any..isfrom_int(v)) then
+    from_int(- Any..as_int(v))
+  else if (Any..isfrom_float(v)) then
+    from_float(- Any..as_float(v))
   else
-  {
-    ret := from_none();
-    error := UndefinedError ("Operand Type is not defined");
-  }
-  }}
-};
+    exception(UndefinedError ("Operand Type is not defined"))
+}
 
-procedure PNot (v: Any) returns (ret: Any, error: Error)
-spec {
-  free requires [dummy]: true;
-  free ensures [dummy]: true;
-}
+inline function PNot (v: Any) : Any
 {
-  if (Any..isfrom_bool(v))
-  {
-    ret:= from_bool(!(Any..as_bool(v)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v))
-  {
-    ret:= from_bool(!(Any..as_int(v) == 0));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v))
-  {
-    ret:= from_bool(!(Any..as_float(v) == 0.0));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_string(v))
-  {
-    ret:= from_bool(!(Any..as_string(v) == ""));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v))
-  {
-    ret:= from_bool(!(List_len(Any..as_ListAny(v)) == 0));
-    error := NoError ();
-  }
+  if Any..isexception(v) then v
+  else if (Any..isfrom_bool(v)) then
+    from_bool(!(Any..as_bool(v)))
+  else if (Any..isfrom_int(v)) then
+    from_bool(!(Any..as_int(v) == 0))
+  else if (Any..isfrom_float(v)) then
+    from_bool(!(Any..as_float(v) == 0.0))
+  else if (Any..isfrom_string(v)) then
+    from_bool(!(Any..as_string(v) == ""))
+  else if (Any..isfrom_ListAny(v)) then
+    from_bool(!(List_len(Any..as_ListAny(v)) == 0))
   else
-  {
-    ret := from_none();
-    error := UndefinedError ("Operand Type is not defined");
-  }
-  }}}}
-};
+    exception(UndefinedError ("Operand Type is not defined"))
+}
 
 
 //Binary operations
@@ -267,545 +229,232 @@ function string_lt (s1: string, s2: string) : bool;
 function string_le (s1: string, s2: string) : bool;
 function string_gt (s1: string, s2: string) : bool;
 function string_ge (s1: string, s2: string) : bool;
-
-procedure PAdd (v1: Any, v2: Any) returns (ret: Any, error: Error)
-spec {
-  free requires [dummy]: true;
-  free ensures [dummy]: true;
-}
+inline function PAdd (v1: Any, v2: Any) : Any
 {
-  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_int(bool_to_int(Any..as_bool(v1)) + bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_int(bool_to_int(Any..as_bool(v1)) + Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_int(Any..as_int(v1) + bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_float(bool_to_real(Any..as_bool(v1)) + Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_float(Any..as_float(v1) + bool_to_real(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_int(Any..as_int(v1) + Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_float(int_to_real(Any..as_int(v1)) + Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_float(Any..as_float(v1) + int_to_real(Any..as_int(v2)) );
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_float(Any..as_float(v1) + Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_string(v1) && Any..isfrom_string(v1))
-  {
-    ret:= from_string(str.concat(Any..as_string(v1),Any..as_string(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
-  {
-    ret:= from_ListAny(List_extend(Any..as_ListAny(v1),Any..as_ListAny(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_datetime(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_datetime((Any..as_datetime(v1) + Any..as_int(v2)));
-    error := NoError ();
-  }
+  if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
+  else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
+    from_int(bool_to_int(Any..as_bool(v1)) + bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_int(v2)) then
+    from_int(bool_to_int(Any..as_bool(v1)) + Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_bool(v2)) then
+    from_int(Any..as_int(v1) + bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_int(v1) && Any..isfrom_float(v2)) then
+    from_float(bool_to_real(Any..as_bool(v1)) + Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_bool(v2)) then
+    from_float(Any..as_float(v1) + bool_to_real(Any..as_bool(v2)))
+  else if (Any..isfrom_int(v1) && Any..isfrom_int(v2)) then
+    from_int(Any..as_int(v1) + Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_float(v2)) then
+    from_float(int_to_real(Any..as_int(v1)) + Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_int(v2)) then
+    from_float(Any..as_float(v1) + int_to_real(Any..as_int(v2)) )
+  else if (Any..isfrom_float(v1) && Any..isfrom_float(v2)) then
+    from_float(Any..as_float(v1) + Any..as_float(v2))
+  else if (Any..isfrom_string(v1) && Any..isfrom_string(v1)) then
+    from_string(str.concat(Any..as_string(v1),Any..as_string(v2)))
+  else if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2)) then
+    from_ListAny(List_extend(Any..as_ListAny(v1),Any..as_ListAny(v2)))
+  else if (Any..isfrom_datetime(v1) && Any..isfrom_int(v2)) then
+    from_datetime((Any..as_datetime(v1) + Any..as_int(v2)))
   else
-  {
-    ret := from_none();
-    error := UndefinedError ("Operand Type is not defined");
-  }
-  }}}}}}}}}}}
-};
-
-procedure PSub (v1: Any, v2: Any) returns (ret: Any, error: Error)
-spec {
-  free requires [dummy]: true;
-  free ensures [dummy]: true;
+    exception(UndefinedError ("Operand Type is not defined"))
 }
-{
-  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_int(bool_to_int(Any..as_bool(v1)) - bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_int(bool_to_int(Any..as_bool(v1)) - Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_int(Any..as_int(v1) - bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_float(bool_to_real(Any..as_bool(v1)) - Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_float(Any..as_float(v1) - bool_to_real(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_int(Any..as_int(v1) - Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_float(int_to_real(Any..as_int(v1)) - Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_float(Any..as_float(v1) - int_to_real(Any..as_int(v2)) );
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_float(Any..as_float(v1) - Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_datetime(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_datetime(Any..as_datetime(v1) - Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_datetime(v1) && Any..isfrom_datetime(v2))
-  {
-    ret:= from_int(Any..as_datetime(v1) - Any..as_datetime(v2));
-    error := NoError ();
-  }
-  else
-  {
-    ret := from_none();
-    error := UndefinedError ("Operand Type is not defined");
-  }
-  }}}}}}}}}}
-};
 
-procedure PMul (v1: Any, v2: Any) returns (ret: Any, error: Error)
-spec {
-  free requires [dummy]: true;
-  free ensures [dummy]: true;
+
+inline function PSub (v1: Any, v2: Any) : Any
+{
+  if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
+  else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
+    from_int(bool_to_int(Any..as_bool(v1)) - bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_int(v2)) then
+    from_int(bool_to_int(Any..as_bool(v1)) - Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_bool(v2)) then
+    from_int(Any..as_int(v1) - bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_float(v2)) then
+    from_float(bool_to_real(Any..as_bool(v1)) - Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_bool(v2)) then
+    from_float(Any..as_float(v1) - bool_to_real(Any..as_bool(v2)))
+  else if (Any..isfrom_int(v1) && Any..isfrom_int(v2)) then
+    from_int(Any..as_int(v1) - Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_float(v2)) then
+    from_float(int_to_real(Any..as_int(v1)) - Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_int(v2)) then
+    from_float(Any..as_float(v1) - int_to_real(Any..as_int(v2)) )
+  else if (Any..isfrom_float(v1) && Any..isfrom_float(v2)) then
+    from_float(Any..as_float(v1) - Any..as_float(v2))
+  else if (Any..isfrom_datetime(v1) && Any..isfrom_int(v2)) then
+    from_datetime(Any..as_datetime(v1) - Any..as_int(v2))
+  else if (Any..isfrom_datetime(v1) && Any..isfrom_datetime(v2)) then
+    from_int(Any..as_datetime(v1) - Any..as_datetime(v2))
+  else
+    exception(UndefinedError ("Operand Type is not defined"))
 }
-{
-  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_int(bool_to_int(Any..as_bool(v1)) * bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_int(bool_to_int(Any..as_bool(v1)) * Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_int(Any..as_int(v1) * bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_float(bool_to_real(Any..as_bool(v1)) + Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_float(Any..as_float(v1) * bool_to_real(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_string(v2))
-  {
-    ret:= if Any..as_bool(v1) then v2 else from_string("");
-    error := NoError ();
-  }
-  else {if (Any..isfrom_string(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= if Any..as_bool(v2) then v1 else from_string("");
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_int(Any..as_int(v1) + Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_float(int_to_real(Any..as_int(v1)) + Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_float(Any..as_float(v1) + int_to_real(Any..as_int(v2)) );
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_string(v2))
-  {
-    ret:= from_string(string_repeat(Any..as_string(v2), Any..as_int(v1)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_string(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_string(string_repeat(Any..as_string(v1), Any..as_int(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_ListAny(v2))
-  {
-    ret:= from_ListAny(List_repeat(Any..as_ListAny(v2), Any..as_int(v1)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_ListAny(List_repeat(Any..as_ListAny(v1), Any..as_int(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_float(Any..as_float(v1) + Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_string(v1) && Any..isfrom_string(v2))
-  {
-    ret:= from_string(str.concat(Any..as_string(v1),Any..as_string(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
-  {
-    ret:= from_ListAny(List_extend(Any..as_ListAny(v1),Any..as_ListAny(v2)));
-    error := NoError ();
-  }
-  else
-  {
-    ret := from_none();
-    error := UndefinedError ("Operand Type is not defined");
-  }
-  }}}}}}}}}}}}}}}}
-};
 
-procedure PLt (v1: Any, v2: Any) returns (ret: Any, error: Error)
-spec {
-  free requires [dummy]: true;
-  free ensures [dummy]: true;
+
+inline function PMul (v1: Any, v2: Any) : Any
+{
+  if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
+  else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
+    from_int(bool_to_int(Any..as_bool(v1)) * bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_int(v2)) then
+    from_int(bool_to_int(Any..as_bool(v1)) * Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_bool(v2)) then
+    from_int(Any..as_int(v1) * bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_float(v2)) then
+    from_float(bool_to_real(Any..as_bool(v1)) + Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_bool(v2)) then
+    from_float(Any..as_float(v1) * bool_to_real(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_string(v2)) then
+    if Any..as_bool(v1) then v2 else from_string("")
+  else if (Any..isfrom_string(v1) && Any..isfrom_bool(v2)) then
+    if Any..as_bool(v2) then v1 else from_string("")
+  else if (Any..isfrom_int(v1) && Any..isfrom_int(v2)) then
+    from_int(Any..as_int(v1) * Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_float(v2)) then
+    from_float(int_to_real(Any..as_int(v1)) + Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_int(v2)) then
+    from_float(Any..as_float(v1) * int_to_real(Any..as_int(v2)) )
+  else if (Any..isfrom_int(v1) && Any..isfrom_string(v2)) then
+    from_string(string_repeat(Any..as_string(v2), Any..as_int(v1)))
+  else if (Any..isfrom_string(v1) && Any..isfrom_int(v2)) then
+    from_string(string_repeat(Any..as_string(v1), Any..as_int(v2)))
+  else if (Any..isfrom_int(v1) && Any..isfrom_ListAny(v2)) then
+    from_ListAny(List_repeat(Any..as_ListAny(v2), Any..as_int(v1)))
+  else if (Any..isfrom_ListAny(v1) && Any..isfrom_int(v2)) then
+    from_ListAny(List_repeat(Any..as_ListAny(v1), Any..as_int(v2)))
+  else if (Any..isfrom_float(v1) && Any..isfrom_float(v2)) then
+    from_float(Any..as_float(v1) * Any..as_float(v2))
+  else if (Any..isfrom_string(v1) && Any..isfrom_string(v2)) then
+    from_string(str.concat(Any..as_string(v1),Any..as_string(v2)))
+  else if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2)) then
+    from_ListAny(List_extend(Any..as_ListAny(v1),Any..as_ListAny(v2)))
+  else
+    exception(UndefinedError ("Operand Type is not defined"))
 }
-{
-  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_bool(bool_to_int(Any..as_bool(v1)) < bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_bool(bool_to_int(Any..as_bool(v1)) < Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_bool(Any..as_int(v1) < bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_bool(bool_to_real(Any..as_bool(v1)) < Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_bool(Any..as_float(v1) < bool_to_real(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_bool(Any..as_int(v1) < Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_bool(int_to_real(Any..as_int(v1)) < Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_bool(Any..as_float(v1) < int_to_real(Any..as_int(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_bool(Any..as_float(v1) < Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_string(v1) && Any..isfrom_string(v2))
-  {
-    ret:= from_bool(string_lt(Any..as_string(v1), Any..as_string(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
-  {
-    ret:= from_bool(List_lt(Any..as_ListAny(v1),Any..as_ListAny(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_datetime(v1) && Any..isfrom_datetime(v2))
-  {
-    ret:= from_bool(Any..as_datetime(v1) <Any..as_datetime(v2));
-    error := NoError ();
-  }
-  else
-  {
-    ret := from_bool(false);
-    error := UndefinedError ("Operand Type is not defined");
-  }
-  }}}}}}}}}}}
-};
 
-procedure PLe (v1: Any, v2: Any) returns (ret: Any, error: Error)
-spec {
-  free requires [dummy]: true;
-  free ensures [dummy]: true;
+inline function PLt (v1: Any, v2: Any) : Any
+{
+  if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
+  else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
+    from_bool(bool_to_int(Any..as_bool(v1)) < bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_int(v2)) then
+    from_bool(bool_to_int(Any..as_bool(v1)) < Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_bool(v2)) then
+    from_bool(Any..as_int(v1) < bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_float(v2)) then
+    from_bool(bool_to_real(Any..as_bool(v1)) < Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_bool(v2)) then
+    from_bool(Any..as_float(v1) < bool_to_real(Any..as_bool(v2)))
+  else if (Any..isfrom_int(v1) && Any..isfrom_int(v2)) then
+    from_bool(Any..as_int(v1) < Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_float(v2)) then
+    from_bool(int_to_real(Any..as_int(v1)) < Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_int(v2)) then
+    from_bool(Any..as_float(v1) < int_to_real(Any..as_int(v2)))
+  else if (Any..isfrom_float(v1) && Any..isfrom_float(v2)) then
+    from_bool(Any..as_float(v1) < Any..as_float(v2))
+  else if (Any..isfrom_string(v1) && Any..isfrom_string(v2)) then
+    from_bool(string_lt(Any..as_string(v1), Any..as_string(v2)))
+  else if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2)) then
+    from_bool(List_lt(Any..as_ListAny(v1),Any..as_ListAny(v2)))
+  else if (Any..isfrom_datetime(v1) && Any..isfrom_datetime(v2)) then
+    from_bool(Any..as_datetime(v1) <Any..as_datetime(v2))
+  else
+    exception(UndefinedError ("Operand Type is not defined"))
 }
+
+inline function PLe (v1: Any, v2: Any) : Any
 {
-  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_bool(bool_to_int(Any..as_bool(v1)) <= bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_bool(bool_to_int(Any..as_bool(v1)) <= Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_bool(Any..as_int(v1) <= bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_bool(bool_to_real(Any..as_bool(v1)) <= Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_bool(Any..as_float(v1) <= bool_to_real(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_bool(Any..as_int(v1) <= Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_bool(int_to_real(Any..as_int(v1)) <= Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_bool(Any..as_float(v1) <= int_to_real(Any..as_int(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_bool(Any..as_float(v1) <= Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_string(v1) && Any..isfrom_string(v2))
-  {
-    ret:= from_bool(string_le(Any..as_string(v1), Any..as_string(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
-  {
-    ret:= from_bool(List_le(Any..as_ListAny(v1),Any..as_ListAny(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_datetime(v1) && Any..isfrom_datetime(v2))
-  {
-    ret:= from_bool(Any..as_datetime(v1) <= Any..as_datetime(v2));
-    error := NoError ();
-  }
+  if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
+  else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
+    from_bool(bool_to_int(Any..as_bool(v1)) <= bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_int(v2)) then
+    from_bool(bool_to_int(Any..as_bool(v1)) <= Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_bool(v2)) then
+    from_bool(Any..as_int(v1) <= bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_float(v2)) then
+    from_bool(bool_to_real(Any..as_bool(v1)) <= Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_bool(v2)) then
+    from_bool(Any..as_float(v1) <= bool_to_real(Any..as_bool(v2)))
+  else if (Any..isfrom_int(v1) && Any..isfrom_int(v2)) then
+    from_bool(Any..as_int(v1) <= Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_float(v2)) then
+    from_bool(int_to_real(Any..as_int(v1)) <= Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_int(v2)) then
+    from_bool(Any..as_float(v1) <= int_to_real(Any..as_int(v2)))
+  else if (Any..isfrom_float(v1) && Any..isfrom_float(v2)) then
+    from_bool(Any..as_float(v1) <= Any..as_float(v2))
+  else if (Any..isfrom_string(v1) && Any..isfrom_string(v2)) then
+    from_bool(string_le(Any..as_string(v1), Any..as_string(v2)))
+  else if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2)) then
+    from_bool(List_le(Any..as_ListAny(v1),Any..as_ListAny(v2)))
+  else if (Any..isfrom_datetime(v1) && Any..isfrom_datetime(v2)) then
+    from_bool(Any..as_datetime(v1) <=Any..as_datetime(v2))
   else
-  {
-    ret := from_bool(false);
-    error := UndefinedError("Operand Type is not defined");
-  }
-  }}}}}}}}}}}
-};
-
-
-procedure PGt (v1: Any, v2: Any) returns (ret: Any, error: Error)
-spec {
-  free requires [dummy]: true;
-  free ensures [dummy]: true;
+    exception(UndefinedError ("Operand Type is not defined"))
 }
-{
-  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_bool(bool_to_int(Any..as_bool(v1)) > bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_bool(bool_to_int(Any..as_bool(v1)) > Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_bool(Any..as_int(v1) > bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_bool(bool_to_real(Any..as_bool(v1)) > Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_bool(Any..as_float(v1) > bool_to_real(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_bool(Any..as_int(v1) > Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_bool(int_to_real(Any..as_int(v1)) > Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_bool(Any..as_float(v1) > int_to_real(Any..as_int(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_bool(Any..as_float(v1) > Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_string(v1) && Any..isfrom_string(v2))
-  {
-    ret:= from_bool(string_gt(Any..as_string(v1), Any..as_string(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
-  {
-    ret:= from_bool(List_gt(Any..as_ListAny(v1),Any..as_ListAny(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_datetime(v1) && Any..isfrom_datetime(v2))
-  {
-    ret:= from_bool(Any..as_datetime(v1) > Any..as_datetime(v2));
-    error := NoError ();
-  }
-  else
-  {
-    ret := from_bool(false);
-    error := UndefinedError ("Operand Type is not defined");
-  }
-  }}}}}}}}}}}
-};
 
-procedure PGe (v1: Any, v2: Any) returns (ret: Any, error: Error)
-spec {
-  free requires [dummy]: true;
-  free ensures [dummy]: true;
-}
+inline function PGt (v1: Any, v2: Any) : Any
 {
-  if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_bool(bool_to_int(Any..as_bool(v1)) >= bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_bool(bool_to_int(Any..as_bool(v1)) >= Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_bool(Any..as_int(v1) >= bool_to_int(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_bool(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_bool(bool_to_real(Any..as_bool(v1)) >= Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_bool(v2))
-  {
-    ret:= from_bool(Any..as_float(v1) >= bool_to_real(Any..as_bool(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_bool(Any..as_int(v1) >= Any..as_int(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_int(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_bool(int_to_real(Any..as_int(v1)) >= Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_int(v2))
-  {
-    ret:= from_bool(Any..as_float(v1) >= int_to_real(Any..as_int(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_float(v1) && Any..isfrom_float(v2))
-  {
-    ret:= from_bool(Any..as_float(v1) >= Any..as_float(v2));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_string(v1) && Any..isfrom_string(v2))
-  {
-    ret:= from_bool(string_ge(Any..as_string(v1), Any..as_string(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2))
-  {
-    ret:= from_bool(List_ge(Any..as_ListAny(v1),Any..as_ListAny(v2)));
-    error := NoError ();
-  }
-  else {if (Any..isfrom_datetime(v1) && Any..isfrom_datetime(v2))
-  {
-    ret:= from_bool(Any..as_datetime(v1) >= Any..as_datetime(v2));
-    error := NoError ();
-  }
+  if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
+  else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
+    from_bool(bool_to_int(Any..as_bool(v1)) > bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_int(v2)) then
+    from_bool(bool_to_int(Any..as_bool(v1)) > Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_bool(v2)) then
+    from_bool(Any..as_int(v1) > bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_float(v2)) then
+    from_bool(bool_to_real(Any..as_bool(v1)) > Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_bool(v2)) then
+    from_bool(Any..as_float(v1) > bool_to_real(Any..as_bool(v2)))
+  else if (Any..isfrom_int(v1) && Any..isfrom_int(v2)) then
+    from_bool(Any..as_int(v1) > Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_float(v2)) then
+    from_bool(int_to_real(Any..as_int(v1)) > Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_int(v2)) then
+    from_bool(Any..as_float(v1) > int_to_real(Any..as_int(v2)))
+  else if (Any..isfrom_float(v1) && Any..isfrom_float(v2)) then
+    from_bool(Any..as_float(v1) > Any..as_float(v2))
+  else if (Any..isfrom_string(v1) && Any..isfrom_string(v2)) then
+    from_bool(string_gt(Any..as_string(v1), Any..as_string(v2)))
+  else if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2)) then
+    from_bool(List_gt(Any..as_ListAny(v1),Any..as_ListAny(v2)))
+  else if (Any..isfrom_datetime(v1) && Any..isfrom_datetime(v2)) then
+    from_bool(Any..as_datetime(v1) >Any..as_datetime(v2))
   else
-  {
-    ret := from_bool(false);
-    error := UndefinedError ("Operand Type is not defined");
-  }
-  }}}}}}}}}}}
-};
+    exception(UndefinedError ("Operand Type is not defined"))
+}
+
+inline function PGe (v1: Any, v2: Any) : Any
+{
+  if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
+  else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
+    from_bool(bool_to_int(Any..as_bool(v1)) >= bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_int(v2)) then
+    from_bool(bool_to_int(Any..as_bool(v1)) >= Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_bool(v2)) then
+    from_bool(Any..as_int(v1) >= bool_to_int(Any..as_bool(v2)))
+  else if (Any..isfrom_bool(v1) && Any..isfrom_float(v2)) then
+    from_bool(bool_to_real(Any..as_bool(v1)) >= Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_bool(v2)) then
+    from_bool(Any..as_float(v1) >= bool_to_real(Any..as_bool(v2)))
+  else if (Any..isfrom_int(v1) && Any..isfrom_int(v2)) then
+    from_bool(Any..as_int(v1) >= Any..as_int(v2))
+  else if (Any..isfrom_int(v1) && Any..isfrom_float(v2)) then
+    from_bool(int_to_real(Any..as_int(v1)) >= Any..as_float(v2))
+  else if (Any..isfrom_float(v1) && Any..isfrom_int(v2)) then
+    from_bool(Any..as_float(v1) >= int_to_real(Any..as_int(v2)))
+  else if (Any..isfrom_float(v1) && Any..isfrom_float(v2)) then
+    from_bool(Any..as_float(v1) >= Any..as_float(v2))
+  else if (Any..isfrom_string(v1) && Any..isfrom_string(v2)) then
+    from_bool(string_ge(Any..as_string(v1), Any..as_string(v2)))
+  else if (Any..isfrom_ListAny(v1) && Any..isfrom_ListAny(v2)) then
+    from_bool(List_ge(Any..as_ListAny(v1),Any..as_ListAny(v2)))
+  else if (Any..isfrom_datetime(v1) && Any..isfrom_datetime(v2)) then
+    from_bool(Any..as_datetime(v1) >=Any..as_datetime(v2))
+  else
+    exception(UndefinedError ("Operand Type is not defined"))
+}
 
 
 inline function PAnd (v1: Any, v2: Any) : Any
@@ -845,6 +494,10 @@ inline function PMod (v1: Any, v2: Any) : Any
 // Python proc
 
 procedure datetime_date(d: Any) returns (ret: Any, error: Error)
+spec {
+  requires [d_type]: Any..isfrom_datetime(d);
+  ensures [ret_type]: Any..isfrom_datetime(ret) && Any..as_datetime(ret) <= Any..as_datetime(d);
+}
 {
   var timedt: int;
   if (Any..isfrom_datetime(d)) {
@@ -859,10 +512,10 @@ procedure datetime_date(d: Any) returns (ret: Any, error: Error)
   }
 };
 
-
-//Test
-
 procedure datetime_now() returns (ret: Any)
+spec {
+  ensures [ret_type]: Any..isfrom_datetime(ret);
+}
 {
   var d: int;
   havoc d;
@@ -871,6 +524,11 @@ procedure datetime_now() returns (ret: Any)
 
 procedure timedelta(days: Any, hours: Any) returns (delta : Any, maybe_except: Error)
 spec{
+  requires [days_type]: Any..isfrom_none(days) || Any..isfrom_int(days);
+  requires [hours_type]: Any..isfrom_none(hours) || Any..isfrom_int(hours);
+  requires [days_pos]: Any..isfrom_int(days) ==> Any..as_int(days)>=0;
+  requires [hours_type]: Any..isfrom_int(hours) ==> Any..as_int(hours)>=0;
+  ensures [ret_pos]: Any..isfrom_int(delta) && Any..as_int(delta)>=0;
 }
 {
   var days_i : int := 0;
