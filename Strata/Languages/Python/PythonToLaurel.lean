@@ -7,6 +7,7 @@
 import Strata.DDM.Elab
 import Strata.DDM.AST
 import Strata.Languages.Laurel.Laurel
+import Strata.Languages.Laurel.LaurelTypes
 import Strata.Languages.Laurel.LaurelToCoreTranslator
 import Strata.Languages.Core.Verifier
 import Strata.Languages.Python.PythonDialect
@@ -828,7 +829,7 @@ def translateFunction (ctx : TranslationContext) (funcdecl : PythonFunctionDecl)
       name := funcdecl.name
       inputs := inputs
       outputs := outputs
-      precondition := mkStmtExprMd (StmtExpr.LiteralBool true)
+      preconditions := []
       determinism := .deterministic none -- TODO: need to set reads
       decreases := none
       body := Body.Transparent bodyBlock
@@ -938,9 +939,9 @@ def pythonToLaurel (prelude: Core.Program)
       name := "__main__",
       inputs := [],
       outputs := [],
-      precondition := mkStmtExprMd (StmtExpr.LiteralBool true),
+      preconditions := [],
+      determinism := .deterministic none, --TODO: need to set reads
       decreases := none,
-      determinism := .deterministic none --TODO: need to set reads
       body := .Transparent bodyBlock
       md := default
       }
