@@ -444,7 +444,7 @@ def pyAnalyzeLaurelCommand : Command where
           let droppedPrefix := coreProgramDecls.decls.take laurelPreludeSize
           let programDecls := coreProgramDecls.decls.drop laurelPreludeSize
           let pyPreludeDecls := pyPrelude.decls.map fun d =>
-            match droppedPrefix.find? (fun pd => pd.name.name == d.name.name) with
+            match droppedPrefix.find? (fun pd => (pd.name.name == d.name.name) && (pd.name.name != "Box")) with
             | some replacement => replacement
             | none => d
           -- Check for name collisions between program and prelude

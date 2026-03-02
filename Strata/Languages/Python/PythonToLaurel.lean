@@ -659,7 +659,7 @@ def withException (ctx : TranslationContext) (funcname: String) : Bool :=
   if funcname ∈ ctx.preludeFunctions then false else
   match ctx.preludeProcedures.lookup funcname with
   | some sig => sig.outputs.length > 0 && sig.outputs.getLast! == "Error"
-  | _ => true
+  | _ => false
 
 def maybe_except_var := mkStmtExprMd (.Identifier "maybe_except")
 def nullcall_var := mkStmtExprMd (.Identifier "nullcall_ret")
@@ -845,7 +845,8 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
 
   -- Expression statement (e.g., function call)
   | .Expr _ value => do
-    translateAssign ctx (.Name default (Ann.mk default "nullcall_ret") default) none value
+    let expr ← translateExpr ctx value
+    return (ctx, [expr])
 
   | .Import _ _ | .ImportFrom _ _ _ _ |.Pass _ => return (ctx, [mkStmtExprMd .Hole])
 
@@ -1002,8 +1003,12 @@ def translateFunction (ctx : TranslationContext) (funcdecl : PythonFunctionDecl)
 
 
     -- Determine outputs based on return type
-    let outputs : List Parameter := [{ name := "LaurelResult", type := AnyTy },
-      { name := "error", type := (mkCoreType "Error") }]
+    let outputs : List Parameter :=
+      match funcdecl.ret with
+      | none => []
+      | some ty =>
+        [{ name := "LaurelResult", type := AnyTy },
+        { name := "error", type := (mkCoreType "Error") }]
 
     -- Translate function body
     let inputtypes := funcdecl.args.map (λ (name, type, _) => (name, type))
