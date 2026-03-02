@@ -322,9 +322,10 @@ def buildPySpecPrelude (pyspecPaths : Array String) : IO PySpecPrelude := do
   -- Laurel.translate prepends corePrelude.decls to every output.
   -- Add them once here and strip the prefix from each translated result.
   -- Accumulate into an Array for efficient appending; build Core.Program at the end.
-  let laurelPreludeSize := Strata.Laurel.corePrelude.decls.length
+  let laurelPreludeSize := Strata.Laurel.corePrelude.decls.length - 1
   let mut preludeDecls : Array Core.Decl :=
-    Strata.Python.Core.PythonLaurelPrelude.decls.toArray ++ Strata.Laurel.corePrelude.decls.toArray
+    Strata.Python.Core.PythonLaurelPrelude.decls.toArray ++
+    (Strata.Laurel.corePrelude.decls.filter (λ d => d.name.name != "Box")).toArray
   let mut existingNames : Std.HashSet String :=
     preludeDecls.foldl (init := {}) fun s d =>
       (Core.Decl.names d).foldl (init := s) fun s n => s.insert n.name
@@ -392,7 +393,6 @@ def pyAnalyzeLaurelCommand : Command where
 
     let pySpecResult ← buildPySpecPrelude (pflags.getRepeated "pyspec")
     let pyPrelude := pySpecResult.corePrelude
-    let pyPrelude := {pyPrelude with decls:= pyPrelude.decls.filter (λ d => d.name.name != "Box")}
 
     -- Extract overload dispatch tables from --dispatch files
     let mut allOverloads := pySpecResult.overloads

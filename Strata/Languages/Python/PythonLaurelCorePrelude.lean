@@ -558,6 +558,7 @@ spec {
   assume [assume_maybe_except_none]: (Error..isNoError(maybe_except));
 };
 
+procedure print(msg : Any) returns (ret: Any);
 
 #end
 

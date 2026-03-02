@@ -1243,7 +1243,6 @@ def pythonToLaurel (prelude: Core.Program)
         compositeTypes := compositeTypes ++ [composite]
       | _ => pure ()
 
-    dbg_trace f!"Comp type {compositeTypes}"
     let mut ctx : TranslationContext := match prev_ctx with
     | some prev_ctx => prev_ctx
     | _ =>
