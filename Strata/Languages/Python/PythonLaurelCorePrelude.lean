@@ -336,6 +336,15 @@ inline function PMul (v1: Any, v2: Any) : Any
     exception(UndefinedError ("Operand Type is not defined"))
 }
 
+inline function PDiv (v1: Any, v2: Any) : Any
+{
+  if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
+  else if (Any..isfrom_int(v1) && Any..isfrom_int(v2)) then
+    from_int(Any..as_int(v1) div Any..as_int(v2))
+  else
+    exception(UndefinedError ("Operand Type is not defined"))
+}
+
 inline function PLt (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
@@ -480,11 +489,6 @@ inline function PNEq (v: Any, v': Any) : Any {
 }
 
 inline function PPow (v1: Any, v2: Any) : Any
-{
-  from_none()
-}
-
-inline function PDiv (v1: Any, v2: Any) : Any
 {
   from_none()
 }
