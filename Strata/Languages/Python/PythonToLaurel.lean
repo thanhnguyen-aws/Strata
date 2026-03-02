@@ -992,9 +992,11 @@ def translateFunction (ctx : TranslationContext) (funcdecl : PythonFunctionDecl)
     -- Translate parameters
     let mut inputs : List Parameter := []
 
-    inputs ← funcdecl.args.mapM (fun (name, _, _) => do
-        --let paramType ← translateType ctx type
-        return { name := name, type := AnyTy })
+    inputs := funcdecl.args.map (fun (name, ty, _) =>
+        if ctx.compositeTypes.any (fun ct => ct.name == ty) then
+          { name := name, type := mkHighTypeMd (.UserDefined ty) }
+        else
+          { name := name, type := AnyTy })
     if funcdecl.has_kwargs then
       let paramType ← translateType ctx "DictStrAny"
       inputs:= inputs ++ [{ name := "kwargs", type := paramType }]
@@ -1007,8 +1009,7 @@ def translateFunction (ctx : TranslationContext) (funcdecl : PythonFunctionDecl)
       match funcdecl.ret with
       | none => []
       | some ty =>
-        [{ name := "LaurelResult", type := AnyTy },
-        { name := "error", type := (mkCoreType "Error") }]
+        [{ name := "LaurelResult", type := AnyTy }]
 
     -- Translate function body
     let inputtypes := funcdecl.args.map (λ (name, type, _) => (name, type))
