@@ -54,6 +54,10 @@ datatype ListAny () {
 
 end;
 
+datatype Box () {
+  BoxInt(intVal: Any)
+};
+
 // Accessible to users
 inline function isBool (v: Any) : Any {
   from_bool (Any..isfrom_bool(v))

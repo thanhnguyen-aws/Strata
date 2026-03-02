@@ -392,6 +392,7 @@ def pyAnalyzeLaurelCommand : Command where
 
     let pySpecResult ← buildPySpecPrelude (pflags.getRepeated "pyspec")
     let pyPrelude := pySpecResult.corePrelude
+    let pyPrelude := {pyPrelude with decls:= pyPrelude.decls.filter (λ d => d.name.name != "Box")}
 
     -- Extract overload dispatch tables from --dispatch files
     let mut allOverloads := pySpecResult.overloads

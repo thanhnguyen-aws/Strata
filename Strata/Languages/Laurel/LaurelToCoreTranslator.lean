@@ -575,7 +575,7 @@ def translate (program : Program) (preludeFunctionNames: List Identifier) : Exce
   -- Procedures marked isFunctional are translated to Core functions; all others become Core procedures.
   let (markedPure, procProcs) := program.staticProcedures.partition (·.isFunctional)
   -- Build the shared initial state with constants and function names
-  let funcNames : FunctionNames := markedPure.map (·.name)
+  let funcNames : FunctionNames := markedPure.map (·.name) ++ preludeFunctionNames
   let initState : TranslateState := { fieldNames := fieldNames, funcNames }
   -- Try to translate each isFunctional procedure to a Core function, collecting errors for failures
   let (pureErrors, pureFuncDecls) := markedPure.foldl (fun (errs, decls) p =>
@@ -619,7 +619,7 @@ def translate (program : Program) (preludeFunctionNames: List Identifier) : Exce
 Verify a Laurel program using an SMT solver
 -/
 def verifyToVcResults (program : Program) (preludeFunctionNames: List Identifier)
-    (options : Options := Options.default)
+    (options : VerifyOptions := .default)
     : IO (Except (Array DiagnosticModel) VCResults) := do
   let (strataCoreProgram, translateDiags) ← match translate program preludeFunctionNames with
     | .error translateErrorDiags => return .error translateErrorDiags
@@ -644,7 +644,7 @@ def verifyToVcResults (program : Program) (preludeFunctionNames: List Identifier
 
 
 def verifyToDiagnostics (files: Map Strata.Uri Lean.FileMap) (program : Program) (preludeFunctionNames: List Identifier)
-    (options : Options := Options.default): IO (Array Diagnostic) := do
+    (options : VerifyOptions := .default): IO (Array Diagnostic) := do
   -- Validate for diamond-inherited field accesses before translation
   let uri := files.keys.head!
   let diamondErrors := validateDiamondFieldAccesses uri program
@@ -656,7 +656,7 @@ def verifyToDiagnostics (files: Map Strata.Uri Lean.FileMap) (program : Program)
   | .ok results => return results.filterMap (fun dm => dm.toDiagnostic files)
 
 
-def verifyToDiagnosticModels (program : Program) (preludeFunctionNames: List Identifier) (options : Options := Options.default) : IO (Array DiagnosticModel) := do
+def verifyToDiagnosticModels (program : Program) (preludeFunctionNames: List Identifier) (options : VerifyOptions := .default) : IO (Array DiagnosticModel) := do
   let results <- verifyToVcResults program preludeFunctionNames options
   match results with
   | .error errors => return errors
