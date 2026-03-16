@@ -320,7 +320,9 @@ def pyAnalyzeCommand : Command where
                 else
                   ("", s!" (at byte offset)")
           | none => ("", "")
-        s := s ++ s!"\n{locationPrefix}{vcResult.obligation.label}: {match vcResult.outcome with | .ok o => Std.format o | .error e => e}{locationSuffix}\n"
+        let outcomeStr := vcResult.formatOutcome
+        s := s ++ s!"\n{locationPrefix}{vcResult.obligation.label}: \
+                      {outcomeStr}{locationSuffix}\n"
       IO.println s
       -- Output in SARIF format if requested
       if outputSarif then
@@ -515,10 +517,9 @@ def pyAnalyzeLaurelCommand : Command where
                     else
                       ("", "")
               | none => ("", "")
-            let vcLabel := match vcResult.obligation.metadata.getPropertySummary with
-              | some msg => msg
-              | _ => vcResult.obligation.label
-            s := s ++ s!"{locationPrefix}{vcLabel}: {match vcResult.outcome with | .ok o => Std.format o | .error e => e}{locationSuffix}\n"
+            let outcomeStr := vcResult.formatOutcome
+            s := s ++ s!"{locationPrefix}{vcResult.obligation.label}: \
+                          {outcomeStr}{locationSuffix}\n"
           IO.println s
           -- Output in SARIF format if requested
           if outputSarif then
