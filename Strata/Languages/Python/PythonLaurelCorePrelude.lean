@@ -34,6 +34,11 @@ private def pythonRuntimeCorePartDDM :=
 #strata
 program Core;
 
+datatype OptionInt {
+  Some (unwrap: int),
+  None ()
+}
+
 // =====================================================================
 // Forward declarations of types defined in PythonRuntimeLaurelPart.
 // These are needed so the DDM parser can resolve references in axioms
@@ -75,6 +80,7 @@ datatype Any () {
   from_Dict (as_Dict: DictStrAny),
   from_ListAny (as_ListAny : ListAny),
   from_ClassInstance (classname : string, instance_attributes: DictStrAny),
+  from_Range(start: int, stop: OptionInt),
   exception (get_error: Error)
 }
 
@@ -299,12 +305,19 @@ rec function DictStrAny_insert (@[cases] d : DictStrAny, key: string, val: Any) 
 
 inline function Any_get (dictOrList: Any, index: Any): Any
   requires  (Any..isfrom_Dict(dictOrList) && Any..isfrom_string(index) && DictStrAny_contains(Any..as_Dict!(dictOrList), Any..as_string!(index))) ||
-            (Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) && Any..as_int!(index) >= 0 && Any..as_int!(index) < List_len(Any..as_ListAny!(dictOrList)));
+            (Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) && Any..as_int!(index) >= 0 && Any..as_int!(index) < List_len(Any..as_ListAny!(dictOrList)))||
+            (Any..isfrom_ListAny(dictOrList) && Any..isfrom_Range(index) && Any..start!(index) >= 0 && Any..start!(index) < List_len(Any..as_ListAny!(dictOrList)) &&
+                ((OptionInt..isSome(Any..stop!(index))) &&  OptionInt..unwrap!(Any..stop!(index)) >= 0 && OptionInt..unwrap!(Any..stop!(index)) <= List_len(Any..as_ListAny!(dictOrList)) && Any..start!(index) <= OptionInt..unwrap!(Any..stop!(index))
+                  || (OptionInt..isNone(Any..stop!(index)))));
 {
   if Any..isfrom_Dict(dictOrList) then
     DictStrAny_get(Any..as_Dict!(dictOrList), Any..as_string!(index))
-  else
+  else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) then
     List_get(Any..as_ListAny!(dictOrList), Any..as_int!(index))
+  else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_Range(index) && OptionInt..isSome(Any..stop!(index)) then
+    from_ListAny(List_slice(Any..as_ListAny!(dictOrList), Any..start!(index), OptionInt..unwrap!(Any..stop!(index))))
+  else
+    from_ListAny(List_drop(Any..as_ListAny!(dictOrList), Any..start!(index)))
 }
 
 inline function Any_get! (dictOrList: Any, index: Any): Any

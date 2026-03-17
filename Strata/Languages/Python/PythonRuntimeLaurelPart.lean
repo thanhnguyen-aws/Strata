@@ -25,6 +25,11 @@ private def pythonRuntimeLaurelPartDDM :=
 #strata
 program Laurel;
 
+datatype OptionInt {
+  Some (unwrap: int),
+  None ()
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////
 
 // Exceptions
@@ -71,6 +76,7 @@ datatype Any {
   from_Dict (as_Dict: DictStrAny),
   from_ListAny (as_ListAny : ListAny),
   from_ClassInstance (classname : string, instance_attributes: DictStrAny),
+  from_Range(start: int, stop: OptionInt),
   exception (get_error: Error)
 }
 
