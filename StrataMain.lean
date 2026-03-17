@@ -596,7 +596,7 @@ def pyAnalyzeLaurelCommand : Command where
                   else
                     ("", s!" (at line {pos.line}, col {pos.column})")
                 else
-git                   if vcResult.isFailure then
+                  if vcResult.isFailure then
                     (s!"Assertion failed in prelude file: ", "")
                   else
                     ("", s!" (in prelude file)")
@@ -607,7 +607,10 @@ git                   if vcResult.isFailure then
                 ("", "")
         | none => ("", "")
       let outcomeStr := vcResult.formatOutcome
-      s := s ++ s!"{locationPrefix}{vcResult.obligation.label}: \
+      let vcLabel := match vcResult.obligation.metadata.getPropertySummary with
+          | some msg => msg
+          | _ => vcResult.obligation.label
+      s := s ++ s!"{locationPrefix}{vcLabel}: \
                     {outcomeStr}{locationSuffix}\n"
     IO.println s
     -- Output in SARIF format if requested
