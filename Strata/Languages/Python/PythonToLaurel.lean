@@ -1070,7 +1070,9 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
         | some varExpr =>
           let varName := pyExprToString varExpr
           if varName ∈ currentCtx.variableTypes.unzip.fst then
-            setupStmts := setupStmts ++ [mgrDecl]
+            let assignStmt := mkStmtExprMd (StmtExpr.Assign
+              [mkStmtExprMd (StmtExpr.Identifier varName)] enterCall)
+            setupStmts := setupStmts ++ [mgrDecl, assignStmt]
           else
             let varDecl := mkStmtExprMd (StmtExpr.LocalVariable varName AnyTy (some enterCall))
             currentCtx := {currentCtx with variableTypes := currentCtx.variableTypes ++ [(varName, PyLauType.Any)]}
