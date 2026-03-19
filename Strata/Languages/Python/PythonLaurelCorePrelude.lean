@@ -34,10 +34,6 @@ private def pythonRuntimeCorePartDDM :=
 #strata
 program Core;
 
-datatype OptionInt {
-  Some (unwrap: int),
-  None ()
-}
 
 // =====================================================================
 // Forward declarations of types defined in PythonRuntimeLaurelPart.
@@ -69,6 +65,11 @@ datatype Error () {
 // appears later in this prelude.
 // In this prelude, we model datetime as a single int and assume
 // that the conversion from a string constant is handled by the translator.
+
+datatype OptionInt {
+  Some (unwrap: int),
+  None ()
+}
 
 datatype Any () {
   from_none (),
