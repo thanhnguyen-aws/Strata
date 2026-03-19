@@ -194,7 +194,7 @@ def boxConstructorName (model : SemanticModel) (ty : HighType) : Identifier :=
       if isDatatype model name then s!"Box..{name.text}"
       else "BoxComposite"
   | .TCore name => s!"Box..{name}"
-  | _ => dbg_trace "BUG, boxConstructorName bad type"; "boxConstructorNameError"
+  | ty => dbg_trace "BUG, boxConstructorName bad type: {repr ty}"; "boxConstructorNameError"
 
 /-- Build the DatatypeConstructor for a Box variant from a HighType, for datatype generation -/
 private def boxConstructorDef (model : SemanticModel) (ty : HighType) : Option DatatypeConstructor :=
@@ -210,7 +210,7 @@ private def boxConstructorDef (model : SemanticModel) (ty : HighType) : Option D
         some { name := "BoxComposite", args := [{ name := "compositeVal", type := ⟨.UserDefined "Composite", #[]⟩ }] }
   | .TCore name =>
         some { name := s!"Box..{name}", args := [{ name := s!"{name}Val", type := ⟨.TCore name, #[]⟩ }] }
-  | _ => dbg_trace "BUG, boxConstructorDef bad type"; none
+  | ty => dbg_trace s!"BUG, boxConstructorDef bad type: {repr ty}"; none
 
 /-- Record a Box constructor use in the transform state -/
 private def recordBoxConstructor (model : SemanticModel) (ty : HighType) : TransformM Unit := do
@@ -240,14 +240,11 @@ private def mkMd (e : StmtExpr) : StmtExprMd := ⟨e, #[]⟩
 Resolve the owning composite type name for a field access by computing the target expression's type.
 Returns the qualified field name "DeclaringType.fieldName".
 -/
-def resolveQualifiedFieldName (model: SemanticModel) (fieldName : Identifier) : String :=
+def resolveQualifiedFieldName (model: SemanticModel) (fieldName : Identifier) : Option String :=
   match model.get fieldName with
     | .field owner _ => owner.text ++ "." ++ fieldName.text
-    -- Unresolved fields (e.g., attribute access on external/dynamic types):
-    -- fall back to unqualified name. Sound but imprecise.
-    | _ =>
-      dbg_trace s!"resolveQualifiedFieldName fallback: {fieldName} not resolved to a field"
-      fieldName.text
+    | .unresolved => none
+    | _ => dbg_trace s!"BUG: resolveQualifiedFieldName {fieldName} did resolved to something other than a field"; none
 
 /--
 Transform an expression, adding heap parameters where needed.
@@ -261,9 +258,11 @@ where
   recurse (exprMd : StmtExprMd) (valueUsed : Bool := true) : TransformM StmtExprMd := do
     let ⟨expr, md⟩ := exprMd
     match _h : expr with
-    | .FieldSelect selectTarget fieldName =>
-        let qualifiedName : Identifier := resolveQualifiedFieldName model fieldName
-        let valTy := (model.get fieldName).getType.getD (panic! "heapTransformExpr1")
+    | .FieldSelect selectTarget fieldName => do
+        let some qualifiedName := resolveQualifiedFieldName model fieldName
+          | return ⟨ .Hole, md ⟩
+
+        let valTy := (model.get fieldName).getType
         let readExpr := ⟨ .StaticCall "readField" [mkMd (.Identifier heapVar), selectTarget, mkMd (.StaticCall qualifiedName [])], md ⟩
         -- Unwrap Box: apply the appropriate destructor
         recordBoxConstructor model valTy.val
@@ -318,8 +317,9 @@ where
     | .Assign targets v =>
         match targets with
         | [⟨.FieldSelect target fieldName, _fieldSelectMd⟩] =>
-            let qualifiedName : Identifier := resolveQualifiedFieldName model fieldName
-            let valTy := (model.get fieldName).getType.getD (panic! "heapTransformExpr2")
+            let some qualifiedName := resolveQualifiedFieldName model fieldName
+              | return ⟨ .Hole, md ⟩
+            let valTy := (model.get fieldName).getType
             let target' ← recurse target
             let v' ← recurse v
             -- Wrap value in Box constructor
