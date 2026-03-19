@@ -913,21 +913,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   -- If statement
   | .If _ test body orelse => do
     let condExpr ← translateExpr ctx test
-    -- Check if condition contains a Hole - if so, hoist to variable to avoid free variable errors
-    let (condStmts, finalCondExpr, condCtx) :=
-      match condExpr.val with
-      | .Hole =>
-        -- Hoist Hole to fresh variable
-        let freshVar := s!"cond_{test.toAst.ann.start.byteIdx}"
-        --let varType := mkHighTypeMd .TBool  -- Conditions are bools
-        let varType := AnyTy
-        let varDecl := mkStmtExprMd (StmtExpr.LocalVariable freshVar varType (some condExpr))
-        let varRef := mkStmtExprMd (StmtExpr.Identifier freshVar)
-        ([varDecl], varRef, { ctx with variableTypes := ctx.variableTypes ++ [(freshVar, "Bool")] })
-      | _ => ([], condExpr, ctx)
-
-    -- Translate body (list of statements)
-    let (bodyCtx, bodyStmts) ← translateStmtList condCtx body.val.toList
+    let (bodyCtx, bodyStmts) ← translateStmtList ctx body.val.toList
     let bodyBlock := mkStmtExprMd (StmtExpr.Block bodyStmts none)
     -- Translate else branch if present
     let elseBlock ← if orelse.val.isEmpty then
@@ -935,46 +921,22 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     else do
       let (_, elseStmts) ← translateStmtList bodyCtx orelse.val.toList
       .ok (some (mkStmtExprMd (StmtExpr.Block elseStmts none)))
-    let ifStmt := mkStmtExprMdWithLoc (StmtExpr.IfThenElse (Any_to_bool finalCondExpr) bodyBlock elseBlock) md
+    let ifStmt := mkStmtExprMdWithLoc (StmtExpr.IfThenElse (Any_to_bool condExpr) bodyBlock elseBlock) md
 
-    -- Wrap in block if we hoisted condition
-    let result := if condStmts.isEmpty then
-      ifStmt
-    else
-      mkStmtExprMdWithLoc (StmtExpr.Block (condStmts ++ [ifStmt]) none) md
-
-    return (bodyCtx, [result])
+    return (bodyCtx, [ifStmt])
 
   -- While loop
   | .While _ test body _orelse => do
     -- Note: Python while-else not supported yet
     let condExpr ← translateExpr ctx test
-    -- Check if condition contains a Hole - if so, hoist to variable
-    let (condStmts, finalCondExpr, condCtx) :=
-      match condExpr.val with
-      | .Hole =>
-        let freshVar := s!"while_cond_{test.toAst.ann.start.byteIdx}"
-        let varType := mkHighTypeMd .TBool
-        let varDecl := mkStmtExprMd (StmtExpr.LocalVariable freshVar varType (some condExpr))
-        let varRef := mkStmtExprMd (StmtExpr.Identifier freshVar)
-        ([varDecl], varRef, { ctx with variableTypes := ctx.variableTypes ++ [(freshVar, "bool")] })
-      | _ => ([], condExpr, ctx)
-
     let breakLabel := s!"loop_break_{test.toAst.ann.start.byteIdx}"
     let continueLabel := s!"loop_continue_{test.toAst.ann.start.byteIdx}"
-    let loopCtx := { condCtx with loopBreakLabel := some breakLabel, loopContinueLabel := some continueLabel }
+    let loopCtx := { ctx with loopBreakLabel := some breakLabel, loopContinueLabel := some continueLabel }
     let (_, bodyStmts) ← translateStmtList loopCtx body.val.toList
     let bodyBlock := mkStmtExprMd (StmtExpr.Block bodyStmts (some continueLabel))
-    let whileStmt := mkStmtExprMd (StmtExpr.While (Any_to_bool finalCondExpr) [] none bodyBlock)
+    let whileStmt := mkStmtExprMd (StmtExpr.While (Any_to_bool condExpr) [] none bodyBlock)
     let whileWrapped := mkStmtExprMdWithLoc (StmtExpr.Block [whileStmt] (some breakLabel)) md
-
-    -- Wrap in block if we hoisted condition
-    let result := if condStmts.isEmpty then
-      whileWrapped
-    else
-      mkStmtExprMdWithLoc (StmtExpr.Block (condStmts ++ [whileWrapped]) none) md
-
-    return (loopCtx, [result])
+    return (loopCtx, [whileWrapped])
 
   -- Return statement
   | .Return _ value => do
@@ -989,26 +951,8 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   -- Assert statement
   | .Assert _ test _msg => do
     let condExpr ← translateExpr ctx test
-    -- Check if condition contains a Hole - if so, hoist to variable
-    let (condStmts, finalCondExpr, condCtx) :=
-      match condExpr.val with
-      | .Hole =>
-        let freshVar := s!"assert_cond_{test.toAst.ann.start.byteIdx}"
-        let varType := mkHighTypeMd .TBool
-        let varDecl := mkStmtExprMd (StmtExpr.LocalVariable freshVar varType (some condExpr))
-        let varRef := mkStmtExprMd (StmtExpr.Identifier freshVar)
-        ([varDecl], varRef, { ctx with variableTypes := ctx.variableTypes ++ [(freshVar, "bool")] })
-      | _ => ([], condExpr, ctx)
-
-    let assertStmt := mkStmtExprMdWithLoc (StmtExpr.Assert (Any_to_bool finalCondExpr)) md
-
-    -- Wrap in block if we hoisted condition
-    let result := if condStmts.isEmpty then
-      assertStmt
-    else
-      mkStmtExprMdWithLoc (StmtExpr.Block (condStmts ++ [assertStmt]) none) md
-
-    return (condCtx, [result])
+    let assertStmt := mkStmtExprMdWithLoc (StmtExpr.Assert (Any_to_bool condExpr)) md
+    return (ctx, [assertStmt])
 
   --Ignore comments in source code
   | .Expr _ (.Constant _ (.ConString _ _) _) => return (ctx, [])
@@ -1048,32 +992,27 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
         | .Assign _ targets _ _ => targets.val.toList.head?.map (fun t => (pyExprToString t, PyLauType.Any))
         | _ => none
     let bodyDecls := collectDeclaredNamesAndTypes body.val.toList
+
+    let errorVarDecls: List (String × String) := (handlers.val.toList.filterMap (λ h => match h with
+          | .ExceptHandler _ _ errname _ => errname.val)).map (λ h => (h.val, "PythonError"))
+
     let handlerDecls := handlers.val.toList.flatMap fun h => match h with
       | .ExceptHandler _ _ _ hBody => collectDeclaredNamesAndTypes hBody.val.toList
-    let allNewDecls := (bodyDecls ++ handlerDecls).foldl (fun acc (n, ty) =>
+    let allNewDecls := (bodyDecls ++ errorVarDecls ++ handlerDecls).foldl (fun acc (n, ty) =>
       if acc.any (fun (an, _) => an == n) || ctx.variableTypes.any (fun (vn, _) => vn == n)
       then acc else acc ++ [(n, ty)]) []
     let hoistedDecls : List StmtExprMd := allNewDecls.map fun (name, tyStr) =>
-      let ty := if tyStr ∈ ctx.compositeTypeNames then
+      let ty := if tyStr ∈ ctx.compositeTypeNames || tyStr == "PythonError" then
           mkHighTypeMd (.UserDefined tyStr)
         else AnyTy
       mkStmtExprMd (StmtExpr.LocalVariable (name : String) ty (some (mkStmtExprMd .Hole)))
     let hoistedCtx := { ctx with variableTypes := ctx.variableTypes ++
       (allNewDecls.map fun (n, ty) =>
-        if ty ∈ ctx.compositeTypeNames then (n, ty) else (n, PyLauType.Any)) }
+        if ty ∈ ctx.compositeTypeNames || ty == "PythonError" then (n, ty) else (n, PyLauType.Any)) }
 
     -- Translate try body (with hoisted context so inner decls become assigns)
     let (bodyCtx, bodyStmts) ← translateStmtList hoistedCtx body.val.toList
 
-    let errorVars: List String := ((handlers.val.toList.filterMap (λ h => match h with
-          | .ExceptHandler _ _ errname _ => errname.val)).map (λ h => h.val)).dedup.filter
-          (λ e => e ∉ ctx.variableTypes.unzip.fst)
-    let errorTy := mkHighTypeMd (.UserDefined {text:= "PythonError"})
-    let errorVarDecls := errorVars.map (λ e => mkStmtExprMd (.LocalVariable {text:=e} errorTy none))
-    let ctx := {ctx with variableTypes:= ctx.variableTypes ++ errorVars.map (λ e => (e, "PythonError"))}
-
-    -- Translate try body
-    let (bodyCtx, bodyStmts) ← translateStmtList ctx body.val.toList
     -- Translate exception handlers
     let mut handlerCtx := bodyCtx
     let mut handlerStmts : List StmtExprMd := []
@@ -1083,9 +1022,6 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
         let (hCtx, hStmts) ← translateStmtList hoistedCtx handlerBody.val.toList
         handlerCtx := hCtx
         handlerStmts := handlerStmts ++ hStmts
-
-    let varDecls := bodyStmts.filter (λ stmt => match stmt.val with |.LocalVariable .. => true | _ => false)
-    let bodyStmts := bodyStmts.filter (λ stmt => match stmt.val with |.LocalVariable .. => false | _ => true)
 
     -- Insert exception checks after each statement in try body
     let bodyStmtsWithChecks := bodyStmts.flatMap fun stmt =>
@@ -1098,15 +1034,6 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     -- Normal completion: exit the try block, skipping handlers
     let exitTry := mkStmtExprMd (StmtExpr.Exit tryLabel)
 
-    let handlersVarDecls := handlerStmts.filter (λ stmt => match stmt.val with |.LocalVariable .. => true | _ => false)
-    handlerStmts := handlerStmts.filter (λ stmt => match stmt.val with |.LocalVariable .. => false | _ => true)
-    -- Create handler block
-    let handlerBlock := mkStmtExprMd (StmtExpr.Block handlerStmts (some handlerLabel))
-
-    let varDecls:= varDecls ++ errorVarDecls ++ handlersVarDecls
-    -- Wrap in try block
-    let tryBlock := mkStmtExprMdWithLoc (StmtExpr.Block (bodyStmtsWithChecks ++ [handlerBlock]) (some tryLabel)) md
-    return (bodyCtx, varDecls ++ [tryBlock])
     -- catchers block: body + exit try (normal path)
     let catchersBlock := mkStmtExprMd (StmtExpr.Block
       (bodyStmtsWithChecks ++ [exitTry]) (some catchersLabel))
