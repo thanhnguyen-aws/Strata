@@ -1588,7 +1588,7 @@ def pythonToLaurel' (info : PreludeInfo)
 
     -- FIRST PASS: Collect all class definitions and field type info
     let mut compositeTypes : List CompositeType := [pyErrorTy]
-    let mut compositeTypeNames := info.compositeTypes
+    let mut compositeTypeNames := info.compositeTypes.insert "PythonError"
     let mut classFieldHighType : Std.HashMap String (Std.HashMap String HighType) := {}
     for stmt in body.val do
       match stmt with
