@@ -35,7 +35,3 @@ ite_cond_calls_Any_to_bool_0: ✅ pass
 (Mul requires) Type constraint of y: ✅ pass (at line 1, col 23)
 (Sum requires) Type constraint of x: ✅ pass (at line 4, col 8)
 (Sum requires) Type constraint of y: ✅ pass (at line 4, col 30)
-(Mul requires) Type constraint of x: ✅ pass (at line 1, col 8)
-(Mul requires) Type constraint of y: ✅ pass (at line 1, col 23)
-(Sum requires) Type constraint of x: ✅ pass (at line 4, col 8)
-(Sum requires) Type constraint of y: ✅ pass (at line 4, col 30)

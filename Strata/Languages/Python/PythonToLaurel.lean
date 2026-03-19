@@ -59,10 +59,17 @@ inductive UnmodeledFunctionBehavior where
   | havocInputsAndOutputs
 deriving Inhabited
 
+structure PyArgInfo where
+  name : String
+  md : MetaData
+  tys : List String
+  default : Option (Python.expr SourceRange)
+deriving Repr
+
 structure PythonFunctionDecl where
   name : String
   --args include name, type, default value
-  args : List (String × MetaData × List String × Option (Python.expr SourceRange))
+  args : List PyArgInfo
   hasKwargs: Bool
   ret : Option String
 deriving Repr, Inhabited
@@ -683,7 +690,7 @@ partial def removePosargsFromKwargs (kwords : List (Python.keyword SourceRange))
   kwords.filter (λ kw => match kw with
     | .mk_keyword _ name _ =>
       match name.val with
-        | some n => n.val ∉ funcDecl.args.unzip.fst
+        | some n => n.val ∉ funcDecl.args.map (·.name)
         | none => true)
 
 partial def combinePositionalAndKeywordArgs
@@ -705,18 +712,18 @@ partial def combinePositionalAndKeywordArgs
     let kwords := pyKwordsToHashMap kwords
     let unprovidedPosArgs := funcDecl.args.drop posArgs.length
     --every unprovided positional args must have a default value in the function signature or be provided in the kwargs
-    let missingArgs := unprovidedPosArgs.filter fun (name,_,  _, d) =>
-      !(name ∈ kwords.keys) && d.isNone
+    let missingArgs := unprovidedPosArgs.filter fun arg =>
+      !(arg.name ∈ kwords.keys) && arg.default.isNone
     if missingArgs.length > 0 then
       let missingNames := missingArgs.map (·.1)
       throwUserError callRange s!"'{name}' called with missing required arguments: {missingNames}"
     let filledPosArgs ←
-      unprovidedPosArgs.mapM (λ (argName,_, _, d) =>
-        match kwords.get? argName with
+      unprovidedPosArgs.mapM (λ arg =>
+        match kwords.get? arg.name with
           | some expr => return expr
-          | none => match d with
+          | none => match arg.default with
                 | some val => return val
-                | _ => throw (.typeError s!"'{name}' missing required argument '{argName}'"))
+                | _ => throw (.typeError s!"'{name}' missing required argument '{arg.name}'"))
     let posArgs := posArgs ++ filledPosArgs
     return (posArgs, kwordArgs, funcDecl.hasKwargs)
   | _ => return (posArgs, kwords, false)
@@ -1211,7 +1218,7 @@ partial def argumentTypeToString (arg: Python.expr SourceRange) : Except Transla
 
 --The return is a List (inputname, type, default value) and a bool indicating if the function has Kwargs input
 def unpackPyArguments (ctx : TranslationContext) (args: Python.arguments SourceRange)
-    : Except TranslationError ((List (String × MetaData × List String × Option (Python.expr SourceRange))) × Bool):= do
+    : Except TranslationError ((List PyArgInfo) × Bool):= do
   match args with
     | .mk_arguments _ _ args _ _ _ kwargs defaults =>
       let argscount := args.val.size
@@ -1219,7 +1226,7 @@ def unpackPyArguments (ctx : TranslationContext) (args: Python.arguments SourceR
       let listdefaults := (List.range (argscount - defaultscount)).map (λ _ => none)
                         ++ defaults.val.toList.map (λ x => some x)
       let argsinfo := args.val.toList.zip listdefaults
-      let argtypes ←
+      let argtypes : List PyArgInfo ←
         argsinfo.mapM (λ a: Python.arg SourceRange × Option (Python.expr SourceRange) =>
         match a.fst with
           | .mk_arg sr name oty _ =>
@@ -1229,8 +1236,8 @@ def unpackPyArguments (ctx : TranslationContext) (args: Python.arguments SourceR
                 let defaultType := match a.snd.mapM (inferExprType ctx) with
                   | .ok (some ty) => [ty]
                   | _ => []
-                return (name.val, md, (← argumentTypeToString ty) ++ defaultType, a.snd)
-              | _ => return (name.val, md, [PyLauType.Any], a.snd))
+                return {name:= name.val, md:=md, tys:=(← argumentTypeToString ty) ++ defaultType, default:= a.snd}
+              | _ => return {name:= name.val, md:= md, tys:=[PyLauType.Any], default:=a.snd})
       return (argtypes, kwargs.val.isSome)
 
 def pyFuncDefToPythonFunctionDecl  (ctx : TranslationContext) (f : Python.stmt SourceRange) : Except TranslationError PythonFunctionDecl := do
@@ -1273,21 +1280,21 @@ def creatBoolOrExpr (exprs: List StmtExprMd) : StmtExprMd :=
 def getUnionTypeConstraint (var: String) (md: MetaData) (tys: List String) (funcname: String): Option StmtExprMd :=
   let type_constraints := tys.filterMap (getSingleTypeConstraint var)
   if type_constraints.isEmpty then none else
-    let md: MetaData := md.withPropertySummary ("(" ++ funcname ++ " requires) Type constraint of " ++ var)
+    let md: MetaData := md.withPropertySummary $ "(" ++ funcname ++ " requires) Type constraint of " ++ var
     some {creatBoolOrExpr type_constraints with md:=md}
 
 def getUnionTypeAssertions (var: String) (md: MetaData) (tys: List String) (funcname: String): Option StmtExprMd :=
   match getUnionTypeConstraint var md tys funcname with
   | some constraint =>
-    let md: MetaData := md.withPropertySummary ("(" ++ funcname ++ " assert) Type constraint of " ++ var)
+    let md: MetaData := md.withPropertySummary $ "(" ++ funcname ++ " assert) Type constraint of " ++ var
     mkStmtExprMdWithLoc (.Assert constraint) md
   | _ => none
 
 def getInputTypePreconditions (funcDecl : PythonFunctionDecl): List StmtExprMd :=
-  funcDecl.args.filterMap (λ(var, md, tys, _) => getUnionTypeConstraint var md tys funcDecl.name)
+  funcDecl.args.filterMap (λ arg => getUnionTypeConstraint arg.name arg.md arg.tys funcDecl.name)
 
 def getInputTypecheckAssertions (funcDecl : PythonFunctionDecl): List StmtExprMd :=
-  funcDecl.args.filterMap (λ(var, md, tys, _)=> getUnionTypeAssertions var md tys funcDecl.name)
+  funcDecl.args.filterMap (λ arg => getUnionTypeAssertions arg.name arg.md arg.tys funcDecl.name)
 
 /-- Translate Python function to Laurel Procedure -/
 def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (funcDecl : PythonFunctionDecl) (body: List (Python.stmt SourceRange))
@@ -1296,11 +1303,11 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
     -- Translate parameters
     let mut inputs : List Parameter := []
 
-    inputs := funcDecl.args.map (fun (name, _, ty, _) =>
-        if ty.length == 1 && ty[0]! ∈ ctx.compositeTypeNames then
-          { name := name, type := mkHighTypeMd (.UserDefined ty[0]!) }
+    inputs := funcDecl.args.map (fun arg =>
+        if arg.tys.length == 1 && arg.tys[0]! ∈ ctx.compositeTypeNames then
+          { name := arg.name, type := mkHighTypeMd (.UserDefined {text:= arg.tys[0]!}) }
         else
-          { name := name, type := AnyTy})
+          { name := arg.name, type := AnyTy})
     if funcDecl.hasKwargs then
       let paramType ← translateType ctx PyLauType.DictStrAny
       inputs:= inputs ++ [{ name := "kwargs", type := paramType }]
@@ -1316,8 +1323,8 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
       | some _ => [{ name := "LaurelResult", type := AnyTy }]
 
     -- Translate function body
-    let inputTypes := funcDecl.args.map (λ (name, _, type, _) =>
-      match type with | [ty] => (name, ty) | _ => (name, PyLauType.Any))
+    let inputTypes := funcDecl.args.map (λ arg =>
+      match arg.tys with | [ty] => (arg.name, ty) | _ => (arg.name, PyLauType.Any))
     let ctx := {ctx with variableTypes:= ("nullcall_ret", PyLauType.Any)::inputTypes}
     let (newctx, bodyStmts) ← translateStmtList ctx body
     let bodyStmts := prependExceptHandlingHelper bodyStmts
@@ -1376,7 +1383,7 @@ def preludeSignatureToPythonFunctionDecl (prelude : Core.Program) : List PythonF
       let noneexpr : Python.expr SourceRange := .Constant default (.ConNone default) default
       some {
         name:= proc.header.name.name
-        args:= (inputnames.zip inputTypes).map (λ(n,t) => (n, defaultMetadata, [t],noneexpr))
+        args:= (inputnames.zip inputTypes).map (λ(n,t) => {name:= n, md:= defaultMetadata, tys:= [t], default:= noneexpr})
         hasKwargs := false
         ret := if outputtypes.length == 0 then none else outputtypes[0]!
       }
@@ -1625,7 +1632,7 @@ def PreludeInfo.ofLaurelProgram (prog : Laurel.Program) : PreludeInfo where
       else
         let noDefault : Option (Python.expr SourceRange) := none
         let args := p.inputs.map fun param =>
-          (param.name.text, default, [getHighTypeName param.type.val], noDefault)
+          {name:= param.name.text, md:= default, tys:= [getHighTypeName param.type.val], default:= noDefault}
         let ret := p.outputs.head?.map fun param => getHighTypeName param.type.val
         some { name := p.name.text, args := args, hasKwargs := false, ret := ret }
   functions :=

@@ -485,9 +485,7 @@ def pyAnalyzeLaurelCommand : Command where
                 ("", "")
         | none => ("", "")
       let outcomeStr := vcResult.formatOutcome
-      let vcLabel := match vcResult.obligation.metadata.getPropertySummary with
-          | some msg => msg
-          | _ => vcResult.obligation.label
+      let vcLabel := vcResult.obligation.metadata.getPropertySummary.getD vcResult.obligation.label
       s := s ++ s!"{locationPrefix}{vcLabel}: \
                     {outcomeStr}{locationSuffix}\n"
     IO.println s
