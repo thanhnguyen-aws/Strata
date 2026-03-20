@@ -368,19 +368,19 @@ partial def translateSlice (ctx : TranslationContext) (start stop step: Option (
             let stop ← translateExpr ctx stop
             let start := mkStmtExprMd (.StaticCall "Any..as_int!" [start])
             let stop := mkStmtExprMd (.StaticCall "Some" [mkStmtExprMd (.StaticCall "Any..as_int!" [stop])])
-            return mkStmtExprMd (.StaticCall "from_Range" [start, stop])
+            return mkStmtExprMd (.StaticCall "from_Slice" [start, stop])
         | some start, none =>
             let start ← translateExpr ctx start
             let start := mkStmtExprMd (.StaticCall "Any..as_int!" [start])
-            return mkStmtExprMd (.StaticCall "from_Range" [start, optNone])
+            return mkStmtExprMd (.StaticCall "from_Slice" [start, optNone])
         | none, some stop =>
             let start := mkStmtExprMd (.LiteralInt 0)
             let stop ← translateExpr ctx stop
             let stop := mkStmtExprMd (.StaticCall "Some" [mkStmtExprMd (.StaticCall "Any..as_int!" [stop])])
-            return mkStmtExprMd (.StaticCall "from_Range" [start, stop])
+            return mkStmtExprMd (.StaticCall "from_Slice" [start, stop])
         | _ , _ =>
             let start := mkStmtExprMd (.LiteralInt 0)
-            return mkStmtExprMd (.StaticCall "from_Range" [start, optNone])
+            return mkStmtExprMd (.StaticCall "from_Slice" [start, optNone])
 
 /-- Translate Python expression to Laurel StmtExpr -/
 partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRange)

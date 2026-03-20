@@ -77,7 +77,7 @@ datatype Any {
   from_Dict (as_Dict: DictStrAny),
   from_ListAny (as_ListAny : ListAny),
   from_ClassInstance (classname : string, instance_attributes: DictStrAny),
-  from_Range(start: int, stop: OptionInt),
+  from_Slice(start: int, stop: OptionInt),
   exception (get_error: Error)
 }
 
