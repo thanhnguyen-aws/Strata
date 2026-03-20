@@ -523,7 +523,10 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
   -- Abstract: return havoc'd tuple (sound abstraction)
   | .Tuple .. => return mkStmtExprMd .Hole
 
-  | .Slice _ start stop _ =>
+  | .Slice _ start stop step =>
+    if step.val.isSome then
+        throw (.unsupportedConstruct "Expression type not yet supported" (toString (repr e)))
+    else
       match start.val, stop.val with
         | some start, some stop =>
             let start ← translateExpr ctx start
