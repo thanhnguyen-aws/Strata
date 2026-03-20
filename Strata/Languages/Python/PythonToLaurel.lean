@@ -358,6 +358,31 @@ partial def translateDictStrAny (ctx : TranslationContext)
   let keys ← keys.mapM pyOptExprToString
   return  mkStmtExprMd (.StaticCall "from_Dict" [DictStrAny_mk (keys.zip val_trans)])
 
+partial def translateSlice (ctx : TranslationContext) (start stop step: Option (expr SourceRange))
+    : Except TranslationError StmtExprMd := do
+    if step.isSome then
+        throw (.unsupportedConstruct "Expression type not yet supported" (toString (repr step)))
+    else
+      match start, stop with
+        | some start, some stop =>
+            let start ← translateExpr ctx start
+            let stop ← translateExpr ctx stop
+            let start := mkStmtExprMd (.StaticCall "Any..as_int!" [start])
+            let stop := mkStmtExprMd (.StaticCall "Some" [mkStmtExprMd (.StaticCall "Any..as_int!" [stop])])
+            return mkStmtExprMd (.StaticCall "from_Range" [start, stop])
+        | some start, none =>
+            let start ← translateExpr ctx start
+            let start := mkStmtExprMd (.StaticCall "Any..as_int!" [start])
+            return mkStmtExprMd (.StaticCall "from_Range" [start, optNone])
+        | none ,some stop =>
+            let start := mkStmtExprMd (.LiteralInt 0)
+            let stop ← translateExpr ctx stop
+            let stop := mkStmtExprMd (.StaticCall "Some" [mkStmtExprMd (.StaticCall "Any..as_int!" [stop])])
+            return mkStmtExprMd (.StaticCall "from_Range" [start, stop])
+        | _ , _ =>
+            let start := mkStmtExprMd (.LiteralInt 0)
+            return mkStmtExprMd (.StaticCall "from_Range" [start, optNone])
+
 /-- Translate Python expression to Laurel StmtExpr -/
 partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRange)
     : Except TranslationError StmtExprMd := do
@@ -523,29 +548,7 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
   -- Abstract: return havoc'd tuple (sound abstraction)
   | .Tuple .. => return mkStmtExprMd .Hole
 
-  | .Slice _ start stop step =>
-    if step.val.isSome then
-        throw (.unsupportedConstruct "Expression type not yet supported" (toString (repr e)))
-    else
-      match start.val, stop.val with
-        | some start, some stop =>
-            let start ← translateExpr ctx start
-            let stop ← translateExpr ctx stop
-            let start := mkStmtExprMd (.StaticCall "Any..as_int!" [start])
-            let stop := mkStmtExprMd (.StaticCall "Some" [mkStmtExprMd (.StaticCall "Any..as_int!" [stop])])
-            return mkStmtExprMd (.StaticCall "from_Range" [start, stop])
-        | some start, none =>
-            let start ← translateExpr ctx start
-            let start := mkStmtExprMd (.StaticCall "Any..as_int!" [start])
-            return mkStmtExprMd (.StaticCall "from_Range" [start, optNone])
-        | none ,some stop =>
-            let start := mkStmtExprMd (.LiteralInt 0)
-            let stop ← translateExpr ctx stop
-            let stop := mkStmtExprMd (.StaticCall "Some" [mkStmtExprMd (.StaticCall "Any..as_int!" [stop])])
-            return mkStmtExprMd (.StaticCall "from_Range" [start, stop])
-        | _ , _ =>
-            let start := mkStmtExprMd (.LiteralInt 0)
-            return mkStmtExprMd (.StaticCall "from_Range" [start, optNone])
+  | .Slice _ start stop step => translateSlice ctx start.val stop.val step.val
 
   -- List comprehension: [x for x in items]
   -- Abstract: return havoc'd list (sound abstraction)
