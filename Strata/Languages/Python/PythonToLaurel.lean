@@ -362,8 +362,7 @@ partial def translateSlice (ctx : TranslationContext) (start stop step: Option (
     : Except TranslationError StmtExprMd := do
     if step.isSome then
         throw (.unsupportedConstruct "Expression type not yet supported" (toString (repr step)))
-    else
-      match start, stop with
+    match start, stop with
         | some start, some stop =>
             let start ← translateExpr ctx start
             let stop ← translateExpr ctx stop
