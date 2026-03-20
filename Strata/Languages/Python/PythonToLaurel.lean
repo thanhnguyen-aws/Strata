@@ -374,7 +374,7 @@ partial def translateSlice (ctx : TranslationContext) (start stop step: Option (
             let start ← translateExpr ctx start
             let start := mkStmtExprMd (.StaticCall "Any..as_int!" [start])
             return mkStmtExprMd (.StaticCall "from_Range" [start, optNone])
-        | none ,some stop =>
+        | none, some stop =>
             let start := mkStmtExprMd (.LiteralInt 0)
             let stop ← translateExpr ctx stop
             let stop := mkStmtExprMd (.StaticCall "Some" [mkStmtExprMd (.StaticCall "Any..as_int!" [stop])])
