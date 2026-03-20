@@ -498,7 +498,9 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
   -- TODO: Handle by creating explicit variable declarations
   | .Subscript _ val slice _ =>
     let dictOrList ← translateExpr ctx val
-    let index ← translateExpr ctx slice
+    let index ←  match slice with
+      | .Slice _ start stop step => translateSlice ctx start.val stop.val step.val
+      | _ => translateExpr ctx slice
     return mkStmtExprMd (.StaticCall "Any_get" [dictOrList, index])
 
   -- Attribute access: obj.attr or obj.method
@@ -546,8 +548,6 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
   -- Tuple literal: (1, 2)
   -- Abstract: return havoc'd tuple (sound abstraction)
   | .Tuple .. => return mkStmtExprMd .Hole
-
-  | .Slice _ start stop step => translateSlice ctx start.val stop.val step.val
 
   -- List comprehension: [x for x in items]
   -- Abstract: return havoc'd list (sound abstraction)
