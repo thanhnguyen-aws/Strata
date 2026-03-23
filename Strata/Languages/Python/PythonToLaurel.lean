@@ -947,12 +947,17 @@ def getForLoopVars (targetIter: Python.expr SourceRange) :List (String × String
           | _ => none
     | _ => []
 
-partial def collectDeclaredNamesAndTypes (stmts : List (Python.stmt SourceRange)) : List (String × String) :=
+partial def collectDeclaredNamesAndTypes (ctx : TranslationContext) (stmts : List (Python.stmt SourceRange)) : List (String × String) :=
   let rec go (s : Python.stmt SourceRange) : List (String × String) :=
     match s with
-    | .Assign _ lhs _ _ =>
+    | .Assign _ lhs value _ =>
+      let ty := match translateExpr ctx value with
+      | .ok {val := .New classname, ..}  => classname.text
+      | .ok {val := .StaticCall funcname _ , ..} =>
+          if funcname.text ∈ ctx.compositeTypeNames then funcname.text else PyLauType.Any
+      | _ => PyLauType.Any
       let names := (lhs.val.toList.filter (λ e => match e with |.Name _ _ _ => true | _=> false)).map pyExprToString
-      names.map (λ n => (n, PyLauType.Any))
+      names.map (λ n => (n, ty))
     | .AnnAssign _ lhs ty _ _ =>
       [(pyExprToString lhs, pyExprToString ty)]
     | .If _ _ body elsebody => body.val.toList.flatMap go ++ elsebody.val.toList.flatMap go
@@ -962,7 +967,7 @@ partial def collectDeclaredNamesAndTypes (stmts : List (Python.stmt SourceRange)
         let handlers_bodies := handlers.val.toList.map (λ h => match h with
           | .ExceptHandler _ _ _ body => body.val.toList)
         let error_var := (handlers.val.toList.filterMap (λ h => match h with
-          | .ExceptHandler _ _ errname _ => errname.val)).map (λ h => (h.val, PyLauType.Any))
+          | .ExceptHandler _ _ errname _ => errname.val)).map (λ h => (h.val, "PythonError"))
         error_var ++ (body.val.toList.flatMap go) ++ (handlers_bodies.flatten.flatMap go) ++ (finalbody.val.toList.flatMap go)
     | .With _ items body _ => (getWithItemsVars items.val.toList) ++ (body.val.toList.flatMap go)
     | _ => []
@@ -1276,7 +1281,7 @@ def pyFuncDefToPythonFunctionDecl  (ctx : TranslationContext) (f : Python.stmt S
 def translateFunctionBody (ctx : TranslationContext) (inputTypes : List (String × String)) (body: List (Python.stmt SourceRange))
   : Except TranslationError (StmtExprMd × TranslationContext) := do
     let ctx := {ctx with variableTypes:= ("nullcall_ret", PyLauType.Any)::inputTypes}
-    let newDecls := collectDeclaredNamesAndTypes body
+    let newDecls := collectDeclaredNamesAndTypes ctx body
     let (varDecls, ctx) := createVarDeclStmtsAndCtx ctx newDecls
     let (newctx, bodyStmts) ← translateStmtList ctx body
     let bodyStmts := prependExceptHandlingHelper (varDecls ++ bodyStmts)
