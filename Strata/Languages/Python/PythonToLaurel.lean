@@ -980,7 +980,8 @@ def createVarDeclStmtsAndCtx (ctx : TranslationContext) (newDecls : List (String
       then acc else acc ++ [(n, ty)]) []
   let hoistedDecls : List StmtExprMd := newDecls.map fun (name, tyStr) =>
       let ty := if tyStr ∈ ctx.compositeTypeNames || tyStr == "PythonError" then
-          mkHighTypeMd (.UserDefined tyStr)
+          --mkHighTypeMd (.UserDefined tyStr)
+          mkCoreType "Composite"
         else AnyTy
       mkStmtExprMd (StmtExpr.LocalVariable (name : String) ty none)
   --dbg_trace f!"{ctx.com}"
@@ -1283,11 +1284,10 @@ def pyFuncDefToPythonFunctionDecl  (ctx : TranslationContext) (f : Python.stmt S
 def translateFunctionBody (ctx : TranslationContext) (inputTypes : List (String × String)) (body: List (Python.stmt SourceRange))
   : Except TranslationError (StmtExprMd × TranslationContext) := do
     let ctx := {ctx with variableTypes:= ("nullcall_ret", PyLauType.Any)::inputTypes}
-    --let newDecls := collectDeclaredNamesAndTypes ctx body
-    --let (varDecls, ctx) := createVarDeclStmtsAndCtx ctx newDecls
+    let newDecls := collectDeclaredNamesAndTypes ctx body
+    let (varDecls, ctx) := createVarDeclStmtsAndCtx ctx newDecls
     let (newctx, bodyStmts) ← translateStmtList ctx body
-    --let bodyStmts := prependExceptHandlingHelper (varDecls ++ bodyStmts)
-    let bodyStmts := prependExceptHandlingHelper (bodyStmts)
+    let bodyStmts := prependExceptHandlingHelper (varDecls ++ bodyStmts)
     let bodyStmts := (mkStmtExprMd (.LocalVariable "nullcall_ret" AnyTy (some AnyNone))) :: bodyStmts
     return (mkStmtExprMd (StmtExpr.Block bodyStmts none), newctx)
 
