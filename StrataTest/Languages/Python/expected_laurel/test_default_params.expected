@@ -28,10 +28,6 @@ assert_name_is_foo: ✅ pass (in prelude file)
 assert_opt_name_none_or_str: ✅ pass (in prelude file)
 assert_opt_name_none_or_bar: ✅ pass (in prelude file)
 ensures_maybe_except_none: ✅ pass (in prelude file)
-(greet assert) Type constraint of name: ✅ pass (at line 1, col 10)
-(greet assert) Type constraint of greeting: ✅ pass (at line 1, col 21)
-(power assert) Type constraint of base: ✅ pass (at line 5, col 10)
-(power assert) Type constraint of exp: ✅ pass (at line 5, col 21)
 loop_guard_calls_Any_to_bool_0: ✅ pass
 loop_guard_end_calls_Any_to_bool_0: ✅ pass
 (greet requires) Type constraint of name: ✅ pass (at line 1, col 10)

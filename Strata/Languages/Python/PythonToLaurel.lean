@@ -1232,7 +1232,9 @@ partial def argumentTypeToString (arg: Python.expr SourceRange) : Except Transla
     | "Union" =>  match slice_head with
         | .Tuple _ tys _ => return (← tys.val.toList.mapM argumentTypeToString).flatten
         | _ => throw (.internalError s!"Unhandled Expr: {repr arg}")
-    | _ => return [v_name]
+    | "List" => return ["ListAny"]
+    | "Dict" => return ["DictStrAny"]
+    | _ =>  throw (.internalError s!"Unhandled Expr: {repr arg}")
   | .Constant _ _ _ => return ["None"]
   | .Attribute _ _ _ _ => return [pyExprToString arg]
   | .BinOp _ _ _ _ => return (← (getUnionTypes arg).mapM argumentTypeToString).flatten
@@ -1274,6 +1276,8 @@ def pyFuncDefToPythonFunctionDecl  (ctx : TranslationContext) (f : Python.stmt S
           | some retExpr => some (pyExprToString retExpr)
           | none => none
     let hasKwargs := args_trans.snd
+    if args.any (λ arg => arg.tys.length > 1 && (arg.tys.any (λ ty => ty ∈ ctx.compositeTypeNames))) then
+      throw (.unsupportedConstruct "Arg of union of class types is not supported" (toString (repr f)))
     return {
       name
       args
@@ -1289,34 +1293,24 @@ def getSingleTypeConstraint (var: String) (ty: String): Option StmtExprMd :=
   | "bool" => mkStmtExprMd (.StaticCall "Any..isfrom_bool" [freeVar var])
   | "datetime" => mkStmtExprMd (.StaticCall "Any..isfrom_datetime" [freeVar var])
   | "None" => mkStmtExprMd (.StaticCall "Any..isfrom_none" [freeVar var])
-  | _ => if ty.startsWith "Dict" then mkStmtExprMd (.StaticCall "Any..isfrom_Dict" [freeVar var])
-      else if ty.startsWith "List" then mkStmtExprMd (.StaticCall "Any..isfrom_ListAny" [freeVar var])
-      else none
+  | "ListAny" => mkStmtExprMd (.StaticCall "Any..isfrom_ListAny" [freeVar var])
+  | "DictStrAny"  => mkStmtExprMd (.StaticCall "Any..isfrom_Dict" [freeVar var])
+  | _ => none
 
-def creatBoolOrExpr (exprs: List StmtExprMd) : StmtExprMd :=
+def createBoolOrExpr (exprs: List StmtExprMd) : StmtExprMd :=
   match exprs with
   | [] => mkStmtExprMd (.LiteralBool true)
   | [expr] => expr
-  | expr::exprs => mkStmtExprMd (.StaticCall "Bool.Or" [expr, creatBoolOrExpr exprs])
+  | expr::exprs => mkStmtExprMd (.PrimitiveOp .Or [expr, createBoolOrExpr exprs])
 
 def getUnionTypeConstraint (var: String) (md: MetaData) (tys: List String) (funcname: String): Option StmtExprMd :=
   let type_constraints := tys.filterMap (getSingleTypeConstraint var)
   if type_constraints.isEmpty then none else
     let md: MetaData := md.withPropertySummary $ "(" ++ funcname ++ " requires) Type constraint of " ++ var
-    some {creatBoolOrExpr type_constraints with md:=md}
-
-def getUnionTypeAssertions (var: String) (md: MetaData) (tys: List String) (funcname: String): Option StmtExprMd :=
-  match getUnionTypeConstraint var md tys funcname with
-  | some constraint =>
-    let md: MetaData := md.withPropertySummary $ "(" ++ funcname ++ " assert) Type constraint of " ++ var
-    mkStmtExprMdWithLoc (.Assert constraint) md
-  | _ => none
+    some {createBoolOrExpr type_constraints with md:=md}
 
 def getInputTypePreconditions (funcDecl : PythonFunctionDecl): List StmtExprMd :=
   funcDecl.args.filterMap (λ arg => getUnionTypeConstraint arg.name arg.md arg.tys funcDecl.name)
-
-def getInputTypecheckAssertions (funcDecl : PythonFunctionDecl): List StmtExprMd :=
-  funcDecl.args.filterMap (λ arg => getUnionTypeAssertions arg.name arg.md arg.tys funcDecl.name)
 
 /-- Translate Python function to Laurel Procedure -/
 def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (funcDecl : PythonFunctionDecl) (body: List (Python.stmt SourceRange))
@@ -1334,9 +1328,7 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
       let paramType ← translateType ctx PyLauType.DictStrAny
       inputs:= inputs ++ [{ name := "kwargs", type := paramType }]
 
-    let typeConstraintAssertions := getInputTypecheckAssertions funcDecl
     let typeConstraintPreconditions := getInputTypePreconditions funcDecl
-
 
     -- Declare an output parameter when the function has a return type annotation.
     -- Return statements explicitly assign to LaurelResult and exit $body.
@@ -1352,7 +1344,6 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
     let (newctx, bodyStmts) ← translateStmtList ctx body
     let bodyStmts := prependExceptHandlingHelper bodyStmts
     let bodyStmts := (mkStmtExprMd (.LocalVariable "nullcall_ret" AnyTy (some AnyNone))) :: bodyStmts
-    let bodyStmts := typeConstraintAssertions ++ bodyStmts
     let bodyBlock := mkStmtExprMd (StmtExpr.Block bodyStmts none)
 
     -- Create procedure with transparent body (no contracts for now)

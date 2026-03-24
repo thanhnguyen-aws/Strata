@@ -1,3 +1,5 @@
+from typing import Union
+
 def Mul(x: int | bool, y: int | bool = "abc") -> int:
     return x * y 
 
