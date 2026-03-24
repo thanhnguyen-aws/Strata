@@ -958,8 +958,16 @@ partial def collectDeclaredNamesAndTypes (ctx : TranslationContext) (stmts : Lis
       | _ => PyLauType.Any
       let names := (lhs.val.toList.filter (λ e => match e with |.Name _ _ _ => true | _=> false)).map pyExprToString
       names.map (λ n => (n, ty))
-    | .AnnAssign _ lhs ty _ _ =>
-      [(pyExprToString lhs, pyExprToString ty)]
+    | .AnnAssign _ lhs annoTy value _ =>
+      let ty := match value.val with
+        | some value =>
+          match translateExpr ctx value with
+          | .ok {val := .New classname, ..}  => classname.text
+          | .ok {val := .StaticCall funcname _ , ..} =>
+            if funcname.text ∈ ctx.compositeTypeNames then funcname.text else PyLauType.Any
+          | _ => pyExprToString annoTy
+        | _ => pyExprToString annoTy
+      [(pyExprToString lhs, ty)]
     | .If _ _ body elsebody => body.val.toList.flatMap go ++ elsebody.val.toList.flatMap go
     | .For _ targetIter _ body _ _ => getForLoopVars targetIter ++ (body.val.toList.flatMap go)
     | .While _ _ body _ => body.val.toList.flatMap go
