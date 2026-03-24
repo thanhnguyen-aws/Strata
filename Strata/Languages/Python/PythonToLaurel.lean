@@ -957,6 +957,7 @@ partial def collectDeclaredNamesAndTypes (ctx : TranslationContext) (stmts : Lis
           if funcname.text ∈ ctx.compositeTypeNames then funcname.text else PyLauType.Any
       | _ => PyLauType.Any
       let names := (lhs.val.toList.filter (λ e => match e with |.Name _ _ _ => true | _=> false)).map pyExprToString
+      dbg_trace f!"name: {lhs.val[0]!} ty: {ty}"
       names.map (λ n => (n, ty))
     | .AnnAssign _ lhs ty _ _ =>
       [(pyExprToString lhs, pyExprToString ty)]
@@ -1684,7 +1685,7 @@ def pythonToLaurel' (info : PreludeInfo)
         else
           ident.pythonModule ++ "_" ++ ident.name
     let mut compositeTypeNames := info.compositeTypes.union overloadCompositeType
-    
+
     -- FIRST PASS: Collect all class definitions and field type info
     let mut compositeTypes : List CompositeType := [pyErrorTy]
     compositeTypeNames := compositeTypeNames.insert "PythonError"
