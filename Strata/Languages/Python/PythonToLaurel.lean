@@ -1677,9 +1677,17 @@ def pythonToLaurel' (info : PreludeInfo)
       instanceProcedures := []
     }
 
+    let overloadCompositeType := Std.HashSet.ofList $
+      (overloadTable.values.flatMap (·.values)).map fun ident =>
+        if ident.pythonModule.isEmpty then
+          ident.name
+        else
+          ident.pythonModule ++ "_" ++ ident.name
+    let mut compositeTypeNames := info.compositeTypes.union overloadCompositeType
+    
     -- FIRST PASS: Collect all class definitions and field type info
     let mut compositeTypes : List CompositeType := [pyErrorTy]
-    let mut compositeTypeNames := info.compositeTypes.insert "PythonError"
+    compositeTypeNames := compositeTypeNames.insert "PythonError"
     let mut classFieldHighType : Std.HashMap String (Std.HashMap String HighType) := {}
     for stmt in body.val do
       match stmt with
