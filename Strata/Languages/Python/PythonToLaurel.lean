@@ -957,7 +957,6 @@ partial def collectDeclaredNamesAndTypes (ctx : TranslationContext) (stmts : Lis
           if funcname.text ∈ ctx.compositeTypeNames then funcname.text else PyLauType.Any
       | _ => PyLauType.Any
       let names := (lhs.val.toList.filter (λ e => match e with |.Name _ _ _ => true | _=> false)).map pyExprToString
-      dbg_trace f!"name: {lhs.val[0]!} ty: {ty}"
       names.map (λ n => (n, ty))
     | .AnnAssign _ lhs ty _ _ =>
       [(pyExprToString lhs, pyExprToString ty)]
@@ -984,6 +983,8 @@ def createVarDeclStmtsAndCtx (ctx : TranslationContext) (newDecls : List (String
           mkHighTypeMd (.UserDefined tyStr)
         else AnyTy
       mkStmtExprMd (StmtExpr.LocalVariable (name : String) ty (some (mkStmtExprMd .Hole)))
+  dbg_trace f!"{ctx.compositeTypeNames.toList}"
+  dbg_trace f!"decls: {hoistedDecls}"
   let hoistedCtx := { ctx with variableTypes := ctx.variableTypes ++
       (newDecls.map fun (n, ty) =>
         if ty ∈ ctx.compositeTypeNames || ty == "PythonError" then (n, ty) else (n, PyLauType.Any)) }
