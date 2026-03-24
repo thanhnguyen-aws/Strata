@@ -1294,7 +1294,7 @@ def translateFunctionBody (ctx : TranslationContext) (inputTypes : List (String 
 /-- Translate Python function to Laurel Procedure -/
 def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (funcDecl : PythonFunctionDecl) (body: List (Python.stmt SourceRange))
     : Except TranslationError (Laurel.Procedure × TranslationContext) := do
-
+    dbg_trace f!"translating {funcDecl.name}"
     -- Translate parameters
     let mut inputs : List Parameter := []
 
