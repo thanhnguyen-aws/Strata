@@ -95,6 +95,7 @@ private meta def runAnalyze (dispatchIon : System.FilePath)
     | .error err => return .error (toString err)
   match Strata.translateCombinedLaurel laurel with
   | (some core, []) =>
+    dbg_trace f!"{laurel.staticProcedures.drop (laurel.staticProcedures.length -2)}"
     -- Also run Core type checking to catch semantic errors (e.g. Heap vs Any)
     match Core.typeCheck Core.VerifyOptions.quiet core with
     | .error diag => return .error s!"Core type checking failed: {diag}"
