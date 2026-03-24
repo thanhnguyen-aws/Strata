@@ -980,8 +980,7 @@ def createVarDeclStmtsAndCtx (ctx : TranslationContext) (newDecls : List (String
       then acc else acc ++ [(n, ty)]) []
   let hoistedDecls : List StmtExprMd := newDecls.map fun (name, tyStr) =>
       let ty := if tyStr ∈ ctx.compositeTypeNames || tyStr == "PythonError" then
-          --mkHighTypeMd (.UserDefined tyStr)
-          mkCoreType "Composite"
+          mkHighTypeMd (.UserDefined tyStr)
         else AnyTy
       mkStmtExprMd (StmtExpr.LocalVariable (name : String) ty none)
   --dbg_trace f!"{ctx.com}"
