@@ -1285,6 +1285,7 @@ def translateFunctionBody (ctx : TranslationContext) (inputTypes : List (String 
     let ctx := {ctx with variableTypes:= ("nullcall_ret", PyLauType.Any)::inputTypes}
     let newDecls := collectDeclaredNamesAndTypes ctx body
     let (varDecls, ctx) := createVarDeclStmtsAndCtx ctx newDecls
+    dbg_trace f!"{varDecls}"
     let (newctx, bodyStmts) ← translateStmtList ctx body
     let bodyStmts := prependExceptHandlingHelper (varDecls ++ bodyStmts)
     let bodyStmts := (mkStmtExprMd (.LocalVariable "nullcall_ret" AnyTy (some AnyNone))) :: bodyStmts
