@@ -984,7 +984,7 @@ def createVarDeclStmtsAndCtx (ctx : TranslationContext) (newDecls : List (String
         else AnyTy
       mkStmtExprMd (StmtExpr.LocalVariable (name : String) ty (some (mkStmtExprMd .Hole)))
   dbg_trace f!"{ctx.compositeTypeNames.toList}"
-  dbg_trace f!"decls: {hoistedDecls}"
+  dbg_trace f!"decls: {repr hoistedDecls}"
   let hoistedCtx := { ctx with variableTypes := ctx.variableTypes ++
       (newDecls.map fun (n, ty) =>
         if ty ∈ ctx.compositeTypeNames || ty == "PythonError" then (n, ty) else (n, PyLauType.Any)) }
