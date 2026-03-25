@@ -38,3 +38,6 @@ set_LaurelResult_calls_Any_get_1: ❓ unknown
 (List_Dict_index requires) Type constraint of l: ✅ pass (at line 11, col 20)
 (List_Dict_index requires) Type constraint of i: ✅ pass (at line 11, col 45)
 (List_Dict_index requires) Type constraint of s: ✅ pass (at line 11, col 54)
+
+DETAIL: 36 passed, 0 failed, 2 inconclusive
+RESULT: Inconclusive

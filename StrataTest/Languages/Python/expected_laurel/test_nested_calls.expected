@@ -29,18 +29,18 @@ assert_opt_name_none_or_str: ✅ pass (in prelude file)
 assert_opt_name_none_or_bar: ✅ pass (in prelude file)
 ensures_maybe_except_none: ✅ pass (in prelude file)
 (double requires) Type constraint of x: ✅ pass (at line 1, col 11)
-(double requires) Type constraint of x: ❓ unknown (at line 1, col 11)
+Assertion failed at line 1, col 11: (double requires) Type constraint of x: ❌ fail
 assert_assert(153)_calls_Any_to_bool_0: ✅ pass (at line 10, col 4)
-assert(153): ❓ unknown (at line 10, col 4)
+Assertion failed at line 10, col 4: assert(153): ❌ fail
 (double requires) Type constraint of x: ✅ pass (at line 1, col 11)
-(add_one requires) Type constraint of x: ❓ unknown (at line 4, col 12)
+Assertion failed at line 4, col 12: (add_one requires) Type constraint of x: ❌ fail
 assert_assert(254)_calls_Any_to_bool_0: ✅ pass (at line 14, col 4)
-assert(254): ❓ unknown (at line 14, col 4)
+Assertion failed at line 14, col 4: assert(254): ❌ fail
 (add_one requires) Type constraint of x: ✅ pass (at line 4, col 12)
-(double requires) Type constraint of x: ❓ unknown (at line 1, col 11)
+Assertion failed at line 1, col 11: (double requires) Type constraint of x: ❌ fail
 assert_assert(356)_calls_Any_to_bool_0: ✅ pass (at line 18, col 4)
 Assertion failed at line 18, col 4: assert(356): ❌ fail
 ite_cond_calls_Any_to_bool_0: ✅ pass
 
-DETAIL: 32 passed, 3 failed, 0 inconclusive
+DETAIL: 35 passed, 6 failed, 0 inconclusive
 RESULT: Failures found
