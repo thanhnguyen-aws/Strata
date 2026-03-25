@@ -39,5 +39,8 @@ assert(254): ❓ unknown (at line 14, col 4)
 (add_one requires) Type constraint of x: ✅ pass (at line 4, col 12)
 (double requires) Type constraint of x: ❓ unknown (at line 1, col 11)
 assert_assert(356)_calls_Any_to_bool_0: ✅ pass (at line 18, col 4)
-assert(356): ❓ unknown (at line 18, col 4)
+Assertion failed at line 18, col 4: assert(356): ❌ fail
 ite_cond_calls_Any_to_bool_0: ✅ pass
+
+DETAIL: 32 passed, 3 failed, 0 inconclusive
+RESULT: Failures found
