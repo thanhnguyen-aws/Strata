@@ -1262,6 +1262,10 @@ def getUnionTypes (arg: Python.expr SourceRange) : List (Python.expr SourceRange
 
 def isOfAnyType (ty: String): Bool := ty ∈ ["None", "bool", "int", "str", "float", "datetime", "ListAny", "DictStrAny", "Any"]
 
+def isCompositeType (ctx : TranslationContext) (ty: String) : Bool := match ctx.importedSymbols[ty]? with
+  | some (ImportedSymbol.compositeType _) => true
+  | _ => false
+
 partial def getArgumentTypes (arg: Python.expr SourceRange) : Except TranslationError (List String) :=
   match arg with
   | .Name _ n _ => return [n.val]
@@ -1332,9 +1336,9 @@ def unpackPyArguments (ctx : TranslationContext) (args: Python.arguments SourceR
                     throw (.unsupportedConstruct "Default value type is invalid" (toString (repr arg)))
               | _ => pure ()
             for ty in tys do
-              if ¬ (isOfAnyType ty || ty ∈ ctx.compositeTypeNames) then
+              if ¬ (isOfAnyType ty || isCompositeType ctx ty) then
                 throw (.unsupportedConstruct "Unknown type" ty)
-            if tys.length > 1 && tys.any (λ ty => ty ∈ ctx.compositeTypeNames) then
+            if tys.length > 1 && tys.any (isCompositeType ctx) then
               throw (.unsupportedConstruct "Argument of union of class types is not supported" (toString (repr arg)))
             argtypes := argtypes ++ [{name:= name.val, md:=md, tys:= tys, default:= default}]
       return (argtypes, kwargs.val.isSome)
@@ -1393,14 +1397,12 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
     -- Translate parameters
     let mut inputs : List Parameter := []
 
-    inputs ← funcDecl.args.mapM (fun (name, ty, _) => do
-        match ctx.importedSymbols[ty]? with
-        | some (ImportedSymbol.compositeType _) =>
-          pure { name := name, type := mkHighTypeMd (.UserDefined ty) }
-        | some _ =>
-          throw (.userPythonError sourceRange s!"'{ty}' is not a type")
-        | _ =>
-          pure { name := name, type := AnyTy})
+    inputs := funcDecl.args.map (fun arg =>
+        if arg.tys.length == 1 && isCompositeType ctx arg.tys[0]! then
+          { name := arg.name, type := mkHighTypeMd (.UserDefined {text:= arg.tys[0]!}) }
+        else
+          { name := arg.name, type := AnyTy})
+
     if funcDecl.hasKwargs then
       let paramType ← translateType ctx PyLauType.DictStrAny
       inputs:= inputs ++ [{ name := "kwargs", type := paramType }]
