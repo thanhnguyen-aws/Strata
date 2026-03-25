@@ -1225,25 +1225,45 @@ def getUnionTypes (arg: Python.expr SourceRange) : List (Python.expr SourceRange
   | .BinOp _ left _ right => getUnionTypes left ++ getUnionTypes right
   | _ => [arg]
 
-partial def argumentTypeToString (arg: Python.expr SourceRange) : Except TranslationError (List String) :=
+def isOfAnyType (ty: String): Bool := ty ∈ ["None", "bool", "int", "str", "float", "datetime", "ListAny", "DictStrAny", "Any"]
+
+partial def getArgumentTypes (arg: Python.expr SourceRange) : Except TranslationError (List String) :=
   match arg with
   | .Name _ n _ => return [n.val]
-  | .Subscript _ _ _ _ =>
-    let subscript_list:= getNestedSubscripts arg
-    let subscript_head := subscript_list[0]!
-    let slice_head := subscript_list[1]!
-    let v_name := pyExprToString subscript_head
-    match v_name with
-    | "Optional" => return [pyExprToString slice_head, "None"]
-    | "Union" =>  match slice_head with
-        | .Tuple _ tys _ => return (← tys.val.toList.mapM argumentTypeToString).flatten
+  | .Subscript _ _ slice _ =>
+    let subscriptList:= getNestedSubscripts arg
+    let subscriptRoot := pyExprToString subscriptList[0]!
+    let sliceHead := subscriptList[1]!
+    match subscriptRoot with
+    | "Optional" => return [pyExprToString sliceHead, "None"]
+    | "Union" =>  match sliceHead with
+        | .Tuple _ tys _ => return (← tys.val.toList.mapM getArgumentTypes).flatten
         | _ => throw (.internalError s!"Unhandled Expr: {repr arg}")
-    | "List" => return ["ListAny"]
-    | "Dict" => return ["DictStrAny"]
+    | "List" => do
+      match ← getArgumentTypes slice with
+      | [ty] =>
+        if isOfAnyType ty then
+          return ["ListAny"]
+        else
+          throw (.unsupportedConstruct "List of non-value type is not supported" s!"List[{ty}]")
+      | _ => throw (.unsupportedConstruct "Invalid list element type" s!"List[{toString (repr slice)}]")
+    | "Dict" => do match sliceHead with
+        | .Tuple _ tys _ =>
+          if tys.val.size != 2 then
+            throw (.internalError s!"Unhandled Expr: {repr arg}")
+          else
+          match ← getArgumentTypes tys.val[0]!, ← getArgumentTypes tys.val[1]! with
+          | ["str"], [ty] =>
+            if isOfAnyType ty then
+              return ["DictStrAny"]
+            else
+              throw (.unsupportedConstruct "Dict of non-value type is not supported" ty)
+          | _, _ => throw (.internalError s!"Unhandled Dict key/value types: {repr arg}")
+        | _ => throw (.unsupportedConstruct "Unhandled Dict key/value types" (toString (repr sliceHead)))
     | _ =>  throw (.internalError s!"Unhandled Expr: {repr arg}")
   | .Constant _ _ _ => return ["None"]
   | .Attribute _ _ _ _ => return [pyExprToString arg]
-  | .BinOp _ _ _ _ => return (← (getUnionTypes arg).mapM argumentTypeToString).flatten
+  | .BinOp _ _ _ _ => return (← (getUnionTypes arg).mapM getArgumentTypes).flatten
   | _ => throw (.internalError s!"Unhandled Expr: {repr arg}")
 
 --The return is a List (inputname, type, default value) and a bool indicating if the function has Kwargs input
@@ -1256,18 +1276,32 @@ def unpackPyArguments (ctx : TranslationContext) (args: Python.arguments SourceR
       let listdefaults := (List.range (argscount - defaultscount)).map (λ _ => none)
                         ++ defaults.val.toList.map (λ x => some x)
       let argsinfo := args.val.toList.zip listdefaults
-      let argtypes : List PyArgInfo ←
-        argsinfo.mapM (λ a: Python.arg SourceRange × Option (Python.expr SourceRange) =>
-        match a.fst with
+      let mut argtypes : List PyArgInfo := []
+      let mut tys : List String := []
+      for (arg, default) in argsinfo do
+        match arg with
           | .mk_arg sr name oty _ =>
             let md := sourceRangeToMetaData ctx.filePath sr
-            match oty.val with
-              | .some ty =>
-                let defaultType := match a.snd.mapM (inferExprType ctx) with
-                  | .ok (some ty) => [ty]
-                  | _ => []
-                return {name:= name.val, md:=md, tys:=(← argumentTypeToString ty) ++ defaultType, default:= a.snd}
-              | _ => return {name:= name.val, md:= md, tys:=[PyLauType.Any], default:=a.snd})
+            let defaultType := match default.mapM (inferExprType ctx) with
+                  | .ok (some ty) => some ty
+                  | _ => none
+            tys ← match oty.val with
+              | .some ty => getArgumentTypes ty
+              | _ => pure [PyLauType.Any]
+            match defaultType with
+              | .some "None" => --Only None is allowed to add to type list
+                  if tys != [PyLauType.Any] then
+                    tys:= (PyLauType.None::tys).dedup
+              | .some defaultType =>
+                  if isOfAnyType defaultType && tys != [PyLauType.Any] && defaultType ∉ tys then
+                    throw (.unsupportedConstruct "Default value type is invalid" (toString (repr arg)))
+              | _ => pure ()
+            for ty in tys do
+              if ¬ (isOfAnyType ty || ty ∈ ctx.compositeTypeNames) then
+                throw (.unsupportedConstruct "Unknown type" ty)
+            if tys.length > 1 && tys.any (λ ty => ty ∈ ctx.compositeTypeNames) then
+              throw (.unsupportedConstruct "Argument of union of class types is not supported" (toString (repr arg)))
+            argtypes := argtypes ++ [{name:= name.val, md:=md, tys:= tys, default:= default}]
       return (argtypes, kwargs.val.isSome)
 
 def pyFuncDefToPythonFunctionDecl  (ctx : TranslationContext) (f : Python.stmt SourceRange) : Except TranslationError PythonFunctionDecl := do
@@ -1282,8 +1316,6 @@ def pyFuncDefToPythonFunctionDecl  (ctx : TranslationContext) (f : Python.stmt S
           | some retExpr => some (pyExprToString retExpr)
           | none => none
     let hasKwargs := args_trans.snd
-    if args.any (λ arg => arg.tys.length > 1 && (arg.tys.any (λ ty => ty ∈ ctx.compositeTypeNames))) then
-      throw (.unsupportedConstruct "Arg of union of class types is not supported" (toString (repr f)))
     return {
       name
       args
@@ -1297,6 +1329,7 @@ def getSingleTypeConstraint (var: String) (ty: String): Option StmtExprMd :=
   | "str" => mkStmtExprMd (.StaticCall "Any..isfrom_string" [freeVar var])
   | "int" => mkStmtExprMd (.StaticCall "Any..isfrom_int" [freeVar var])
   | "bool" => mkStmtExprMd (.StaticCall "Any..isfrom_bool" [freeVar var])
+  | "float" => mkStmtExprMd (.StaticCall "Any..isfrom_float" [freeVar var])
   | "datetime" => mkStmtExprMd (.StaticCall "Any..isfrom_datetime" [freeVar var])
   | "None" => mkStmtExprMd (.StaticCall "Any..isfrom_none" [freeVar var])
   | "ListAny" => mkStmtExprMd (.StaticCall "Any..isfrom_ListAny" [freeVar var])

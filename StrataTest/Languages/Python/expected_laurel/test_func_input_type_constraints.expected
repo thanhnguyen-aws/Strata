@@ -29,7 +29,12 @@ assert_opt_name_none_or_str: ✅ pass (in prelude file)
 assert_opt_name_none_or_bar: ✅ pass (in prelude file)
 ensures_maybe_except_none: ✅ pass (in prelude file)
 ite_cond_calls_Any_to_bool_0: ✅ pass
+set_LaurelResult_calls_Any_get_0: ❓ unknown
+set_LaurelResult_calls_Any_get_1: ❓ unknown
 (Mul requires) Type constraint of x: ✅ pass (at line 3, col 8)
 (Mul requires) Type constraint of y: ✅ pass (at line 3, col 23)
 (Sum requires) Type constraint of x: ✅ pass (at line 6, col 8)
 (Sum requires) Type constraint of y: ✅ pass (at line 6, col 30)
+(List_Dict_index requires) Type constraint of l: ✅ pass (at line 11, col 20)
+(List_Dict_index requires) Type constraint of i: ✅ pass (at line 11, col 45)
+(List_Dict_index requires) Type constraint of s: ✅ pass (at line 11, col 54)
