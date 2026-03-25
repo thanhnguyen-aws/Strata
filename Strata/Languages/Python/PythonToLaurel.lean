@@ -964,6 +964,9 @@ def isCompositeType (ctx : TranslationContext) (ty: String) : Bool := match ctx.
   | some (ImportedSymbol.compositeType _) => true
   | _ => false
 
+/-- Extracts variable bindings from `with` statement items.
+    Returns a list of (variable name, type) pairs, where type defaults to `Any`.
+    Items without an `as` clause (e.g. `with open(...)`) are ignored. -/
 partial def getWithItemsVars (withItems: List (Python.withitem SourceRange))
     :List (String × String) :=
   withItems.filterMap fun item => match item with
@@ -972,13 +975,13 @@ partial def getWithItemsVars (withItems: List (Python.withitem SourceRange))
         | some var => some (pyExprToString var, PyLauType.Any)
         | _ => none
 
-def getForLoopVars (targetIter: Python.expr SourceRange) :List (String × String) :=
+/-- Extracts loop variables from a `for` loop target expression.
+    Handles single var or tuple/list unpacking targets. -/
+partial def getForLoopVars (targetIter: Python.expr SourceRange) :List (String × String) :=
   match targetIter with
-    | .Name _ n _ => [(n.val, PyLauType.Any)]
-    | .Tuple _ tup _ =>
-        tup.val.toList.filterMap fun n => match n with
-          | .Name _ n _ => (n.val, PyLauType.Any)
-          | _ => none
+    | .Name _ n _ => [(n.val, PyLauType.Any)]  -- `for x in ...`
+    | .Tuple _ tup _ | .List _ tup _ =>
+        tup.val.toList.flatMap fun n => getForLoopVars n -- `for x, y in ...` or `for [x, y] in ...`
     | _ => []
 
 partial def collectDeclaredNamesAndTypes (ctx : TranslationContext) (stmts : List (Python.stmt SourceRange)) : List (String × String) :=
@@ -1805,11 +1808,11 @@ def pythonToLaurel' (info : PreludeInfo)
       otherStmts := otherStmts.push stmt
 
   ctx := {ctx with variableTypes:= [("nullcall_ret", PyLauType.Any)]}
-  let (_, bodyStmts) ← translateStmtList ctx otherStmts.toList
-  let bodyStmts := prependExceptHandlingHelper bodyStmts
-  let bodyStmts := mkStmtExprMd (.LocalVariable "__name__" AnyTy (some <| strToAny "__main__")) :: bodyStmts
-  let bodyStmts := (mkStmtExprMd (.LocalVariable "nullcall_ret" AnyTy (some AnyNone))) :: bodyStmts
-  let bodyBlock := mkStmtExprMd (StmtExpr.Block bodyStmts none)
+  let nameDecl : Python.stmt SourceRange := .AnnAssign default (.Name default {val:= "__name__", ann:= default} default)
+                              (.Name default {val:= "str", ann:= default} default)
+                              {val:= some $ .Constant default (.ConString default {val:= "__main__", ann:= default}) default , ann:= default}
+                              default
+  let (bodyBlock, _) ← translateFunctionBody ctx [] (nameDecl::otherStmts.toList)
 
   let md := sourceRangeToMetaData ctx.filePath { start := 0, stop := 0 }
   let mainProc : Procedure := {
