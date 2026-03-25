@@ -1337,7 +1337,7 @@ def unpackPyArguments (ctx : TranslationContext) (args: Python.arguments SourceR
               | _ => pure ()
             for ty in tys do
               if ¬ (isOfAnyType ty || isCompositeType ctx ty) then
-                throw (.unsupportedConstruct "Unknown type" ty)
+                throw (.userPythonError .none s!"'{ty}' is not a type")
             if tys.length > 1 && tys.any (isCompositeType ctx) then
               throw (.unsupportedConstruct "Argument of union of class types is not supported" (toString (repr arg)))
             argtypes := argtypes ++ [{name:= name.val, md:=md, tys:= tys, default:= default}]
