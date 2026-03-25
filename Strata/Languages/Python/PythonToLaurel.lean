@@ -960,6 +960,9 @@ partial def translateAssign  (ctx : TranslationContext)
       | _ => throw (.unsupportedConstruct "Assignment targets not yet supported" (toString (repr lhs)))
     | _ => throw (.unsupportedConstruct "Assignment targets not yet supported" (toString (repr lhs)))
 
+def isCompositeType (ctx : TranslationContext) (ty: String) : Bool := match ctx.importedSymbols[ty]? with
+  | some (ImportedSymbol.compositeType _) => true
+  | _ => false
 
 partial def getWithItemsVars (withItems: List (Python.withitem SourceRange))
     :List (String × String) :=
@@ -985,7 +988,7 @@ partial def collectDeclaredNamesAndTypes (ctx : TranslationContext) (stmts : Lis
       let ty := match translateExpr ctx value with
       | .ok {val := .New classname, ..}  => classname.text
       | .ok {val := .StaticCall funcname _ , ..} =>
-          if funcname.text ∈ ctx.compositeTypeNames then funcname.text else PyLauType.Any
+          if isCompositeType ctx funcname.text then funcname.text else PyLauType.Any
       | _ => PyLauType.Any
       let names := (lhs.val.toList.filter (λ e => match e with |.Name _ _ _ => true | _=> false)).map pyExprToString
       names.map (λ n => (n, ty))
@@ -995,7 +998,7 @@ partial def collectDeclaredNamesAndTypes (ctx : TranslationContext) (stmts : Lis
           match translateExpr ctx value with
           | .ok {val := .New classname, ..}  => classname.text
           | .ok {val := .StaticCall funcname _ , ..} =>
-            if funcname.text ∈ ctx.compositeTypeNames then funcname.text else PyLauType.Any
+            if isCompositeType ctx funcname.text then funcname.text else PyLauType.Any
           | _ => pyExprToString annoTy
         | _ => pyExprToString annoTy
       [(pyExprToString lhs, ty)]
@@ -1733,9 +1736,17 @@ def pythonToLaurel' (info : PreludeInfo)
     instanceProcedures := []
   }
 
+    let overloadCompositeType := Std.HashSet.ofList $
+      (overloadTable.values.flatMap (·.values)).map fun ident =>
+        if ident.pythonModule.isEmpty then
+          ident.name
+        else
+          ident.pythonModule ++ "_" ++ ident.name
+    let mut compositeTypeNames := info.compositeTypes.union overloadCompositeType
+
   -- FIRST PASS: Collect all class definitions and field type info
   let mut compositeTypes : List CompositeType := [pyErrorTy]
-  let mut compositeTypeNames := info.compositeTypes.insert "PythonError"
+  compositeTypeNames := compositeTypeNames.insert "PythonError"
   let mut classFieldHighType : Std.HashMap String (Std.HashMap String HighType) := {}
   for stmt in body do
     match stmt with
