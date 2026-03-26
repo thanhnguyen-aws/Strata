@@ -1421,6 +1421,7 @@ def getUnionTypeConstraint (var: String) (md: MetaData) (tys: List String) (func
     some {createBoolOrExpr type_constraints with md:=md}
 
 def getReturnTypeEnsure (md: MetaData) (tys: List String) (funcname: String): Option StmtExprMd :=
+  let tys := tys.filter (λ ty => ty ≠ "None")
   let type_constraints := tys.filterMap (getSingleTypeConstraint PyLauFuncReturnVar)
   if type_constraints.isEmpty then none else
     let md: MetaData := md.withPropertySummary $ "(" ++ funcname ++ " ensures) Return type constraint"

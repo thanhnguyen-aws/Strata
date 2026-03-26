@@ -1,3 +1,5 @@
+⚠️ [addPathCondition] Label clash detected for requires_0, using unique label requires_0_1.
+⚠️ [addPathCondition] Label clash detected for requires_1, using unique label requires_1_1.
 
 ==== Verification Results ====
 List_get_body_calls_List_get_0: ✅ pass (in prelude file)
