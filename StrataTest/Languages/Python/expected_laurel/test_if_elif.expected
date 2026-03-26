@@ -29,8 +29,12 @@ assert_opt_name_none_or_str: ✅ pass (in prelude file)
 assert_opt_name_none_or_bar: ✅ pass (in prelude file)
 ensures_maybe_except_none: ✅ pass (in prelude file)
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 2, col 4)
+(classify ensures) Return type constraint: ✅ pass
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 4, col 4)
+(classify ensures) Return type constraint: ✅ pass
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 6, col 4)
+(classify ensures) Return type constraint: ✅ pass
+(classify ensures) Return type constraint: ✅ pass
 (classify requires) Type constraint of x: ✅ pass (at line 1, col 13)
 assert_assert(225)_calls_Any_to_bool_0: ✅ pass (at line 13, col 4)
 assert(225): ❓ unknown (at line 13, col 4)
@@ -45,5 +49,5 @@ assert_assert(444)_calls_Any_to_bool_0: ✅ pass (at line 22, col 4)
 assert(444): ❓ unknown (at line 22, col 4)
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 24, col 0)
 
-DETAIL: 40 passed, 0 failed, 4 inconclusive
+DETAIL: 44 passed, 0 failed, 4 inconclusive
 RESULT: Inconclusive

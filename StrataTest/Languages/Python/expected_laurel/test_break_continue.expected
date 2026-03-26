@@ -29,8 +29,12 @@ assert_opt_name_none_or_str: ✅ pass (in prelude file)
 assert_opt_name_none_or_bar: ✅ pass (in prelude file)
 ensures_maybe_except_none: ✅ pass (in prelude file)
 loop_guard_calls_Any_to_bool_0: ✅ pass (at line 3, col 4)
+(test_while_break ensures) Return type constraint: ❌ fail
 loop_guard_calls_Any_to_bool_0: ✅ pass (at line 8, col 4)
 loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 8, col 4)
+(test_while_continue ensures) Return type constraint: ❓ unknown
+(test_for_break ensures) Return type constraint: ❌ fail
+(test_for_continue ensures) Return type constraint: ❌ fail
 
-DETAIL: 31 passed, 0 failed, 0 inconclusive
-RESULT: Analysis success
+DETAIL: 31 passed, 3 failed, 1 inconclusive
+RESULT: Failures found

@@ -28,7 +28,8 @@ assert_name_is_foo: ✅ pass (in prelude file)
 assert_opt_name_none_or_str: ✅ pass (in prelude file)
 assert_opt_name_none_or_bar: ✅ pass (in prelude file)
 ensures_maybe_except_none: ✅ pass (in prelude file)
+postcondition: ✅ pass (at line 8, col 0)
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 13, col 0)
 
-DETAIL: 29 passed, 0 failed, 0 inconclusive
+DETAIL: 30 passed, 0 failed, 0 inconclusive
 RESULT: Analysis success

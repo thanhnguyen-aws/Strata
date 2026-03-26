@@ -32,21 +32,26 @@ loop_guard_calls_Any_to_bool_0: ✅ pass (at line 4, col 4)
 loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 4, col 4)
 assert_assert(134)_calls_Any_to_bool_0: ✅ pass (at line 7, col 4)
 Assertion failed at line 7, col 4: assert(134): ❌ fail
+(test_while_countdown ensures) Return type constraint: ❌ fail
 loop_guard_calls_Any_to_bool_0: ✅ pass (at line 12, col 4)
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 14, col 8)
 assert_assert(344)_calls_Any_to_bool_0: ✅ pass (at line 16, col 4)
 assert(344): ✅ pass (at line 16, col 4)
+(test_while_true_break ensures) Return type constraint: ❓ unknown
 loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 12, col 4)
 assert_assert(344)_calls_Any_to_bool_0: ✅ pass (at line 16, col 4)
 assert(344): ✅ pass (at line 16, col 4)
+(test_while_true_break ensures) Return type constraint: ✅ pass
 loop_guard_calls_Any_to_bool_0: ✅ pass (at line 22, col 4)
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 24, col 8)
 loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 22, col 4)
 assert_assert(589)_calls_Any_to_bool_0: ✅ pass (at line 27, col 4)
 assert(589): ❓ unknown (at line 27, col 4)
+(test_while_with_continue ensures) Return type constraint: ❓ unknown
 loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 22, col 4)
 assert_assert(589)_calls_Any_to_bool_0: ✅ pass (at line 27, col 4)
 assert(589): ❓ unknown (at line 27, col 4)
+(test_while_with_continue ensures) Return type constraint: ❓ unknown
 
-DETAIL: 44 passed, 1 failed, 2 inconclusive
+DETAIL: 45 passed, 2 failed, 5 inconclusive
 RESULT: Failures found

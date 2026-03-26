@@ -30,6 +30,8 @@ assert_opt_name_none_or_bar: ✅ pass (in prelude file)
 ensures_maybe_except_none: ✅ pass (in prelude file)
 assert_assert(285)_calls_Any_to_bool_0: ✅ pass (at line 14, col 4)
 Assertion failed at line 14, col 4: assert(285): ❌ fail
+postcondition: ✅ pass (at line 11, col 0)
+(process_buffer ensures) Return type constraint: ✅ pass
 
-DETAIL: 29 passed, 1 failed, 0 inconclusive
+DETAIL: 31 passed, 1 failed, 0 inconclusive
 RESULT: Failures found

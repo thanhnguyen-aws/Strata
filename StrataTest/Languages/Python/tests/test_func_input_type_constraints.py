@@ -3,7 +3,7 @@ from typing import Union
 def Mul(x: int | bool, y: int | bool = True) -> int:
     return x * y 
 
-def Sum(x: Union[int , bool], y: Union[int , bool] = None) -> int:
+def Sum(x: Union[int , bool], y: Union[int , bool] = None) -> int | bool:
     if y == None:
       return x
     return x + y 
