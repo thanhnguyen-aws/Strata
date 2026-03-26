@@ -47,5 +47,5 @@ assert_assert(589)_calls_Any_to_bool_0: ✅ pass (at line 27, col 4)
 assert(589): ❓ unknown (at line 27, col 4)
 (test_while_with_continue ensures) Return type constraint: ❓ unknown
 
-DETAIL: 45 passed, 2 failed, 5 inconclusive
+DETAIL: 39 passed, 2 failed, 5 inconclusive
 RESULT: Failures found

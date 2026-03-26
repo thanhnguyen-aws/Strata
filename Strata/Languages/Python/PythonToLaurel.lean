@@ -838,8 +838,8 @@ partial def translateCall (ctx : TranslationContext)
     let trans_posArgs ← args.mapM (translateExpr ctx)
     let trans_dict ← translateVarKwargs ctx kwords
     let remainingParams := funcDecl.args.drop args.length
-    let trans_dictArgs := remainingParams.map fun (argName, _, dflt) =>
-      DictStrAny_get_param trans_dict argName dflt.isSome
+    let trans_dictArgs := remainingParams.map fun arg =>
+      DictStrAny_get_param trans_dict arg.name arg.default.isSome
     let allArgs := trans_posArgs ++ trans_dictArgs
     let kwargsArg := if funcDecl.hasKwargs then [trans_dict] else []
     emitCall (allArgs ++ kwargsArg)

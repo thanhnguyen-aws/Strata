@@ -22,34 +22,27 @@ PFloorDiv_body_calls_Int.SafeDiv_2: ✅ pass (in prelude file)
 PFloorDiv_body_calls_Int.SafeDiv_3: ✅ pass (in prelude file)
 PAnd_body_calls_Any_to_bool_0: ✅ pass (in prelude file)
 POr_body_calls_Any_to_bool_0: ✅ pass (in prelude file)
-ret_type: ✅ pass (in prelude file)
-ret_type: ✅ pass (in prelude file)
-ret_pos: ✅ pass (in prelude file)
-assert_name_is_foo: ✅ pass (in prelude file)
-assert_opt_name_none_or_str: ✅ pass (in prelude file)
-assert_opt_name_none_or_bar: ✅ pass (in prelude file)
-ensures_maybe_except_none: ✅ pass (in prelude file)
 (greet ensures) Return type constraint: ✅ pass
 loop_guard_calls_Any_to_bool_0: ✅ pass (at line 8, col 4)
 loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 8, col 4)
 (power ensures) Return type constraint: ❌ fail
-(greet requires) Type constraint of name: ✅ pass (at line 1, col 10)
-(greet requires) Type constraint of greeting: ✅ pass (at line 1, col 21)
+callElimAssert_requires_0_21: ✅ pass
+callElimAssert_requires_1_22: ✅ pass
 assert_assert(325)_calls_Any_to_bool_0: ✅ pass (at line 15, col 4)
 assert(325): ❓ unknown (at line 15, col 4)
-(greet requires) Type constraint of name: ✅ pass (at line 1, col 10)
-(greet requires) Type constraint of greeting: ✅ pass (at line 1, col 21)
+callElimAssert_requires_0_15: ✅ pass
+callElimAssert_requires_1_16: ✅ pass
 assert_assert(421)_calls_Any_to_bool_0: ✅ pass (at line 18, col 4)
 assert(421): ❓ unknown (at line 18, col 4)
-(power requires) Type constraint of base: ✅ pass (at line 5, col 10)
-(power requires) Type constraint of exp: ✅ pass (at line 5, col 21)
+callElimAssert_requires_0_9: ✅ pass
+callElimAssert_requires_1_10: ✅ pass
 assert_assert(501)_calls_Any_to_bool_0: ✅ pass (at line 21, col 4)
 Assertion failed at line 21, col 4: assert(501): ❌ fail
-(power requires) Type constraint of base: ✅ pass (at line 5, col 10)
-(power requires) Type constraint of exp: ✅ pass (at line 5, col 21)
+callElimAssert_requires_0_3: ✅ pass
+callElimAssert_requires_1_4: ✅ pass
 assert_assert(571)_calls_Any_to_bool_0: ✅ pass (at line 24, col 4)
 Assertion failed at line 24, col 4: assert(571): ❌ fail
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 26, col 0)
 
-DETAIL: 44 passed, 3 failed, 2 inconclusive
+DETAIL: 38 passed, 3 failed, 2 inconclusive
 RESULT: Failures found

@@ -30,5 +30,5 @@ loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 8, col 4)
 (test_for_break ensures) Return type constraint: ❌ fail
 (test_for_continue ensures) Return type constraint: ❌ fail
 
-DETAIL: 31 passed, 3 failed, 1 inconclusive
+DETAIL: 25 passed, 3 failed, 1 inconclusive
 RESULT: Failures found

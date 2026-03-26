@@ -27,5 +27,5 @@ Assertion failed at line 14, col 4: assert(285): ❌ fail
 postcondition: ✅ pass (at line 11, col 0)
 (process_buffer ensures) Return type constraint: ✅ pass
 
-DETAIL: 31 passed, 1 failed, 0 inconclusive
+DETAIL: 25 passed, 1 failed, 0 inconclusive
 RESULT: Failures found

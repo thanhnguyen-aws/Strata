@@ -22,13 +22,6 @@ PFloorDiv_body_calls_Int.SafeDiv_2: ✅ pass (in prelude file)
 PFloorDiv_body_calls_Int.SafeDiv_3: ✅ pass (in prelude file)
 PAnd_body_calls_Any_to_bool_0: ✅ pass (in prelude file)
 POr_body_calls_Any_to_bool_0: ✅ pass (in prelude file)
-ret_type: ✅ pass (in prelude file)
-ret_type: ✅ pass (in prelude file)
-ret_pos: ✅ pass (in prelude file)
-assert_name_is_foo: ✅ pass (in prelude file)
-assert_opt_name_none_or_str: ✅ pass (in prelude file)
-assert_opt_name_none_or_bar: ✅ pass (in prelude file)
-ensures_maybe_except_none: ✅ pass (in prelude file)
 (get_number ensures) Return type constraint: ✅ pass
 (get_greeting ensures) Return type constraint: ✅ pass
 (get_flag ensures) Return type constraint: ✅ pass
@@ -40,11 +33,11 @@ assert_assert(387)_calls_Any_to_bool_0: ✅ pass (at line 23, col 4)
 assert(387): ❓ unknown (at line 23, col 4)
 assert_assert(474)_calls_Any_to_bool_0: ✅ pass (at line 26, col 4)
 Assertion failed at line 26, col 4: assert(474): ❌ fail
-(add requires) Type constraint of a: ✅ pass (at line 14, col 8)
-(add requires) Type constraint of b: ✅ pass (at line 14, col 16)
+callElimAssert_requires_0_3: ✅ pass
+callElimAssert_requires_1_4: ✅ pass
 assert_assert(558)_calls_Any_to_bool_0: ✅ pass (at line 29, col 4)
 Assertion failed at line 29, col 4: assert(558): ❌ fail
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 31, col 0)
 
-DETAIL: 40 passed, 3 failed, 1 inconclusive
+DETAIL: 34 passed, 3 failed, 1 inconclusive
 RESULT: Failures found
