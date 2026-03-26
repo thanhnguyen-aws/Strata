@@ -964,6 +964,8 @@ def isCompositeType (ctx : TranslationContext) (ty: String) : Bool := match ctx.
   | some (ImportedSymbol.compositeType _) => true
   | _ => false
 
+def isOfAnyType (ty: String): Bool := ty ∈ ["None", "bool", "int", "str", "float", "datetime", "ListAny", "DictStrAny", "Any"]
+
 /-- Extracts variable bindings from `with` statement items.
     Returns a list of (variable name, type) pairs, where type defaults to `Any`.
     Items without an `as` clause (e.g. `with open(...)`) are ignored. -/
@@ -1002,6 +1004,7 @@ partial def collectDeclaredNamesAndTypes (ctx : TranslationContext) (stmts : Lis
           | .ok {val := .New classname, ..}  => classname.text
           | .ok {val := .StaticCall funcname _ , ..} =>
             if isCompositeType ctx funcname.text then funcname.text else PyLauType.Any
+          | .ok {val := .Hole, ..} => PyLauType.Any
           | _ => pyExprToString annoTy
         | _ => pyExprToString annoTy
       [(pyExprToString lhs, ty)]
@@ -1025,24 +1028,22 @@ partial def collectDeclaredNamesAndTypes (ctx : TranslationContext) (stmts : Lis
   stmts.flatMap go
 
 def createVarDeclStmtsAndCtx (ctx : TranslationContext) (newDecls : List (String × String))
-    : List StmtExprMd × TranslationContext :=
+    : Except TranslationError (List StmtExprMd × TranslationContext) := do
   let newDecls := newDecls.foldl (fun acc (n, ty) =>
       if acc.any (fun (an, _) => an == n) || ctx.variableTypes.any (fun (vn, _) => vn == n)
       then acc else acc ++ [(n, ty)]) []
-  let isCompositeOrError (tyStr : String) : Bool :=
-    tyStr == "PythonError" ||
-    match ctx.importedSymbols[tyStr]? with
-    | some (ImportedSymbol.compositeType _) => true
-    | _ => false
-  let hoistedDecls : List StmtExprMd := newDecls.map fun (name, tyStr) =>
-      let ty := if isCompositeOrError tyStr then
-          mkHighTypeMd (.UserDefined tyStr)
-        else AnyTy
-      mkStmtExprMd (StmtExpr.LocalVariable (name : String) ty (some (mkStmtExprMd .Hole)))
+  let hoistedDecls : List StmtExprMd ←  newDecls.mapM fun (name, tyStr) => do
+      if isCompositeType ctx tyStr then
+        let ty := mkHighTypeMd (.UserDefined tyStr)
+        pure $ mkStmtExprMd (StmtExpr.LocalVariable (name : String) ty (some (mkStmtExprMd .Hole)))
+      else if isOfAnyType tyStr then
+        pure $ mkStmtExprMd (StmtExpr.LocalVariable (name : String) AnyTy (some (mkStmtExprMd .Hole)))
+      else
+        throw (.userPythonError .none s!"'{tyStr}' is not a type")
   let hoistedCtx := { ctx with variableTypes := ctx.variableTypes ++
       (newDecls.map fun (n, ty) =>
-        if isCompositeOrError ty then (n, ty) else (n, PyLauType.Any)) }
-  (hoistedDecls, hoistedCtx)
+        if isCompositeType ctx ty then (n, ty) else (n, PyLauType.Any)) }
+  return (hoistedDecls, hoistedCtx)
 
 mutual
 
@@ -1340,7 +1341,7 @@ def translateFunctionBody (ctx : TranslationContext) (inputTypes : List (String 
   : Except TranslationError (StmtExprMd × TranslationContext) := do
     let ctx := {ctx with variableTypes:= ("nullcall_ret", PyLauType.Any)::inputTypes}
     let newDecls := collectDeclaredNamesAndTypes ctx body
-    let (varDecls, ctx) := createVarDeclStmtsAndCtx ctx newDecls
+    let (varDecls, ctx) ←  createVarDeclStmtsAndCtx ctx newDecls
     let (newctx, bodyStmts) ← translateStmtList ctx body
     let bodyStmts := prependExceptHandlingHelper (varDecls ++ bodyStmts)
     let bodyStmts := (mkStmtExprMd (.LocalVariable "nullcall_ret" AnyTy (some AnyNone))) :: bodyStmts
