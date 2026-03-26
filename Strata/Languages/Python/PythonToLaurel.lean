@@ -238,6 +238,12 @@ def translateType (ctx : TranslationContext) (typeStr : String) : Except Transla
           .ok (mkCoreType PyLauType.Any)
 
 def AnyTy := mkCoreType PyLauType.Any
+def compositeToStringName (typeName : String) : String := "$composite_to_string_" ++ typeName
+def compositeToStringAnyName (typeName : String) : String := "$composite_to_string_any_" ++ typeName
+
+def isCompositeType (ctx : TranslationContext) (typeName : String) : Bool :=
+  typeName != PyLauType.Any && (ctx.importedSymbols[typeName]?.any fun s =>
+    match s with | .compositeType _ => true | _ => false)
 def strToAny (s: String) := mkStmtExprMd (.StaticCall "from_string" [mkStmtExprMd (StmtExpr.LiteralString s)])
 def intToAny (i: Int) := mkStmtExprMd (.StaticCall "from_int" [mkStmtExprMd (StmtExpr.LiteralInt i)])
 def boolToAny (b: Bool) := mkStmtExprMd (.StaticCall "from_bool" [mkStmtExprMd (StmtExpr.LiteralBool b)])
@@ -294,6 +300,14 @@ def DictStrAny_mk_aux
 def DictStrAny_empty:= mkStmtExprMd (StmtExpr.StaticCall "DictStrAny_empty" [])
 
 def DictStrAny_mk (kv: List (String × StmtExprMd)) := DictStrAny_mk_aux kv DictStrAny_empty
+
+/-- Extract a value from a dictionary for a function parameter.
+    For required params, generates `Any_get(dict, from_string(key))` (with precondition).
+    For optional params, generates `Any_get_or_none(dict, from_string(key))` (returns `None` if absent).
+    Both operate on `Any`-typed dictionaries. -/
+def DictStrAny_get_param (dict : StmtExprMd) (key : String) (isOptional : Bool) : StmtExprMd :=
+  let func := if isOptional then "Any_get_or_none" else "Any_get"
+  mkStmtExprMd (.StaticCall func [dict, strToAny key])
 
 /-- Look up a function call in the overload dispatch table.
     Extracts the bare function name from the call target, then
@@ -788,6 +802,45 @@ partial def translateCall (ctx : TranslationContext)
     | .Name range _ _ => range
     | _ => .none
   let funcDecl := ctx.functionSignatures.find? fun x => x.name == funcName
+  -- Emit the final call, handling Name vs Attribute dispatch and transparent procedures.
+  let emitCall (callArgs : List StmtExprMd) : Except TranslationError StmtExprMd := do
+    let mkCall (name : String) := mkStmtExprMd (StmtExpr.StaticCall name callArgs)
+    match f with
+    | .Name  _ _ _ =>
+        -- If calling str() on a composite-typed variable, use $composite_to_string_any_<type>
+        -- so that heap parameterization adds the heap dependency.
+        let funcName' :=
+          if funcName == "to_string_any" && args.length == 1 then
+            match inferExprType ctx args[0]! with
+            | .ok argType =>
+              if isCompositeType ctx argType then
+                compositeToStringAnyName argType
+              else funcName
+            | .error _ => funcName
+          else funcName
+        return mkCall funcName'
+    | .Attribute _ val _attr _ =>
+        let _target_trans ← translateExpr ctx val
+        if opt_firstarg.isSome then
+          if let some (ImportedSymbol.procedure _ _ true) := ctx.importedSymbols[funcName]? then
+            return mkCall funcName
+          else
+            return mkStmtExprMd (.Hole)
+        else return mkCall funcName
+    | _ => throw (.unsupportedConstruct "Invalid call construct" (toString (repr f)))
+  -- When ** is used at the call site and we have a known function signature,
+  -- expand the dictionary into individual arguments using DictStrAny_get
+  if isVarKwargs kwords && funcDecl.isSome then
+    let funcDecl := funcDecl.get!
+    let trans_posArgs ← args.mapM (translateExpr ctx)
+    let trans_dict ← translateVarKwargs ctx kwords
+    let remainingParams := funcDecl.args.drop args.length
+    let trans_dictArgs := remainingParams.map fun (argName, _, dflt) =>
+      DictStrAny_get_param trans_dict argName dflt.isSome
+    let allArgs := trans_posArgs ++ trans_dictArgs
+    let kwargsArg := if funcDecl.hasKwargs then [trans_dict] else []
+    emitCall (allArgs ++ kwargsArg)
+  else
   let (args, kwords, funcdecl_hasKwargs) ←
     combinePositionalAndKeywordArgs args kwords funcDecl methodName callRange
   let trans_args ← args.mapM (translateExpr ctx)
@@ -796,20 +849,7 @@ partial def translateCall (ctx : TranslationContext)
     if kwords.length == 0 then
       if funcdecl_hasKwargs then [DictStrAny_empty] else []
     else [trans_kwords]
-  match f with
-  | .Name  _ _ _ =>  return mkStmtExprMd (StmtExpr.StaticCall funcName (trans_args ++ trans_kwords_exprs))
-  | .Attribute _ val _attr _ =>
-      let _target_trans ← translateExpr ctx val
-      if opt_firstarg.isSome then
-        -- Emit StaticCall only for procedures with transparent bodies
-        -- (e.g. pyspec with precondition assertions). Opaque procedures stay as Hole.
-        if let some (ImportedSymbol.procedure _ _ true) := ctx.importedSymbols[funcName]? then
-          return mkStmtExprMd (StmtExpr.StaticCall funcName (trans_args ++ trans_kwords_exprs))
-        else
-          return mkStmtExprMd (.Hole)
-      else
-        return mkStmtExprMd (StmtExpr.StaticCall funcName (trans_args ++ trans_kwords_exprs))
-  | _ =>  throw (.unsupportedConstruct "Invalid call construct" (toString (repr f)))
+  emitCall (trans_args ++ trans_kwords_exprs)
 
 
 end
@@ -951,10 +991,6 @@ partial def translateAssign  (ctx : TranslationContext)
           return (ctx, [assignStmt])
       | _ => throw (.unsupportedConstruct "Assignment targets not yet supported" (toString (repr lhs)))
     | _ => throw (.unsupportedConstruct "Assignment targets not yet supported" (toString (repr lhs)))
-
-def isCompositeType (ctx : TranslationContext) (ty: String) : Bool := match ctx.importedSymbols[ty]? with
-  | some (ImportedSymbol.compositeType _) => true
-  | _ => false
 
 /-- Extracts variable bindings from `with` statement items.
     Returns a list of (variable name, type) pairs, where type defaults to `Any`.
@@ -1819,8 +1855,35 @@ def pythonToLaurel' (info : PreludeInfo)
     isFunctional := false
   }
 
+  -- Generate $composite_to_string_<type> and $composite_to_string_any_<type>
+  -- for each composite type. These take a composite, so heap parameterization
+  -- will add a Heap parameter, ensuring the verifier does not assume referential
+  -- transparency across heap mutations.
+  for ct in compositeTypes do
+    let selfParam : Parameter := { name := "self", type := mkHighTypeMd (.UserDefined ct.name.text) }
+    procedures := procedures.push
+      { name := { text := compositeToStringName ct.name.text }
+        inputs := [selfParam]
+        outputs := [{ name := "result", type := mkHighTypeMd .TString }]
+        preconditions := []
+        determinism := .deterministic none
+        decreases := none
+        body := .Opaque [] none []
+        md := default
+        isFunctional := false }
+    procedures := procedures.push
+      { name := { text := compositeToStringAnyName ct.name.text }
+        inputs := [selfParam]
+        outputs := [{ name := "result", type := AnyTy }]
+        preconditions := []
+        determinism := .deterministic none
+        decreases := none
+        body := .Opaque [] none []
+        md := default
+        isFunctional := false }
+
   let program : Laurel.Program := {
-    staticProcedures := procedures.push mainProc |>.toList
+    staticProcedures := (procedures.push mainProc).toList
     staticFields := []
     types := compositeTypes.map TypeDefinition.Composite
     constants := []
