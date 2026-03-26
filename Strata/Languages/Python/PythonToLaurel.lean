@@ -1006,15 +1006,21 @@ partial def collectDeclaredNamesAndTypes (ctx : TranslationContext) (stmts : Lis
         | _ => pyExprToString annoTy
       [(pyExprToString lhs, ty)]
     | .If _ _ body elsebody => body.val.toList.flatMap go ++ elsebody.val.toList.flatMap go
-    | .For _ targetIter _ body _ _ => getForLoopVars targetIter ++ (body.val.toList.flatMap go)
+    | .For _ targetIter _ body _ _
+    | .AsyncFor _ targetIter _ body _ _ => getForLoopVars targetIter ++ (body.val.toList.flatMap go)
     | .While _ _ body _ => body.val.toList.flatMap go
-    | .Try _ body handlers _orelse finalbody =>
+    | .Try _ body handlers orelse finalbody
+    | .TryStar _ body handlers orelse finalbody =>
         let handlers_bodies := handlers.val.toList.map (λ h => match h with
           | .ExceptHandler _ _ _ body => body.val.toList)
         let error_var := (handlers.val.toList.filterMap (λ h => match h with
           | .ExceptHandler _ _ errname _ => errname.val)).map (λ h => (h.val, "PythonError"))
-        error_var ++ (body.val.toList.flatMap go) ++ (handlers_bodies.flatten.flatMap go) ++ (finalbody.val.toList.flatMap go)
-    | .With _ items body _ => (getWithItemsVars items.val.toList) ++ (body.val.toList.flatMap go)
+        error_var ++ (body.val.toList.flatMap go) ++ (handlers_bodies.flatten.flatMap go)
+          ++ (finalbody.val.toList.flatMap go) ++ (orelse.val.toList.flatMap go)
+    | .With _ items body _
+    | .AsyncWith _ items body _=> (getWithItemsVars items.val.toList) ++ (body.val.toList.flatMap go)
+    | .Match _ _ cases => cases.val.toList.flatMap (λ c => match c with
+          | .mk_match_case _ _ _ body => body.val.toList.flatMap go)
     | _ => []
   stmts.flatMap go
 
@@ -1059,6 +1065,8 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
       -- Declaration without initializer (not allowed in pure context, but OK in procedures)
       let varType := pyExprToString annotation
       let varName := pyExprToString target
+      if varName ∈ ctx.variableTypes.unzip.1 then
+          return (ctx, [])
       let newctx := {ctx with variableTypes:=(varName, varType)::ctx.variableTypes}
       let varType ← translateType ctx varType
       let declStmt := mkStmtExprMd (StmtExpr.LocalVariable varName varType AnyNone)
