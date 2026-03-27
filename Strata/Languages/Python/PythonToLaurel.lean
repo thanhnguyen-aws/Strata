@@ -614,21 +614,12 @@ partial def getListAttributes (expr: Python.expr SourceRange): (Python.expr Sour
       (ret.fst , ret.snd ++ [attr.val])
   | _ => (expr, [])
 
-partial def reMapFunctionName (ctx: TranslationContext) (fname: String) : String :=
-  if fname ∈ ctx.userClasses then
-    fname ++ "@__init__"
-  else
-    match fname with
-    | "str" => "to_string_any"
-    | "int" => "to_int_any"
-    | "len" => "Any_len_to_Any"
-    | "timedelta" => "timedelta_func" -- We handle timedelta as an int, not a class
-    | _ => fname
 partial def reMapFunctionName (_ctx: TranslationContext) (fname: String) : String :=
   match fname with
   | "str" => "to_string_any"
   | "int" => "to_int_any"
   | "len" => "Any_len_to_Any"
+  | "timedelta" => "timedelta_func" -- We handle timedelta as an int, not a class
   | _ => fname
 
 partial def isPackage (ctx : TranslationContext) (expr: Python.expr SourceRange) : Bool :=
@@ -1232,7 +1223,6 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   -- With statement: with EXPR as VAR: BODY
   -- Desugars to: mgr = EXPR; VAR = mgr.__enter__(); BODY; mgr.__exit__()
   | .With _ items body _ => do
-    let mut declStmts : List StmtExprMd := []
     let mut setupStmts : List StmtExprMd := []
     let mut cleanupStmts : List StmtExprMd := []
     let mut currentCtx := ctx
@@ -1252,22 +1242,20 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
         | some varExpr =>
           let varName := pyExprToString varExpr
           if varName ∈ currentCtx.variableTypes.unzip.fst then
-            -- Variable already declared — just reassign inside the block
-            declStmts := declStmts ++ [mgrDecl]
-            setupStmts := setupStmts ++ [mkStmtExprMd (StmtExpr.Assign
-              [mkStmtExprMd (StmtExpr.Identifier varName)] enterCall)]
+            let assignStmt := mkStmtExprMd (StmtExpr.Assign
+              [mkStmtExprMd (StmtExpr.Identifier varName)] enterCall)
+            setupStmts := setupStmts ++ [mgrDecl, assignStmt]
           else
             -- New variable — declare outside the block so it's visible after
             let varDecl := mkStmtExprMd (StmtExpr.LocalVariable varName AnyTy (some enterCall))
             currentCtx := {currentCtx with variableTypes := currentCtx.variableTypes ++ [(varName, PyLauType.Any)]}
-            declStmts := declStmts ++ [mgrDecl, varDecl]
+            setupStmts := setupStmts ++ [mgrDecl, varDecl]
         | none =>
-          declStmts := declStmts ++ [mgrDecl]
           setupStmts := setupStmts ++ [enterCall]
         cleanupStmts := cleanupStmts ++ [exitCall]
-    let (_bodyCtx, bodyStmts) ← translateStmtList currentCtx body.val.toList
+    let (bodyCtx, bodyStmts) ← translateStmtList currentCtx body.val.toList
     let block := mkStmtExprMdWithLoc (StmtExpr.Block (setupStmts ++ bodyStmts ++ cleanupStmts) none) md
-    return (currentCtx, declStmts ++ [block])
+    return (bodyCtx, [block])
 
   -- For loop: for target in iter: body (target may be any assignment target)
   -- Abstract: execute body once with havoc'd target, then havoc all modified variables
@@ -1417,7 +1405,7 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
         | _ =>
           pure { name := name, type := AnyTy})
     if funcDecl.hasKwargs then
-      let paramType := mkCoreType PyLauType.DictStrAny
+      let paramType := mkCoreType PyLauType.Any
       inputs:= inputs ++ [{ name := "kwargs", type := paramType }]
 
     -- Translate return type
@@ -1545,10 +1533,9 @@ def translateMethod (ctx : TranslationContext) (className : String)
     let outputs : List Parameter := [{name := "LaurelResult", type := AnyTy}]
 
     -- Translate method body with class context
-    let ctxWithClass := {ctx with currentClassName := some className}
-    let (_, bodyStmts) ← translateStmtList ctxWithClass body.val.toList
-    let bodyStmts := prependExceptHandlingHelper bodyStmts
-    let bodyBlock := mkStmtExprMd (StmtExpr.Block bodyStmts none)
+    let inputTypes := inputs.map (λ input => (input.name.text, PyLauType.Any))
+    let ctxWithClass := {ctx with currentClassName := some className, variableTypes:= ctx.variableTypes ++ inputTypes}
+    let (bodyBlock, _) ←  translateFunctionBody ctxWithClass inputTypes body.val.toList
 
     let md := sourceRangeToMetaData ctx.filePath methodStmt.ann
     return {
@@ -1790,20 +1777,18 @@ def pythonToLaurel' (info : PreludeInfo)
     instanceProcedures := []
   }
 
-    let overloadCompositeType := Std.HashSet.ofList $
+  let overloadCompositeType := Std.HashSet.ofList $
       (overloadTable.values.flatMap (·.values)).map fun ident =>
         if ident.pythonModule.isEmpty then
           ident.name
         else
           ident.pythonModule ++ "_" ++ ident.name
-    let mut compositeTypeNames := info.compositeTypes.union overloadCompositeType
+  let mut compositeTypeNames := info.compositeTypes.union overloadCompositeType
 
   -- FIRST PASS: Collect all class definitions and field type info
-  let mut compositeTypes : List CompositeType := [pyErrorTy]
-  compositeTypeNames := compositeTypeNames.insert "PythonError"
   let mut procedures : Array Procedure := #[]
   let mut compositeTypes : Array TypeDefinition := #[.Composite pyErrorTy]
-  let mut compositeTypeNames := info.compositeTypes.insert "PythonError"
+  compositeTypeNames := compositeTypeNames.insert "PythonError"
   let mut classFieldHighType : Std.HashMap String (Std.HashMap String HighType) := {}
   for stmt in body do
     match stmt with
