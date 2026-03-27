@@ -829,6 +829,8 @@ partial def translateCall (ctx : TranslationContext)
     | .Name range _ _ => range
     | _ => .none
   let funcDecl := ctx.functionSignatures.find? fun x => (x.name == funcName || x.name == funcName ++ "@__init__")
+  if funcDecl.isNone && kwords.length > 0 then
+    throwUserError f.ann s!"Undeclared function '{funcName}' called with keyword args"
   -- Emit the final call, handling Name vs Attribute dispatch and transparent procedures.
   let emitCall (callArgs : List StmtExprMd) : Except TranslationError StmtExprMd := do
     let mkCall (name : String) := mkStmtExprMd (StmtExpr.StaticCall name callArgs)
