@@ -227,6 +227,7 @@ def pythonTypeToCoreType (typeStr : String) : Option String :=
   | "Dict[str, Any]" => some PyLauType.DictStrAny
   | "List[str]" => some PyLauType.ListStr
   | "Any" => some PyLauType.Any
+  | "None" => some PyLauType.Any
   | "datetime" => some PyLauType.Datetime
   | "timedelta" => some PyLauType.Int
   | _ => none
@@ -1333,8 +1334,7 @@ def isOfAnyType (ty: String): Bool := ty ∈ ["None", "bool", "int", "str", "flo
 
 def checkValidTypeList (ctx : TranslationContext) (tys: List String) : Except TranslationError (List String) := do
   for ty in tys do
-    if ¬ (isOfAnyType ty || isCompositeType ctx ty) then
-      throw (.userPythonError .none s!"'{ty}' is not a type")
+    let _ ← translateType ctx ty
   if tys.length > 1 && tys.any (isCompositeType ctx) then
     throw (.unsupportedConstruct "Argument of union of class types is not supported" (toString tys))
   return tys
