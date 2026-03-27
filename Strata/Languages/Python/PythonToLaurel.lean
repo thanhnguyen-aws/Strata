@@ -828,7 +828,7 @@ partial def translateCall (ctx : TranslationContext)
     | .Attribute range _ _ _ => range
     | .Name range _ _ => range
     | _ => .none
-  let funcDecl := ctx.functionSignatures.find? fun x => x.name == funcName
+  let funcDecl := ctx.functionSignatures.find? fun x => (x.name == funcName || x.name == funcName ++ "@__init__")
   -- Emit the final call, handling Name vs Attribute dispatch and transparent procedures.
   let emitCall (callArgs : List StmtExprMd) : Except TranslationError StmtExprMd := do
     let mkCall (name : String) := mkStmtExprMd (StmtExpr.StaticCall name callArgs)
@@ -1550,7 +1550,7 @@ def extractFieldsFromInit (ctx : TranslationContext) (initBody : Array (Python.s
 
 /-- Translate a Python class to a Laurel CompositeType -/
 def translateClass (ctx : TranslationContext) (classStmt : Python.stmt SourceRange)
-    : Except TranslationError (CompositeType × Array Procedure) := do
+    : Except TranslationError (CompositeType × Array Procedure × List PythonFunctionDecl) := do
   match classStmt with
   | .ClassDef _ className _bases _ ⟨_, body⟩ _ _ =>
     let className := className.val
@@ -1591,7 +1591,7 @@ def translateClass (ctx : TranslationContext) (classStmt : Python.stmt SourceRan
       extending := []  -- No inheritance support for now
       fields := fields
       instanceProcedures := [] -- Laurel does not yet support instance procedures, so treat them as if they were static
-    }, instanceProcedures)
+    }, instanceProcedures, classFunDecls)
   | _ => throw (.internalError "Expected ClassDef")
 
 def getFunctions (decls: List Core.Decl) : List String :=
@@ -1762,6 +1762,7 @@ def pythonToLaurel' (info : PreludeInfo)
   let mut compositeTypes : Array TypeDefinition := #[.Composite pyErrorTy]
   let mut compositeTypeNames := info.compositeTypes.insert "PythonError"
   let mut classFieldHighType : Std.HashMap String (Std.HashMap String HighType) := {}
+  let mut allClassFuncDecls : List PythonFunctionDecl := []
   for stmt in body do
     match stmt with
     | .ClassDef _ _ _ _ _ _ _ =>
@@ -1775,7 +1776,8 @@ def pythonToLaurel' (info : PreludeInfo)
         classFieldHighType := classFieldHighType,
         filePath := filePath
       }
-      let (composite, instanceProcedures) ← translateClass initCtx stmt
+      let (composite, instanceProcedures, classFuncDecls) ← translateClass initCtx stmt
+      allClassFuncDecls := allClassFuncDecls ++ classFuncDecls
       procedures := procedures ++ instanceProcedures
       compositeTypes := compositeTypes.push <| .Composite composite
       compositeTypeNames := compositeTypeNames.insert composite.name.text
@@ -1794,7 +1796,7 @@ def pythonToLaurel' (info : PreludeInfo)
   | _ =>
   {
     currentClassName := none,
-    functionSignatures := info.functionSignatures
+    functionSignatures := info.functionSignatures ++ allClassFuncDecls
     preludeTypes := info.types,
     userFunctions := userFunctions,
     classFieldHighType := classFieldHighType,
