@@ -27,6 +27,7 @@ loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 4, col 4)
 assert_assert(134)_calls_Any_to_bool_0: ✅ pass (at line 7, col 4)
 Assertion failed at line 7, col 4: assert(134): ❌ fail
 (test_while_countdown ensures) Return type constraint: ❌ fail
+assert(134): ❓ unknown (at line 7, col 4)
 loop_guard_calls_Any_to_bool_0: ✅ pass (at line 12, col 4)
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 14, col 8)
 assert_assert(344)_calls_Any_to_bool_0: ✅ pass (at line 16, col 4)
@@ -49,3 +50,5 @@ assert(589): ❓ unknown (at line 27, col 4)
 
 DETAIL: 39 passed, 2 failed, 5 inconclusive
 RESULT: Failures found
+DETAIL: 38 passed, 0 failed, 3 inconclusive
+RESULT: Inconclusive

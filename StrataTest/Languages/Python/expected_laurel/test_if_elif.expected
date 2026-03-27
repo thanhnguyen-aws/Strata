@@ -30,6 +30,7 @@ ite_cond_calls_Any_to_bool_0: ✅ pass (at line 6, col 4)
 (classify ensures) Return type constraint: ✅ pass
 (classify ensures) Return type constraint: ✅ pass
 callElimAssert_requires_14: ✅ pass
+ite_cond_calls_Any_to_bool_0: ❓ unknown (at line 6, col 4)
 assert_assert(225)_calls_Any_to_bool_0: ✅ pass (at line 13, col 4)
 assert(225): ❓ unknown (at line 13, col 4)
 callElimAssert_requires_10: ✅ pass
@@ -45,3 +46,5 @@ ite_cond_calls_Any_to_bool_0: ✅ pass (at line 24, col 0)
 
 DETAIL: 38 passed, 0 failed, 4 inconclusive
 RESULT: Inconclusive
+DETAIL: 28 passed, 1 failed, 5 inconclusive
+RESULT: Failures found
