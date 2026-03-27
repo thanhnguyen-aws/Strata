@@ -1555,7 +1555,11 @@ def translateMethod (ctx : TranslationContext) (className : String)
           match arg with
           | .mk_arg _ paramName _paramAnnotation _ =>
             inputs := inputs ++ [{name := paramName.val, type := AnyTy}]
-
+    match args with
+      | .mk_arguments _ _ _ _ _ _ kwargs _ =>
+          if kwargs.val.isSome then
+            let paramType := mkCoreType PyLauType.DictStrAny
+            inputs:= inputs ++ [{ name := "kwargs", type := paramType }]
     -- Translate return type
     -- All methods return Any (void methods return Any via from_none)
     let outputs : List Parameter := [{name := "LaurelResult", type := AnyTy}]
@@ -1573,7 +1577,7 @@ def translateMethod (ctx : TranslationContext) (className : String)
     -- non-self input parameter to "$in_<name>" and prepend a local variable
     -- declaration  var <name> := $in_<name>  so the body works with a
     -- freely-modifiable local copy.
-    let nonSelfParams := inputs.filter (fun p => p.name.text != "self")
+    let nonSelfParams := inputs.filter (fun p => p.name.text != "self" && p.name.text != "kwargs")
     let renamedInputs := inputs.map fun p =>
       if p.name.text == "self" then p
       else { p with name := mkId ("$in_" ++ p.name.text) }
