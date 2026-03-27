@@ -25,7 +25,7 @@ POr_body_calls_Any_to_bool_0: ✅ pass (in prelude file)
 (greet ensures) Return type constraint: ✅ pass
 loop_guard_calls_Any_to_bool_0: ✅ pass (at line 8, col 4)
 loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 8, col 4)
-(power ensures) Return type constraint: ❌ fail
+(power ensures) Return type constraint: ❓ unknown
 callElimAssert_requires_0_21: ✅ pass
 callElimAssert_requires_1_22: ✅ pass
 assert_assert(325)_calls_Any_to_bool_0: ✅ pass (at line 15, col 4)
@@ -44,5 +44,5 @@ assert_assert(571)_calls_Any_to_bool_0: ✅ pass (at line 24, col 4)
 Assertion failed at line 24, col 4: assert(571): ❌ fail
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 26, col 0)
 
-DETAIL: 38 passed, 3 failed, 2 inconclusive
+DETAIL: 38 passed, 2 failed, 3 inconclusive
 RESULT: Failures found

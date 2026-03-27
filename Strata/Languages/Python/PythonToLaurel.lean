@@ -1331,10 +1331,6 @@ def getUnionTypes (arg: Python.expr SourceRange) : List (Python.expr SourceRange
 
 def isOfAnyType (ty: String): Bool := ty ∈ ["None", "bool", "int", "str", "float", "datetime", "ListAny", "DictStrAny", "Any"]
 
-def isCompositeType (ctx : TranslationContext) (ty: String) : Bool := match ctx.importedSymbols[ty]? with
-  | some (ImportedSymbol.compositeType _) => true
-  | _ => false
-
 def checkValidTypeList (ctx : TranslationContext) (tys: List String) : Except TranslationError (List String) := do
   for ty in tys do
     if ¬ (isOfAnyType ty || isCompositeType ctx ty) then
@@ -1420,7 +1416,7 @@ def pyFuncDefToPythonFunctionDecl  (ctx : TranslationContext) (f : Python.stmt S
   match f with
   | .FunctionDef _ name args _body _decorator_list returns _type_comment _ =>
     let name := match ctx.currentClassName with | none => name.val | some classname => classname ++ "@" ++ name.val
-    let args_trans ← unpackPyArguments args
+    let args_trans ← unpackPyArguments ctx args
     let args := if ctx.currentClassName.isSome then args_trans.fst.tail else args_trans.fst
     let retMd := sourceRangeToMetaData ctx.filePath returns.ann
     let ret ←  if name.endsWith "@__init__" then pure $ some ([(name.dropEnd "@__init__".length).toString], retMd)
@@ -1877,11 +1873,9 @@ def pythonToLaurel' (info : PreludeInfo)
   let mut compositeTypeNames := info.compositeTypes.union overloadCompositeType
 
   -- FIRST PASS: Collect all class definitions and field type info
-  let mut compositeTypes : List CompositeType := [pyErrorTy]
-  compositeTypeNames := compositeTypeNames.insert "PythonError"
   let mut procedures : Array Procedure := #[]
   let mut compositeTypes : Array TypeDefinition := #[.Composite pyErrorTy]
-  let mut compositeTypeNames := info.compositeTypes.insert "PythonError"
+  compositeTypeNames := compositeTypeNames.insert "PythonError"
   let mut classFieldHighType : Std.HashMap String (Std.HashMap String HighType) := {}
   for stmt in body do
     match stmt with
