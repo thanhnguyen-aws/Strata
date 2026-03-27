@@ -4,5 +4,5 @@ if x > 0:
         label = "large"
     else:
         label = "small"
-x = -1
-label = "negative"
+
+assert label == "large"
