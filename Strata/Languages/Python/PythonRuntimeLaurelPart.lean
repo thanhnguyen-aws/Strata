@@ -64,8 +64,8 @@ datatype Error {
 // Laurel does not support mutual blocks, so they are declared separately.
 
 datatype OptionInt {
-  Some (unwrap: int),
-  None ()
+  OptSome (unwrap: int),
+  OptNone ()
 }
 
 datatype Any {

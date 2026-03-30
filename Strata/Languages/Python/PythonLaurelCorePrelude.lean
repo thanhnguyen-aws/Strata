@@ -68,8 +68,8 @@ datatype Error () {
 // that the conversion from a string constant is handled by the translator.
 
 datatype OptionInt {
-  Some (unwrap: int),
-  None ()
+  OptSome (unwrap: int),
+  OptNone ()
 }
 
 datatype Any () {
@@ -412,14 +412,14 @@ inline function Any_get (dictOrList: Any, index: Any): Any
   requires  (Any..isfrom_Dict(dictOrList) && Any..isfrom_string(index) && DictStrAny_contains(Any..as_Dict!(dictOrList), Any..as_string!(index))) ||
             (Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) && Any..as_int!(index) >= 0 && Any..as_int!(index) < List_len(Any..as_ListAny!(dictOrList)))||
             (Any..isfrom_ListAny(dictOrList) && Any..isfrom_Slice(index) && Any..start!(index) >= 0 && Any..start!(index) < List_len(Any..as_ListAny!(dictOrList)) &&
-                ((OptionInt..isSome(Any..stop!(index))) &&  OptionInt..unwrap!(Any..stop!(index)) >= 0 && OptionInt..unwrap!(Any..stop!(index)) <= List_len(Any..as_ListAny!(dictOrList)) && Any..start!(index) <= OptionInt..unwrap!(Any..stop!(index))
-                  || (OptionInt..isNone(Any..stop!(index)))));
+                ((OptionInt..isOptSome(Any..stop!(index))) &&  OptionInt..unwrap!(Any..stop!(index)) >= 0 && OptionInt..unwrap!(Any..stop!(index)) <= List_len(Any..as_ListAny!(dictOrList)) && Any..start!(index) <= OptionInt..unwrap!(Any..stop!(index))
+                  || (OptionInt..isOptNone(Any..stop!(index)))));
 {
   if Any..isfrom_Dict(dictOrList) then
     DictStrAny_get(Any..as_Dict!(dictOrList), Any..as_string!(index))
   else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) then
     List_get(Any..as_ListAny!(dictOrList), Any..as_int!(index))
-  else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_Slice(index) && OptionInt..isSome(Any..stop!(index)) then
+  else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_Slice(index) && OptionInt..isOptSome(Any..stop!(index)) then
     from_ListAny(List_slice(Any..as_ListAny!(dictOrList), Any..start!(index), OptionInt..unwrap!(Any..stop!(index))))
   else
     from_ListAny(List_drop(Any..as_ListAny!(dictOrList), Any..start!(index)))

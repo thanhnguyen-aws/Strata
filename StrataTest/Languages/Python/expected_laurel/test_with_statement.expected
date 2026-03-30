@@ -22,5 +22,5 @@ callElimAssert_requires_31: ✅ pass
 callElimAssert_requires_28: ✅ pass
 Assertion failed at line 27, col 0: postcondition: ❌ fail
 
-DETAIL: 15 passed, 2 failed, 1 inconclusive
+DETAIL: 15 passed, 5 failed, 1 inconclusive
 RESULT: Failures found

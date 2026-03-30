@@ -1,6 +1,7 @@
 
 ==== Verification Results ====
-Assertion failed at line 9, col 4: ite_cond_calls_PNotIn_0: ❌ fail
+(create_config ensures) Return type constraint: ✅ pass
+ite_cond_calls_PNotIn_0: ✅ pass (at line 9, col 4)
 ite_cond_calls_Any_to_bool_1: ✅ pass (at line 9, col 4)
 (validate_config ensures) Return type constraint: ✅ pass
 ite_cond_calls_PNotIn_0: ✅ pass (at line 11, col 4)
@@ -21,5 +22,5 @@ callElimAssert_req_opt_name_none_or_str_15: ✅ pass (at line 26, col 4)
 callElimAssert_req_opt_name_none_or_bar_16: ✅ pass (at line 26, col 4)
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 28, col 0)
 
-DETAIL: 7 passed, 2 failed, 3 inconclusive
+DETAIL: 19 passed, 1 failed, 1 inconclusive
 RESULT: Failures found

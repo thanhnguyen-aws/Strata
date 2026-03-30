@@ -1,6 +1,7 @@
 
 ==== Verification Results ====
-Assertion failed at line 2, col 4: ite_cond_calls_Any_to_bool_0: ❌ fail
+ite_cond_calls_Any_to_bool_0: ✅ pass (at line 2, col 4)
+(classify ensures) Return type constraint: ✅ pass
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 4, col 4)
 (classify ensures) Return type constraint: ✅ pass
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 6, col 4)
@@ -20,5 +21,5 @@ assert_assert(444)_calls_Any_to_bool_0: ✅ pass (at line 22, col 4)
 assert(444): ❓ unknown (at line 22, col 4)
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 24, col 0)
 
-DETAIL: 6 passed, 1 failed, 5 inconclusive
-RESULT: Failures found
+DETAIL: 16 passed, 0 failed, 4 inconclusive
+RESULT: Inconclusive
