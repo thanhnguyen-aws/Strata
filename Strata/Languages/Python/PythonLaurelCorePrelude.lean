@@ -425,7 +425,7 @@ inline function Any_get (dictOrList: Any, index: Any): Any
     from_ListAny(List_drop(Any..as_ListAny!(dictOrList), Any..start!(index)))
 }
 
-inline function Any_get! (dictOrList: Any, index: Any): Any
+inline function Any_get!AnyMaybeExcept (dictOrList: Any, index: Any): Any
 {
   if Any..isexception(dictOrList) then dictOrList
   else if Any..isexception(index) then index
@@ -449,7 +449,7 @@ inline function Any_set (dictOrList: Any, index: Any, val: Any): Any
     from_ListAny(List_set(Any..as_ListAny!(dictOrList), Any..as_int!(index), val))
 }
 
-inline function Any_set! (dictOrList: Any, index: Any, val: Any): Any
+inline function Any_set!AnyMaybeExcept (dictOrList: Any, index: Any, val: Any): Any
 {
   if Any..isexception(dictOrList) then dictOrList
   else if Any..isexception(index) then index
@@ -464,12 +464,12 @@ inline function Any_set! (dictOrList: Any, index: Any, val: Any): Any
     exception (IndexError("Index out of bound"))
 }
 
-rec function Any_sets (dictOrList: Any, @[cases] indices: ListAny, val: Any): Any
+rec function Any_sets!AnyMaybeExcept (dictOrList: Any, @[cases] indices: ListAny, val: Any): Any
 {
   if ListAny..isListAny_nil(indices) then dictOrList
-  else if ListAny..isListAny_nil(ListAny..tail!(indices)) then Any_set!(dictOrList, ListAny..head!(indices), val)
-  else Any_set!(dictOrList, ListAny..head!(indices),
-    Any_sets(Any_get!(dictOrList, ListAny..head!(indices)), ListAny..tail!(indices), val))
+  else if ListAny..isListAny_nil(ListAny..tail!(indices)) then Any_set!AnyMaybeExcept(dictOrList, ListAny..head!(indices), val)
+  else Any_set!AnyMaybeExcept(dictOrList, ListAny..head!(indices),
+    Any_sets!AnyMaybeExcept(Any_get!AnyMaybeExcept(dictOrList, ListAny..head!(indices)), ListAny..tail!(indices), val))
 };
 
 inline function PIn (v: Any, dictOrList: Any) : Any
@@ -531,7 +531,7 @@ inline function bool_to_real (b: bool) : real {if b then 1.0 else 0.0}
 // Modelling of Python unary operations
 // /////////////////////////////////////////////////////////////////////////////////////
 
-inline function PNeg (v: Any) : Any
+inline function PNeg!AnyMaybeExcept (v: Any) : Any
 {
   if Any..isexception(v) then v
   else if (Any..isfrom_bool(v)) then
@@ -544,7 +544,7 @@ inline function PNeg (v: Any) : Any
     exception(UndefinedError ("Operand Type is not defined"))
 }
 
-inline function PNot (v: Any) : Any
+inline function PNot!AnyMaybeExcept (v: Any) : Any
 {
   if Any..isexception(v) then v
   else if (Any..isfrom_bool(v)) then
@@ -566,7 +566,7 @@ inline function PNot (v: Any) : Any
 // Modelling of Python binary operations
 // /////////////////////////////////////////////////////////////////////////////////////
 
-inline function PAdd (v1: Any, v2: Any) : Any
+inline function PAdd!AnyMaybeExcept (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
@@ -596,7 +596,7 @@ inline function PAdd (v1: Any, v2: Any) : Any
 }
 
 
-inline function PSub (v1: Any, v2: Any) : Any
+inline function PSub!AnyMaybeExcept (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
@@ -628,7 +628,7 @@ inline function PSub (v1: Any, v2: Any) : Any
 
 function string_repeat (s: string, i: int) : string;
 
-inline function PMul (v1: Any, v2: Any) : Any
+inline function PMul!AnyMaybeExcept (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
@@ -665,7 +665,7 @@ inline function PMul (v1: Any, v2: Any) : Any
     exception(UndefinedError ("Operand Type is not defined"))
 }
 
-inline function PFloorDiv (v1: Any, v2: Any) : Any
+inline function PFloorDiv!AnyMaybeExcept (v1: Any, v2: Any) : Any
   requires (Any..isfrom_bool(v2)==>Any..as_bool!(v2)) && (Any..isfrom_int(v2)==>Any..as_int!(v2)!=0);
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
@@ -694,7 +694,7 @@ function List_le (l1: ListAny, l2: ListAny): bool;
 function List_gt (l1: ListAny, l2: ListAny): bool;
 function List_ge (l1: ListAny, l2: ListAny): bool;
 
-inline function PLt (v1: Any, v2: Any) : Any
+inline function PLt!AnyMaybeExcept (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
@@ -725,7 +725,7 @@ inline function PLt (v1: Any, v2: Any) : Any
     exception(UndefinedError ("Operand Type is not defined"))
 }
 
-inline function PLe (v1: Any, v2: Any) : Any
+inline function PLe!AnyMaybeExcept (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
@@ -756,7 +756,7 @@ inline function PLe (v1: Any, v2: Any) : Any
     exception(UndefinedError ("Operand Type is not defined"))
 }
 
-inline function PGt (v1: Any, v2: Any) : Any
+inline function PGt!AnyMaybeExcept (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
@@ -787,7 +787,7 @@ inline function PGt (v1: Any, v2: Any) : Any
     exception(UndefinedError ("Operand Type is not defined"))
 }
 
-inline function PGe (v1: Any, v2: Any) : Any
+inline function PGe!AnyMaybeExcept (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if (Any..isfrom_bool(v1) && Any..isfrom_bool(v2)) then
@@ -846,7 +846,7 @@ inline function POr (v1: Any, v2: Any) : Any
 // /////////////////////////////////////////////////////////////////////////////////////
 // Modelling of other Python operations, currrently unsupported
 // /////////////////////////////////////////////////////////////////////////////////////
-inline function PPow (v1: Any, v2: Any) : Any
+inline function PPow!AnyMaybeExcept (v1: Any, v2: Any) : Any
 {
   exception(UnimplementedError ("Pow operator is not supported"))
 }

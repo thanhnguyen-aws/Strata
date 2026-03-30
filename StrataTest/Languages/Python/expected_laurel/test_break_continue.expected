@@ -1,8 +1,10 @@
 
 ==== Verification Results ====
+Check PNot!AnyMaybeExcept exception: ✅ pass (at line 3, col 10)
 loop_guard_calls_Any_to_bool_0: ✅ pass (at line 3, col 4)
+Check PNot!AnyMaybeExcept exception: ✅ pass (at line 8, col 10)
 loop_guard_calls_Any_to_bool_0: ✅ pass (at line 8, col 4)
 loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 8, col 4)
 
-DETAIL: 3 passed, 0 failed, 0 inconclusive
+DETAIL: 5 passed, 0 failed, 0 inconclusive
 RESULT: Analysis success

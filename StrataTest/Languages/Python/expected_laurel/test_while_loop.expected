@@ -1,24 +1,31 @@
 
 ==== Verification Results ====
+Check PGt!AnyMaybeExcept exception: ✅ pass (at line 4, col 10)
 loop_guard_calls_Any_to_bool_0: ✅ pass (at line 4, col 4)
+Check PAdd!AnyMaybeExcept exception: ❓ unknown (at line 5, col 16)
+Check PSub!AnyMaybeExcept exception: ✅ pass (at line 6, col 12)
 loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 4, col 4)
 assert_assert(134)_calls_Any_to_bool_0: ✅ pass (at line 7, col 4)
 assert(134): ❓ unknown (at line 7, col 4)
 loop_guard_calls_Any_to_bool_0: ✅ pass (at line 12, col 4)
+Check PAdd!AnyMaybeExcept exception: ❓ unknown (at line 13, col 16)
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 14, col 8)
 assert_assert(344)_calls_Any_to_bool_0: ✅ pass (at line 16, col 4)
 assert(344): ✅ pass (at line 16, col 4)
 loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 12, col 4)
 assert_assert(344)_calls_Any_to_bool_0: ✅ pass (at line 16, col 4)
 assert(344): ✅ pass (at line 16, col 4)
+Check PLt!AnyMaybeExcept exception: ✅ pass (at line 22, col 10)
 loop_guard_calls_Any_to_bool_0: ✅ pass (at line 22, col 4)
+Check PAdd!AnyMaybeExcept exception: ✅ pass (at line 23, col 12)
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 24, col 8)
 loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 22, col 4)
 assert_assert(589)_calls_Any_to_bool_0: ✅ pass (at line 27, col 4)
 assert(589): ❓ unknown (at line 27, col 4)
+Check PAdd!AnyMaybeExcept exception: ❓ unknown (at line 26, col 16)
 loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 22, col 4)
 assert_assert(589)_calls_Any_to_bool_0: ✅ pass (at line 27, col 4)
 assert(589): ❓ unknown (at line 27, col 4)
 
-DETAIL: 16 passed, 0 failed, 3 inconclusive
+DETAIL: 20 passed, 0 failed, 6 inconclusive
 RESULT: Inconclusive

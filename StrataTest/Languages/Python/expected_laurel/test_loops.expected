@@ -1,21 +1,30 @@
 
 ==== Verification Results ====
+Check PAdd!AnyMaybeExcept exception: ✅ pass (at line 5, col 12)
+Check PGt!AnyMaybeExcept exception: ✅ pass (at line 6, col 11)
 assert_assert(95)_calls_Any_to_bool_0: ✅ pass (at line 6, col 4)
 assert(95): ✅ pass (at line 6, col 4)
 set_a_calls_Any_get_0: ❓ unknown
 set_b_calls_Any_get_0: ❓ unknown
+Check PSub!AnyMaybeExcept exception: ✅ pass (at line 11, col 13)
+Check PLt!AnyMaybeExcept exception: ✅ pass (at line 12, col 11)
 assert_assert(245)_calls_Any_to_bool_0: ✅ pass (at line 12, col 4)
 assert(245): ✅ pass (at line 12, col 4)
 set_x_calls_Any_get_0: ❓ unknown
 set_tuple_360_calls_Any_get_0: ❓ unknown
 set_y_calls_Any_get_0: ❓ unknown
 set_z_calls_Any_get_0: ❓ unknown
+Check PAdd!AnyMaybeExcept exception: ✅ pass (at line 17, col 13)
+Check PGt!AnyMaybeExcept exception: ✅ pass (at line 18, col 11)
 assert_assert(409)_calls_Any_to_bool_0: ✅ pass (at line 18, col 4)
 assert(409): ✅ pass (at line 18, col 4)
+Check PGt!AnyMaybeExcept exception: ✅ pass (at line 22, col 10)
 loop_guard_calls_Any_to_bool_0: ✅ pass (at line 22, col 4)
+Check PSub!AnyMaybeExcept exception: ✅ pass (at line 23, col 13)
 loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 22, col 4)
+Check PLe!AnyMaybeExcept exception: ❓ unknown (at line 24, col 11)
 assert_assert(531)_calls_Any_to_bool_0: ❓ unknown (at line 24, col 4)
 assert(531): ❓ unknown (at line 24, col 4)
 
-DETAIL: 8 passed, 0 failed, 8 inconclusive
+DETAIL: 16 passed, 0 failed, 9 inconclusive
 RESULT: Inconclusive
