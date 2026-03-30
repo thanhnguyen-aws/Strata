@@ -5,7 +5,6 @@
 -/
 module
 
--- TODO: rename file to PythonRuntimeCorePart
 import Strata.DDM.Elab
 import Strata.DDM.AST
 import Strata.Languages.Core.DDMTransform.Grammar
@@ -30,7 +29,7 @@ are filtered out.
 
 The original `CorePrelude.lean` remains unchanged for the Python-through-Core pipeline.
 -/
-private def pythonRuntimeCorePartDDM :=
+private def PythonLaurelCorePreludeDDM :=
 #strata
 program Core;
 
@@ -101,17 +100,6 @@ datatype DictStrAny () {
   DictStrAny_cons (key: string, val: Any, tail: DictStrAny)
 };
 
-// Forward declaration for re_pattern_error: needed so the inline functions
-// after CoreOnlyDelimiter can reference it during DDM parsing.
-function re_pattern_error(pattern : string) : Error;
-// The _bool variants are also factory functions (not inlined here) so that
-// unsupported patterns leave an uninterpreted Bool UF rather than an
-// uninterpreted RegLan UF.  An uninterpreted Bool UF produces `unknown`
-// gracefully; an uninterpreted RegLan UF causes cvc5 theory-combination errors.
-function re_fullmatch_bool(pattern : string, s : string) : bool;
-function re_match_bool(pattern : string, s : string) : bool;
-function re_search_bool(pattern : string, s : string) : bool;
-
 type CoreOnlyDelimiter;
 
 // =====================================================================
@@ -119,236 +107,10 @@ type CoreOnlyDelimiter;
 // =====================================================================
 
 // /////////////////////////////////////////////////////////////////////////////////////
-// Regex support
-//
-// Python signatures:
-//   re.compile(pattern: str) -> re.Pattern
-//   re.match(pattern: str | re.Pattern, string: str) -> re.Match | None
-//   re.search(pattern: str | re.Pattern, string: str) -> re.Match | None
-//   re.fullmatch(pattern: str | re.Pattern, string: str) -> re.Match | None
-//
-// Architecture:
-//
-// re.compile is a semantic no-op — it returns the pattern string unchanged.
-// The mode-specific factory functions re_fullmatch_bool, re_match_bool,
-// re_search_bool each compile a pattern+string pair to a Bool via
-// pythonRegexToCore, so anchors (^/$) are handled correctly per mode.
-// Their concreteEval fires when the pattern is a string literal; on
-// unsupported patterns it returns .none, leaving an uninterpreted Bool UF
-// (which produces `unknown` gracefully rather than a cvc5 theory-combination
-// error).
-//
-// On match, we return a from_ClassInstance wrapping a concrete re_Match
-// with pos=0 and endpos=str.len(s), which is sound for the module-level
-// API (no pos/endpos parameters).
-// /////////////////////////////////////////////////////////////////////////////////////
-
-// Mode-specific factory functions (re_fullmatch_bool, re_match_bool,
-// re_search_bool) are declared via ReFactory (with concreteEval for literal
-// pattern expansion), not as inlines here, to avoid duplicate definitions and
-// to prevent uninterpreted RegLan UFs from reaching the SMT solver.
-
-inline function mk_re_Match(s : string) : Any {
-  from_ClassInstance("re_Match",
-    DictStrAny_cons("re_match_string", from_string(s),
-      DictStrAny_cons("re_match_pos", from_int(0),
-        DictStrAny_cons("re_match_endpos", from_int(str.len(s)),
-          DictStrAny_empty()))))
-}
-
-// re.compile is a no-op: returns the pattern string unchanged.
-inline function re_compile(pattern : Any) : Any
-  requires Any..isfrom_string(pattern);
-{
-  pattern
-}
-
-inline function re_fullmatch(pattern : Any, s : Any) : Any
-  requires Any..isfrom_string(pattern) && Any..isfrom_string(s);
-{
-  if Error..isRePatternError(re_pattern_error(Any..as_string!(pattern)))
-  then exception(re_pattern_error(Any..as_string!(pattern)))
-  else if re_fullmatch_bool(Any..as_string!(pattern), Any..as_string!(s))
-       then mk_re_Match(Any..as_string!(s))
-       else from_none()
-}
-inline function re_match(pattern : Any, s : Any) : Any
-  requires Any..isfrom_string(pattern) && Any..isfrom_string(s);
-{
-  if Error..isRePatternError(re_pattern_error(Any..as_string!(pattern)))
-  then exception(re_pattern_error(Any..as_string!(pattern)))
-  else if re_match_bool(Any..as_string!(pattern), Any..as_string!(s))
-       then mk_re_Match(Any..as_string!(s))
-       else from_none()
-}
-inline function re_search(pattern : Any, s : Any) : Any
-  requires Any..isfrom_string(pattern) && Any..isfrom_string(s);
-{
-  if Error..isRePatternError(re_pattern_error(Any..as_string!(pattern)))
-  then exception(re_pattern_error(Any..as_string!(pattern)))
-  else if re_search_bool(Any..as_string!(pattern), Any..as_string!(s))
-       then mk_re_Match(Any..as_string!(s))
-       else from_none()
-}
-
-// /////////////////////////////////////////////////////////////////////////////////////
-//Functions that we provide to Python user
-//to write assertions/contracts about about types of variables
-
-inline function isBool (v: Any) : Any {
-  from_bool (Any..isfrom_bool(v))
-}
-
-inline function isInt (v: Any) : Any {
-  from_bool (Any..isfrom_int(v))
-}
-
-inline function isFloat (v: Any) : Any {
-  from_bool (Any..isfrom_float(v))
-}
-
-inline function isString (v: Any) : Any {
-  from_bool (Any..isfrom_string(v))
-}
-
-inline function isdatetime (v: Any) : Any {
-  from_bool (Any..isfrom_datetime(v))
-}
-
-inline function isDict (v: Any) : Any {
-  from_bool (Any..isfrom_Dict(v))
-}
-
-inline function isList (v: Any) : Any {
-  from_bool (Any..isfrom_ListAny(v))
-}
-
-inline function isClassInstance (v: Any) : Any {
-  from_bool (Any..isfrom_ClassInstance(v))
-}
-
-inline function isInstance_of_Int (v: Any) : Any {
-  from_bool (Any..isfrom_int(v) || Any..isfrom_bool(v))
-}
-
-inline function isInstance_of_Float (v: Any) : Any {
-  from_bool (Any..isfrom_float(v) || Any..isfrom_int(v) || Any..isfrom_bool(v))
-}
-
-// /////////////////////////////////////////////////////////////////////////////////////
-//Functions that we provide to Python user
-//to write assertions/contracts about about types of errors
-// /////////////////////////////////////////////////////////////////////////////////////
-
-inline function isTypeError (e: Error) : Any {
-  from_bool (Error..isTypeError(e))
-}
-
-inline function isAttributeError (e: Error) : Any {
-  from_bool (Error..isAttributeError(e))
-}
-
-inline function isAssertionError (e: Error) : Any {
-  from_bool (Error..isAssertionError(e))
-}
-
-inline function isUnimplementedError (e: Error) : Any {
-  from_bool (Error..isUnimplementedError(e))
-}
-
-inline function isUndefinedError (e: Error) : Any {
-  from_bool (Error..isUndefinedError(e))
-}
-
-inline function isError (e: Error) : bool {
-  ! Error..isNoError(e)
-}
-
-// /////////////////////////////////////////////////////////////////////////////////////
-//The following function convert Any type to bool
-//based on the Python definition of truthiness for basic types
-// https://docs.python.org/3/library/stdtypes.html
-// /////////////////////////////////////////////////////////////////////////////////////
-
-inline function Any_to_bool (v: Any) : bool
-  requires (Any..isfrom_bool(v) || Any..isfrom_none(v) || Any..isfrom_string(v) || Any..isfrom_int(v) || Any..isfrom_Dict(v) || Any..isfrom_ListAny(v));
-{
-  if (Any..isfrom_bool(v)) then Any..as_bool!(v) else
-  if (Any..isfrom_none(v)) then false else
-  if (Any..isfrom_string(v)) then !(Any..as_string!(v) == "") else
-  if (Any..isfrom_int(v)) then !(Any..as_int!(v) == 0) else
-  if (Any..isfrom_Dict(v)) then !(Any..as_Dict!(v) == DictStrAny_empty) else
-  if (Any..isfrom_ListAny(v)) then !(Any..as_ListAny!(v) == ListAny_nil) else
-  false
-  //WILL BE ADDED
-}
-
-// /////////////////////////////////////////////////////////////////////////////////////
 // ListAny functions
 // /////////////////////////////////////////////////////////////////////////////////////
 
-rec function List_len (@[cases] l : ListAny) : int
-{
-  if ListAny..isListAny_nil(l) then 0 else 1 + List_len(ListAny..tail!(l))
-};
-
-axiom [List_len_pos]: forall l : ListAny :: List_len(l) >= 0;
-
-rec function List_contains (@[cases] l : ListAny, x: Any) : bool
-{
-  if ListAny..isListAny_nil(l) then false else (ListAny..head!(l) == x) || List_contains(ListAny..tail!(l), x)
-};
-
-rec function List_extend (@[cases] l1 : ListAny, l2: ListAny) : ListAny
-{
-  if ListAny..isListAny_nil(l1) then l2
-  else ListAny_cons(ListAny..head!(l1), List_extend(ListAny..tail!(l1), l2))
-};
-
-rec function List_get (@[cases] l : ListAny, i : int) : Any
-  requires i >= 0 && i < List_len(l);
-{
-  if ListAny..isListAny_nil(l) then from_none()
-  else if  i == 0 then ListAny..head!(l)
-  else List_get(ListAny..tail!(l), i - 1)
-};
-
-rec function List_take (@[cases] l : ListAny, i: int) : ListAny
-  requires i >= 0 && i <= List_len(l);
-{
-  if ListAny..isListAny_nil(l) then ListAny_nil()
-  else if  i == 0 then ListAny_nil()
-  else ListAny_cons(ListAny..head!(l), List_take(ListAny..tail!(l), i - 1))
-};
-
-axiom [List_take_len]: forall l : ListAny, i: int :: {List_len(List_take(l,i))}
-  (i >= 0 && i <= List_len(l)) ==> List_len(List_take(l,i)) == i;
-
-rec function List_drop (@[cases] l : ListAny, i: int) : ListAny
-  requires i >= 0 && i <= List_len(l);
-{
-  if ListAny..isListAny_nil(l) then ListAny_nil()
-  else if  i == 0 then l
-  else List_drop(ListAny..tail!(l), i - 1)
-};
-
-axiom [List_drop_len]: forall l : ListAny, i: int :: {List_len(List_drop(l,i))}
-  (i >= 0 && i <= List_len(l)) ==> List_len(List_drop(l,i)) == List_len(l) - i;
-
-inline function List_slice (l : ListAny, start : int, stop: int) : ListAny
-  requires start >= 0 && start < List_len(l) && stop >= 0 && stop <= List_len(l) && start <= stop;
-{
-  List_take (List_drop (l, start), stop - start)
-}
-
-rec function List_set (@[cases] l : ListAny, i : int, v: Any) : ListAny
-  requires i >= 0 && i < List_len(l);
-{
-  if ListAny..isListAny_nil(l) then ListAny_nil()
-  else if  i == 0 then ListAny_cons(v, ListAny..tail!(l))
-  else ListAny_cons(ListAny..head!(l), List_set(ListAny..tail!(l), i - 1, v))
-};
-
+// TODO introduce procedure types in Laurel so we can move this to the Laurel part
 rec function List_map (@[cases] l : ListAny, f: Any -> Any) : ListAny
 {
   if ListAny..isListAny_nil(l) then
@@ -865,84 +627,6 @@ inline function PMod (v1: Any, v2: Any) : Any
 // Modelling some datetime-related Python operations, for testing purpose
 // /////////////////////////////////////////////////////////////////////////////////////
 
-function to_string(a: Any) : string;
-
-function to_string_any(a: Any) : Any {
-  from_string(to_string(a))
-}
-
-function datetime_strptime(dtstring: Any, format: Any) : Any;
-
-axiom [datetime_tostring_cancel]: forall dt: Any ::
-  datetime_strptime(to_string_any(dt), from_string ("%Y-%m-%d")) == dt;
-
-procedure datetime_date(d: Any) returns (ret: Any, error: Error)
-spec {
-  requires [d_type]: Any..isfrom_datetime(d);
-  ensures [ret_type]: Any..isfrom_datetime(ret) && Any..as_datetime!(ret) <= Any..as_datetime!(d);
-}
-{
-  var timedt: int;
-  if (Any..isfrom_datetime(d)) {
-    assume [timedt_le]: timedt <= Any..as_datetime!(d);
-    ret := from_datetime(timedt);
-    error := NoError();
-  }
-  else {
-    ret := from_none();
-    error := TypeError("Input must be datetime");
-  }
-};
-
-procedure datetime_now() returns (ret: Any)
-spec {
-  ensures [ret_type]: Any..isfrom_datetime(ret);
-}
-{
-  var d: int;
-  ret := from_datetime(d);
-};
-
-procedure timedelta_func (days: Any, hours: Any) returns (delta : Any, maybe_except: Error)
-spec{
-  requires [days_type]: Any..isfrom_none(days) || Any..isfrom_int(days);
-  requires [hours_type]: Any..isfrom_none(hours) || Any..isfrom_int(hours);
-  requires [days_pos]: Any..isfrom_int(days) ==> Any..as_int!(days)>=0;
-  requires [hours_pos]: Any..isfrom_int(hours) ==> Any..as_int!(hours)>=0;
-  ensures [ret_pos]: Any..isfrom_int(delta) && Any..as_int!(delta)>=0;
-}
-{
-  var days_i : int := 0;
-  if (Any..isfrom_int(days)) {
-        days_i := Any..as_int!(days);
-  }
-  var hours_i : int := 0;
-  if (Any..isfrom_int(hours)) {
-        hours_i := Any..as_int!(hours);
-  }
-  delta := from_int ((((days_i * 24) + hours_i) * 3600) * 1000000);
-};
-
-// /////////////////////////////////////////////////////////////////////////////////////
-// For testing purpose
-// /////////////////////////////////////////////////////////////////////////////////////
-
-procedure test_helper_procedure(req_name : Any, opt_name : Any) returns (ret: Any, maybe_except: Error)
-spec {
-  requires [req_name_is_foo]: req_name == from_string("foo");
-  requires [req_opt_name_none_or_str]: (Any..isfrom_none(opt_name)) || (Any..isfrom_string(opt_name));
-  requires [req_opt_name_none_or_bar]: (opt_name == from_none()) || (opt_name == from_string("bar"));
-  ensures [ensures_maybe_except_none]: (Error..isNoError(maybe_except));
-}
-{
-  assert [assert_name_is_foo]: req_name == from_string("foo");
-  assert [assert_opt_name_none_or_str]: (Any..isfrom_none(opt_name)) || (Any..isfrom_string(opt_name));
-  assert [assert_opt_name_none_or_bar]: (opt_name == from_none()) || (opt_name == from_string("bar"));
-  assume [assume_maybe_except_none]: (Error..isNoError(maybe_except));
-};
-
-procedure print(msg : Any) returns ();
-
 #end
 
 public section
@@ -952,8 +636,8 @@ These are declarations that cannot be expressed in Laurel grammar.
 The returned program includes forward declarations of types from the
 Laurel prelude; callers should filter out duplicates when merging.
 -/
-def pythonRuntimeCorePart : Core.Program :=
-  Core.getProgram pythonRuntimeCorePartDDM |>.fst
+def PythonLaurelCorePrelude : Core.Program :=
+  Core.getProgram PythonLaurelCorePreludeDDM |>.fst
 
 /--
 Get only the Core-only declarations, dropping the forward declarations
@@ -961,11 +645,11 @@ that precede the `type CoreOnlyDelimiter;` sentinel (and the sentinel itself).
 Everything after the delimiter is a genuine Core-only declaration.
 -/
 def coreOnlyFromRuntimeCorePart : List Core.Decl :=
-  let decls := pythonRuntimeCorePart.decls
+  let decls := PythonLaurelCorePrelude.decls
   -- Drop everything up to and including the CoreOnlyDelimiter sentinel
   match decls.dropWhile (fun d => d.name.name != "CoreOnlyDelimiter") with
   | _ :: rest => rest   -- drop the delimiter itself
-  | [] => dbg_trace "SOUND BUG: CoreOnlyDelimiter sentinel not found in pythonRuntimeCorePart"; []
+  | [] => dbg_trace "SOUND BUG: CoreOnlyDelimiter sentinel not found in PythonLaurelCorePrelude"; []
 
 end -- public section
 
