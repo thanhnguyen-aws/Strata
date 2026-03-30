@@ -5,6 +5,8 @@ callElimAssert_requires_0_4: ✅ pass
 callElimAssert_requires_1_5: ✅ pass
 callElimAssert_requires_2_6: ✅ pass
 callElimAssert_requires_3_7: ✅ pass
+Check PSub!AnyMaybeExcept exception: ✅ pass (at line 15, col 19)
+Check PLe!AnyMaybeExcept exception: ✅ pass (at line 21, col 7)
 assert_assert(554)_calls_Any_to_bool_0: ✅ pass (at line 21, col 0)
 assert(554): ✅ pass (at line 21, col 0)
 assert_assert(673)_calls_Any_to_bool_0: ✅ pass (at line 25, col 0)
