@@ -1397,36 +1397,20 @@ partial def getArgumentTypes (arg: Python.expr SourceRange) : Except Translation
   | .Name _ n _ => return [n.val]
   | .Subscript _ _ slice _ =>
     let subscriptList:= getNestedSubscripts arg
-    let subscriptRoot := pyExprToString subscriptList[0]!
+    let subscriptRoot := match subscriptList[0]! with
+    | .Attribute _ (.Name _ n _) att _ => if n.val == "typing" then att.val else pyExprToString subscriptList[0]!
+    | _ => pyExprToString subscriptList[0]!
     let sliceHead := subscriptList[1]!
     match subscriptRoot with
     | "Optional" => return [pyExprToString sliceHead, "None"]
     | "Union" =>  match sliceHead with
         | .Tuple _ tys _ => return (← tys.val.toList.mapM getArgumentTypes).flatten
         | _ => throw (.internalError s!"Unhandled Expr: {repr arg}")
-    | "List" => do
-      match ← getArgumentTypes slice with
-      | [ty] =>
-        if isOfAnyType ty then
-          return ["ListAny"]
-        else
-          throw (.unsupportedConstruct "List of non-value type is not supported" s!"List[{ty}]")
-      | _ => throw (.unsupportedConstruct "Invalid list element type" s!"List[{toString (repr slice)}]")
-    | "Dict" => do match sliceHead with
-        | .Tuple _ tys _ =>
-          if tys.val.size != 2 then
-            throw (.internalError s!"Unhandled Expr: {repr arg}")
-          else
-          match ← getArgumentTypes tys.val[0]!, ← getArgumentTypes tys.val[1]! with
-          | ["str"], [ty] =>
-            if isOfAnyType ty then
-              return ["DictStrAny"]
-            else
-              throw (.unsupportedConstruct "Dict of non-value type is not supported" ty)
-          | _, _ => throw (.internalError s!"Unhandled Dict key/value types: {repr arg}")
-        | _ => throw (.unsupportedConstruct "Unhandled Dict key/value types" (toString (repr sliceHead)))
+    | "List" => return ["ListAny"]
+    | "Dict" => return ["DictStrAny"]
     | _ =>  throw (.internalError s!"Unhandled Expr: {repr arg}")
   | .Constant _ _ _ => return ["None"]
+  | .Attribute _ (.Name _ {val:= "typing",..} _) att _ => return [att.val]
   | .Attribute _ _ _ _ => return [pyExprToString arg]
   | .BinOp _ _ _ _ => return (← (getUnionTypes arg).mapM getArgumentTypes).flatten
   | _ => throw (.internalError s!"Unhandled Expr: {repr arg}")
