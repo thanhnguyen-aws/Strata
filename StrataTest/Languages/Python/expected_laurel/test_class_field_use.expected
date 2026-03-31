@@ -1,10 +1,10 @@
 
 ==== Verification Results ====
-callElimAssert_requires_11: ✅ pass
+(process_buffer ensures) Return type constraint: ❓ unknown
+callElimAssert_requires_8: ✅ pass
 assert_assert(285)_calls_Any_to_bool_0: ✅ pass (at line 14, col 4)
 Assertion failed at line 14, col 4: assert(285): ❌ fail
-Assertion failed at line 11, col 0: postcondition: ❌ fail
-(process_buffer ensures) Return type constraint: ❓ unknown
+postcondition: ✅ pass (at line 11, col 0)
 
-DETAIL: 2 passed, 2 failed, 1 inconclusive
+DETAIL: 3 passed, 1 failed, 1 inconclusive
 RESULT: Failures found

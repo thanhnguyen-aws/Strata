@@ -65,7 +65,7 @@ structure PythonFunctionDecl where
   name : String
   --args include name, type, default value
   args : List PyArgInfo
-  hasKwargs: Bool
+  kwargsName: Option String
   ret : Option (List String × MetaData)
 deriving Repr, Inhabited
 
@@ -476,6 +476,7 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
       | .Div _ => return mkStmtExprMd .Hole -- Floating-point are not supported yet
       | .FloorDiv _ => .ok "PFloorDiv"  -- Python // maps to Laurel Div
       | .Mod _ => .ok "PMod"
+      | .Pow _ => .ok "PPow"
       | .BitAnd _ => return mkStmtExprMd .Hole --TODO: Adding BitVector subtype in Any type, then the related operations
       | .BitOr _ => return mkStmtExprMd .Hole
       | .BitXor _ => return mkStmtExprMd .Hole
@@ -812,7 +813,7 @@ partial def combinePositionalAndKeywordArgs
   | some funcDecl =>
     let name := if displayName.isEmpty then funcDecl.name else displayName
     let kwordArgs := removePosargsFromKwargs kwords funcDecl
-    if !funcDecl.hasKwargs && kwordArgs.length > 0 then
+    if funcDecl.kwargsName.isNone && kwordArgs.length > 0 then
       let extraNames := kwordArgs.filterMap fun kw => match kw with
         | .mk_keyword _ name _ => name.val.map (·.val)
       throwUserError callRange
@@ -833,7 +834,7 @@ partial def combinePositionalAndKeywordArgs
                 | some val => return val
                 | _ => throw (.typeError s!"'{name}' missing required argument '{arg.name}'"))
     let posArgs := posArgs ++ filledPosArgs
-    return (posArgs, kwordArgs, funcDecl.hasKwargs)
+    return (posArgs, kwordArgs, funcDecl.kwargsName.isSome)
   | _ => return (posArgs, kwords, false)
 
 
@@ -871,7 +872,9 @@ partial def translateCall (ctx : TranslationContext)
     | .Attribute range _ _ _ => range
     | .Name range _ _ => range
     | _ => .none
-  let funcDecl := ctx.functionSignatures.find? fun x => x.name == funcName
+  let funcDecl := ctx.functionSignatures.find? fun x => (x.name == funcName || x.name == funcName ++ "@__init__")
+  if funcDecl.isNone && kwords.length > 0 then
+    throwUserError f.ann s!"Undeclared function '{funcName}' called with keyword args"
   -- Emit the final call, handling Name vs Attribute dispatch and transparent procedures.
   let emitCall (callArgs : List StmtExprMd) : Except TranslationError StmtExprMd := do
     let mkCall (name : String) := mkStmtExprMd (StmtExpr.StaticCall name callArgs)
@@ -908,7 +911,7 @@ partial def translateCall (ctx : TranslationContext)
     let trans_dictArgs := remainingParams.map fun arg =>
       DictStrAny_get_param trans_dict arg.name arg.default.isSome
     let allArgs := trans_posArgs ++ trans_dictArgs
-    let kwargsArg := if funcDecl.hasKwargs then [trans_dict] else []
+    let kwargsArg := if funcDecl.kwargsName.isSome then [trans_dict] else []
     emitCall (allArgs ++ kwargsArg)
   else
   let (args, kwords, funcdecl_hasKwargs) ←
@@ -1043,7 +1046,7 @@ partial def translateAssign  (ctx : TranslationContext)
         | target :: slices =>
             let target ← translateExpr ctx target
             let slices ← slices.mapM (translateExpr ctx)
-            let anySetsExpr := mkStmtExprMd (StmtExpr.StaticCall "Any_sets" [target, ListAny_mk slices, rhs_trans])
+            let anySetsExpr := ⟨ StmtExpr.StaticCall "Any_sets" [ListAny_mk slices, target, rhs_trans] , md ⟩
             let assignStmts := [mkStmtExprMd (StmtExpr.Assign [target] anySetsExpr)]
             return (ctx,assignStmts)
         | _ =>  throw (.internalError "Invalid Subscript Expr")
@@ -1430,7 +1433,7 @@ partial def getArgumentTypes (arg: Python.expr SourceRange) : Except Translation
 
 --The return is a List (inputname, type, default value) and a bool indicating if the function has Kwargs input
 def unpackPyArguments (ctx : TranslationContext) (args: Python.arguments SourceRange)
-    : Except TranslationError ((List PyArgInfo) × Bool):= do
+    : Except TranslationError ((List PyArgInfo) × (Option String)):= do
   match args with
     | .mk_arguments _ _ args _ _ _ kwargs defaults =>
       let argscount := args.val.size
@@ -1460,7 +1463,8 @@ def unpackPyArguments (ctx : TranslationContext) (args: Python.arguments SourceR
               | _ => pure ()
             tys ← checkValidTypeList ctx tys
             argtypes := argtypes ++ [{name:= name.val, md:=md, tys:= tys, default:= default}]
-      return (argtypes, kwargs.val.isSome)
+      let kwargsName := kwargs.val.map (λ kwarg => match kwarg with | .mk_arg _ name _ _ => name.val)
+      return (argtypes, kwargsName)
 
 def pyFuncDefToPythonFunctionDecl  (ctx : TranslationContext) (f : Python.stmt SourceRange) : Except TranslationError PythonFunctionDecl := do
   match f with
@@ -1476,11 +1480,11 @@ def pyFuncDefToPythonFunctionDecl  (ctx : TranslationContext) (f : Python.stmt S
               let tys ← checkValidTypeList ctx (← getArgumentTypes retTy)
               pure (tys, retMd)
           | none => pure none
-    let hasKwargs := args_trans.snd
+    let kwargsName := args_trans.snd
     return {
       name
       args
-      hasKwargs
+      kwargsName
       ret
     }
   | _ => throw (.internalError "Expected FunctionDef")
@@ -1543,9 +1547,9 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
         else
           { name := arg.name, type := AnyTy})
 
-    if funcDecl.hasKwargs then
-      let paramType := mkCoreType PyLauType.Any
-      inputs:= inputs ++ [{ name := "kwargs", type := paramType }]
+    match funcDecl.kwargsName with
+    | some kwargs => inputs:= inputs ++ [{ name := kwargs, type := mkCoreType PyLauType.DictStrAny}]
+    | _ => pure ()
 
     let typeConstraintPreconditions := getInputTypePreconditions funcDecl
     let typeConstraintPostcondition :=
@@ -1617,7 +1621,7 @@ def preludeSignatureToPythonFunctionDecl (prelude : Core.Program) : List PythonF
       some {
         name:= proc.header.name.name
         args:= (inputnames.zip inputTypes).map (λ(n,t) => {name:= n, md:= defaultMetadata, tys:= [t], default:= noneexpr})
-        hasKwargs := false
+        kwargsName := none
         ret := if outputtypes.length == 0 then none else ([outputtypes[0]!], defaultMetadata)
       }
     | none => none
@@ -1670,6 +1674,11 @@ def translateMethod (ctx : TranslationContext) (className : String)
           match arg with
           | .mk_arg _ paramName _paramAnnotation _ =>
             inputs := inputs ++ [{name := paramName.val, type := AnyTy}]
+    match args with
+      | .mk_arguments _ _ _ _ _ _ kwargs _ =>
+          match kwargs.val with
+          | some (.mk_arg _ name _ _ ) => inputs:= inputs ++ [{ name := name.val, type := mkCoreType PyLauType.DictStrAny }]
+          | _ => pure ()
 
     -- Translate return type
     -- All methods return Any (void methods return Any via from_none)
@@ -1681,8 +1690,10 @@ def translateMethod (ctx : TranslationContext) (className : String)
     let paramTypes : List (String × String) := inputs.map (fun p => (p.name.text, PyLauType.Any))
     let ctxWithClass := {ctx with currentClassName := some className,
                                   variableTypes := paramTypes}
+    let newDecls := collectDeclaredNamesAndTypes ctxWithClass body.val.toList
+    let (varDecls, ctxWithClass) ←  createVarDeclStmtsAndCtx ctxWithClass newDecls
     let (_, bodyStmts) ← translateStmtList ctxWithClass body.val.toList
-    let bodyStmts := prependExceptHandlingHelper bodyStmts
+    let bodyStmts := prependExceptHandlingHelper (varDecls ++ bodyStmts)
     -- In Python, parameters are mutable local variables.  In Core, input
     -- parameters cannot be modified.  To bridge this gap we rename each
     -- non-self input parameter to "$in_<name>" and prepend a local variable
@@ -1695,7 +1706,7 @@ def translateMethod (ctx : TranslationContext) (className : String)
     let paramCopies := nonSelfParams.map fun p =>
       let origName := p.name.text
       let renamedName := "$in_" ++ origName
-      mkStmtExprMd (StmtExpr.LocalVariable origName AnyTy
+      mkStmtExprMd (StmtExpr.LocalVariable origName p.type
         (some (mkStmtExprMd (StmtExpr.Identifier renamedName))))
     let bodyStmts := paramCopies ++ bodyStmts
     let bodyBlock := mkStmtExprMd (StmtExpr.Block bodyStmts none)
@@ -1733,7 +1744,7 @@ def extractFieldsFromInit (ctx : TranslationContext) (initBody : Array (Python.s
 
 /-- Translate a Python class to a Laurel CompositeType -/
 def translateClass (ctx : TranslationContext) (classStmt : Python.stmt SourceRange)
-    : Except TranslationError (CompositeType × Array Procedure) := do
+    : Except TranslationError (CompositeType × Array Procedure × List PythonFunctionDecl) := do
   match classStmt with
   | .ClassDef _ className _bases _ ⟨_, body⟩ _ _ =>
     let className := className.val
@@ -1767,14 +1778,15 @@ def translateClass (ctx : TranslationContext) (classStmt : Python.stmt SourceRan
     for stmt in body do
       if let .FunctionDef .. := stmt then
         let proc ← translateMethod ctx className stmt
-        instanceProcedures := instanceProcedures.push proc
+        -- TODO stop replacing the body of instance proceduces with an empty one
+        instanceProcedures := instanceProcedures.push { proc with body := .Opaque [] .none [] }
 
     return ({
       name := className
       extending := []  -- No inheritance support for now
       fields := fields
       instanceProcedures := [] -- Laurel does not yet support instance procedures, so treat them as if they were static
-    }, instanceProcedures)
+    }, instanceProcedures, classFunDecls)
   | _ => throw (.internalError "Expected ClassDef")
 
 def getFunctions (decls: List Core.Decl) : List String :=
@@ -1880,11 +1892,11 @@ def PreludeInfo.ofLaurelProgram (prog : Laurel.Program) : PreludeInfo where
     prog.staticProcedures.filterMap fun p =>
       if p.body.isExternal then none
       else
-        let noDefault : Option (Python.expr SourceRange) := none
+        let noneexpr : Python.expr SourceRange := .Constant default (.ConNone default) default
         let args := p.inputs.map fun param =>
-          {name:= param.name.text, md:= default, tys:= [getHighTypeName param.type.val], default:= noDefault}
+          {name:= param.name.text, md:= default, tys:= [getHighTypeName param.type.val], default:= some noneexpr}
         let ret := p.outputs.head?.map fun param => ([getHighTypeName param.type.val], defaultMetadata)
-        some { name := p.name.text, args := args, hasKwargs := false, ret := ret }
+        some { name := p.name.text, args := args, kwargsName := none, ret := ret }
   functions :=
     let funcNames := prog.staticProcedures.filterMap fun p =>
       if p.body.isExternal || !p.isFunctional then none else some p.name.text
@@ -1956,6 +1968,7 @@ def pythonToLaurel' (info : PreludeInfo)
   let mut compositeTypes : Array TypeDefinition := #[.Composite pyErrorTy]
   compositeTypeNames := compositeTypeNames.insert "PythonError"
   let mut classFieldHighType : Std.HashMap String (Std.HashMap String HighType) := {}
+  let mut allClassFuncDecls : List PythonFunctionDecl := []
   let mut exhaustiveClasses := info.exhaustiveClasses
   for stmt in body do
     match stmt with
@@ -1965,12 +1978,14 @@ def pythonToLaurel' (info : PreludeInfo)
         (init := info.importedSymbols) fun m name =>
           m.insert name (ImportedSymbol.compositeType name)
       let initCtx : TranslationContext := {
+        functionSignatures := info.functionSignatures
         preludeTypes := info.types,
         importedSymbols := localSymbols,
         classFieldHighType := classFieldHighType,
         filePath := filePath
       }
-      let (composite, instanceProcedures) ← translateClass initCtx stmt
+      let (composite, instanceProcedures, classFuncDecls) ← translateClass initCtx stmt
+      allClassFuncDecls := allClassFuncDecls ++ classFuncDecls
       procedures := procedures ++ instanceProcedures
       compositeTypes := compositeTypes.push <| .Composite composite
       compositeTypeNames := compositeTypeNames.insert composite.name.text
@@ -1987,11 +2002,11 @@ def pythonToLaurel' (info : PreludeInfo)
       m.insert name (ImportedSymbol.compositeType name)
 
   let mut ctx : TranslationContext := match prev_ctx with
-  | some prev_ctx => prev_ctx
+  | some prev_ctx => {prev_ctx with functionSignatures:= prev_ctx.functionSignatures ++ allClassFuncDecls}
   | _ =>
   {
     currentClassName := none,
-    functionSignatures := info.functionSignatures
+    functionSignatures := info.functionSignatures ++ allClassFuncDecls
     preludeTypes := info.types,
     userFunctions := userFunctions,
     classFieldHighType := classFieldHighType,
@@ -2071,21 +2086,6 @@ def pythonToLaurel' (info : PreludeInfo)
 
   return (program, ctx)
 
-/-- Generate External procedure stubs for prelude names so the Laurel
-    `resolve` pass can see them. -/
-def preludeStubs (info : PreludeInfo) : List Laurel.Procedure :=
-  let functionStubs := info.functions.map fun funcname =>
-    { name := { text := funcname }, inputs := [], outputs := [],
-      preconditions := [], determinism := .deterministic none,
-      decreases := none, body := .External, md := default,
-      isFunctional := true }
-  let procedureStubs := info.procedureNames.map fun funcname =>
-    { name := { text := funcname }, inputs := [], outputs := [],
-      preconditions := [], determinism := .deterministic none,
-      decreases := none, body := .External, md := default,
-      isFunctional := false }
-  functionStubs ++ procedureStubs
-
 /-- Translate Python module to Laurel Program.
     Delegates to `pythonToLaurel'` after extracting prelude info,
     then prepends External stubs so the Laurel resolve pass can
@@ -2097,11 +2097,7 @@ def pythonToLaurel (prelude: Core.Program)
     (overloadTable : OverloadTable := {})
     : Except TranslationError (Laurel.Program × TranslationContext) := do
   let info := PreludeInfo.ofCoreProgram prelude
-  let (program, ctx) ← pythonToLaurel' info pyCommands prev_ctx filePath overloadTable
-  let stubs := preludeStubs info
-  return ({ program with
-    staticProcedures := stubs ++ program.staticProcedures }, ctx)
-
+  pythonToLaurel' info pyCommands prev_ctx filePath overloadTable
 
 end -- public section
 end Strata.Python
