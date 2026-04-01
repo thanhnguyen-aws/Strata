@@ -1,16 +1,22 @@
 
 ==== Verification Results ====
+Check PPow!AnyMaybeExcept exception: ✅ pass (at line 3, col 13)
 assert_assert(65)_calls_Any_to_bool_0: ✅ pass (at line 4, col 4)
 assert(65): ✅ pass (at line 4, col 4)
+Check PPow!AnyMaybeExcept exception: ✅ pass (at line 6, col 13)
 assert_assert(129)_calls_Any_to_bool_0: ✅ pass (at line 7, col 4)
 assert(129): ✅ pass (at line 7, col 4)
+Check PPow!AnyMaybeExcept exception: ✅ pass (at line 10, col 13)
 assert_assert(234)_calls_Any_to_bool_0: ✅ pass (at line 11, col 4)
 assert(234): ✅ pass (at line 11, col 4)
+Check PPow!AnyMaybeExcept exception: ✅ pass (at line 13, col 13)
 assert_assert(302)_calls_Any_to_bool_0: ✅ pass (at line 14, col 4)
 assert(302): ✅ pass (at line 14, col 4)
+Check PPow!AnyMaybeExcept exception: ✅ pass (at line 17, col 15)
+Check PGt!AnyMaybeExcept exception: ✅ pass (at line 18, col 11)
 assert_assert(440)_calls_Any_to_bool_0: ✅ pass (at line 18, col 4)
 Assertion failed at line 18, col 4: assert(440): ❌ fail
 ite_cond_calls_Any_to_bool_0: ✅ pass (at line 20, col 0)
 
-DETAIL: 10 passed, 1 failed, 0 inconclusive
+DETAIL: 16 passed, 1 failed, 0 inconclusive
 RESULT: Failures found
