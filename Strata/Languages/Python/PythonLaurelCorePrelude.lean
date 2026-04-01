@@ -72,14 +72,14 @@ datatype OptionInt {
 };
 
 datatype Any () {
-  from_none (),
+  from_None (),
   from_bool (as_bool : bool),
   from_int (as_int : int),
   from_float (as_float : real),
-  from_string (as_string : string),
+  from_str (as_string : string),
   from_datetime (as_datetime : int),
   from_bytes (as_bytes: string),
-  from_Dict (as_Dict: DictStrAny),
+  from_DictStrAny (as_Dict: DictStrAny),
   from_ListAny (as_ListAny : ListAny),
   from_ClassInstance (classname : string, instance_attributes: DictStrAny),
   from_Slice(start: int, stop: OptionInt),
