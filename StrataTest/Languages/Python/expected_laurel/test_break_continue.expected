@@ -1,10 +1,7 @@
-
-==== Verification Results ====
-Check PNot!AnyMaybeExcept exception: ✅ pass (at line 3, col 10)
-loop_guard_calls_Any_to_bool_0: ✅ pass (at line 3, col 4)
-Check PNot!AnyMaybeExcept exception: ✅ pass (at line 8, col 10)
-loop_guard_calls_Any_to_bool_0: ✅ pass (at line 8, col 4)
-loop_guard_end_calls_Any_to_bool_0: ✅ pass (at line 8, col 4)
-
+test_break_continue.py(3, 10): ✅ pass - Check PNot!AnyMaybeExcept exception
+test_break_continue.py(3, 4): ✅ pass - loop_guard_calls_Any_to_bool_0
+test_break_continue.py(8, 10): ✅ pass - Check PNot!AnyMaybeExcept exception
+test_break_continue.py(8, 4): ✅ pass - loop_guard_calls_Any_to_bool_0
+test_break_continue.py(8, 4): ✅ pass - loop_guard_end_calls_Any_to_bool_0
 DETAIL: 5 passed, 0 failed, 0 inconclusive
 RESULT: Analysis success
