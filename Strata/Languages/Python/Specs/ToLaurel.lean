@@ -359,7 +359,7 @@ partial def specExprToLaurel (e : SpecExpr) (md : Imperative.MetaData Core.Expre
     | .var "kwargs" =>
       -- containsKey(kwargs, "key") → parameter was provided (not None)
       return some (mkStmt (.PrimitiveOp .Not
-        [mkStmt (.StaticCall (mkId "Any..isfrom_none") [mkStmt (.Identifier (mkId key)) md]) md])
+        [mkStmt (.StaticCall (mkId "Any..isfrom_None") [mkStmt (.Identifier (mkId key)) md]) md])
         md)
     | _ =>
       let c? ← specExprToLaurel container md
@@ -396,7 +396,7 @@ def buildSpecBody (preconditions : Array Assertion)
   -- Assert that required parameters are provided (not None)
   for param in requiredParams do
     let cond := mkStmt (.PrimitiveOp .Not
-      [mkStmt (.StaticCall (mkId "Any..isfrom_none")
+      [mkStmt (.StaticCall (mkId "Any..isfrom_None")
         [mkStmt (.Identifier (mkId param)) md]) md]) md
     let assertStmt ← mkStmtWithLoc (.Assert cond) default s!"Required parameter '{param}' is missing"
     stmts := assertStmt :: stmts
