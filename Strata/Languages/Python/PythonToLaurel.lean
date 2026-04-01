@@ -205,11 +205,17 @@ def PyLauType.None := "None"
 def PyLauType.Int := "int"
 def PyLauType.Bool := "bool"
 def PyLauType.Str := "str"
+def PyLauType.Float := "float"
+def PyLauType.Bytes := "bytes"
 def PyLauType.Datetime := "datetime"
 def PyLauType.DictStrAny := "DictStrAny"
+def PyLauType.ListAny := "ListAny"
 def PyLauType.ListStr := "ListStr"
 def PyLauType.Package := "Package"
 def PyLauType.Any := "Any"
+
+def isOfAnyType (ty: String): Bool := ty ∈ [PyLauType.None, PyLauType.Bool, PyLauType.Int, PyLauType.Float,
+                           PyLauType.Str, PyLauType.Datetime, PyLauType.Bytes, PyLauType.ListAny, PyLauType.DictStrAny, PyLauType.Any]
 
 def PyLauFuncReturnVar := "LaurelResult"
 
@@ -272,10 +278,10 @@ def compositeToStringAnyName (typeName : String) : String := "$composite_to_stri
 def isCompositeType (ctx : TranslationContext) (typeName : String) : Bool :=
   typeName != PyLauType.Any && (ctx.importedSymbols[typeName]?.any fun s =>
     match s with | .compositeType _ => true | _ => false)
-def strToAny (s: String) := mkStmtExprMd (.StaticCall "from_string" [mkStmtExprMd (StmtExpr.LiteralString s)])
+def strToAny (s: String) := mkStmtExprMd (.StaticCall "from_str" [mkStmtExprMd (StmtExpr.LiteralString s)])
 def intToAny (i: Int) := mkStmtExprMd (.StaticCall "from_int" [mkStmtExprMd (StmtExpr.LiteralInt i)])
 def boolToAny (b: Bool) := mkStmtExprMd (.StaticCall "from_bool" [mkStmtExprMd (StmtExpr.LiteralBool b)])
-def AnyNone := mkStmtExprMd (.StaticCall "from_none" [])
+def AnyNone := mkStmtExprMd (.StaticCall "from_None" [])
 def Any_to_bool (b: StmtExprMd) := mkStmtExprMd (.StaticCall "Any_to_bool" [b])
 
 /-- Wrap a field access expression in the appropriate Any constructor based on HighType.
@@ -287,7 +293,7 @@ def wrapFieldInAny (ty : HighType) (expr : StmtExprMd) : Except TranslationError
   | .TBool => .ok <| mkStmtExprMd (.StaticCall "from_bool" [expr])
   | .TFloat64 => .ok <| mkStmtExprMd (.StaticCall "from_float" [expr])
   | .TReal => .ok <| mkStmtExprMd (.StaticCall "from_float" [expr])
-  | .TString => .ok <| mkStmtExprMd (.StaticCall "from_string" [expr])
+  | .TString => .ok <| mkStmtExprMd (.StaticCall "from_str" [expr])
   | .TCore "Any" => .ok expr
   | .UserDefined name => .error (.unsupportedConstruct
     s!"Coercion from user-defined class '{name.text}' to Any is not yet supported" name.text)
@@ -332,8 +338,8 @@ def DictStrAny_empty:= mkStmtExprMd (StmtExpr.StaticCall "DictStrAny_empty" [])
 def DictStrAny_mk (kv: List (String × StmtExprMd)) := DictStrAny_mk_aux kv DictStrAny_empty
 
 /-- Extract a value from a dictionary for a function parameter.
-    For required params, generates `Any_get(dict, from_string(key))` (with precondition).
-    For optional params, generates `Any_get_or_none(dict, from_string(key))` (returns `None` if absent).
+    For required params, generates `Any_get(dict, from_str(key))` (with precondition).
+    For optional params, generates `Any_get_or_none(dict, from_str(key))` (returns `None` if absent).
     Both operate on `Any`-typed dictionaries. -/
 def DictStrAny_get_param (dict : StmtExprMd) (key : String) (isOptional : Bool) : StmtExprMd :=
   let func := if isOptional then "Any_get_or_none" else "Any_get"
@@ -404,7 +410,7 @@ partial def translateDictStrAny (ctx : TranslationContext)
   let kv := keys.zip values
   let val_trans ←  kv.unzip.snd.mapM (translateExpr ctx)
   let keys ← keys.mapM pyOptExprToString
-  return  mkStmtExprMd (.StaticCall "from_Dict" [DictStrAny_mk (keys.zip val_trans)])
+  return  mkStmtExprMd (.StaticCall "from_DictStrAny" [DictStrAny_mk (keys.zip val_trans)])
 
 partial def translateSlice (ctx : TranslationContext) (start stop step: Option (expr SourceRange))
     : Except TranslationError StmtExprMd := do
@@ -557,7 +563,7 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
       let concat := parts.foldl (fun acc part =>
         mkStmtExprMd (.PrimitiveOp .StrConcat [acc, unwrap part]))
         (mkStmtExprMd (.LiteralString ""))
-      return mkStmtExprMd (.StaticCall "from_string" [concat])
+      return mkStmtExprMd (.StaticCall "from_str" [concat])
 
   -- Interpolation / TemplateStr (Python 3.14+ t-strings) - not yet supported
   | .Interpolation .. => return mkStmtExprMd .Hole
@@ -824,7 +830,7 @@ partial def combinePositionalAndKeywordArgs
     let missingArgs := unprovidedPosArgs.filter fun arg =>
       !(arg.name ∈ kwords.keys) && arg.default.isNone
     if missingArgs.length > 0 then
-      let missingNames := missingArgs.map (·.1)
+      let missingNames := missingArgs.map (·.name)
       throwUserError callRange s!"'{name}' called with missing required arguments: {missingNames}"
     let filledPosArgs ←
       unprovidedPosArgs.mapM (λ arg =>
@@ -1391,8 +1397,6 @@ def getUnionTypes (arg: Python.expr SourceRange) : List (Python.expr SourceRange
   | .BinOp _ left _ right => getUnionTypes left ++ getUnionTypes right
   | _ => [arg]
 
-def isOfAnyType (ty: String): Bool := ty ∈ ["None", "bool", "int", "str", "float", "datetime", "bytes", "ListAny", "DictStrAny", "Any"]
-
 def checkValidInputTypeList (ctx : TranslationContext) (tys: List String) : Except TranslationError (List String) := do
   for ty in tys do
     let _ ← translateType ctx ty
@@ -1421,6 +1425,7 @@ partial def getArgumentTypes (arg: Python.expr SourceRange) : Except Translation
   | .Constant _ _ _ => return ["None"]
   | .Attribute _ _ _ _ => return [pyExprToString arg]
   | .BinOp _ _ _ _ => return (← (getUnionTypes arg).mapM getArgumentTypes).flatten
+  --Temporary: just to handle "typing:some_type ... "
   | .Slice _ lower upper _ => match lower.val, upper.val with
       | some (.Name  _ _ _ ), some upper => getArgumentTypes upper
       | _, _ => throw (.internalError s!"Unhandled Expr: {repr arg}")
@@ -1486,17 +1491,7 @@ def pyFuncDefToPythonFunctionDecl  (ctx : TranslationContext) (f : Python.stmt S
   | _ => throw (.internalError "Expected FunctionDef")
 
 def getSingleTypeConstraint (var: String) (ty: String): Option StmtExprMd :=
-  match ty with
-  | "str" => mkStmtExprMd (.StaticCall "Any..isfrom_string" [freeVar var])
-  | "int" => mkStmtExprMd (.StaticCall "Any..isfrom_int" [freeVar var])
-  | "bool" => mkStmtExprMd (.StaticCall "Any..isfrom_bool" [freeVar var])
-  | "float" => mkStmtExprMd (.StaticCall "Any..isfrom_float" [freeVar var])
-  | "datetime" => mkStmtExprMd (.StaticCall "Any..isfrom_datetime" [freeVar var])
-  | "bytes" => mkStmtExprMd (.StaticCall "Any..isfrom_bytes" [freeVar var])
-  | "None" => mkStmtExprMd (.StaticCall "Any..isfrom_none" [freeVar var])
-  | "ListAny" => mkStmtExprMd (.StaticCall "Any..isfrom_ListAny" [freeVar var])
-  | "DictStrAny"  => mkStmtExprMd (.StaticCall "Any..isfrom_Dict" [freeVar var])
-  | _ => none
+  if isOfAnyType ty && ty ≠ "Any" then mkStmtExprMd (.StaticCall ("Any..isfrom_" ++ ty) [freeVar var]) else none
 
 def createBoolOrExpr (exprs: List StmtExprMd) : StmtExprMd :=
   match exprs with
@@ -1511,13 +1506,12 @@ def getUnionTypeConstraint (var: String) (md: MetaData) (tys: List String) (func
     some {createBoolOrExpr type_constraints with md:=md}
 
 def getReturnTypeEnsure (md: MetaData) (tys: List String) (funcname: String): Option StmtExprMd :=
-  let type_constraints := tys.filterMap (getSingleTypeConstraint PyLauFuncReturnVar)
-  if type_constraints.isEmpty then none else
-    let md: MetaData := md.withPropertySummary $ "(" ++ funcname ++ " ensures) Return type constraint"
-    some {createBoolOrExpr type_constraints with md:=md}
+  getUnionTypeConstraint PyLauFuncReturnVar md tys funcname
+  |>.map fun c => {c with md := md.withPropertySummary $ "(" ++ funcname ++ " ensures) Return type constraint"}
 
 def getInputTypePreconditions (funcDecl : PythonFunctionDecl): List StmtExprMd :=
   funcDecl.args.filterMap (λ arg => getUnionTypeConstraint arg.name arg.md arg.tys funcDecl.name)
+
 /-- Translate a Python function body: collect all variable declarations, hoist them
     to the top, and translate the remaining statements. --/
 def translateFunctionBody (ctx : TranslationContext) (inputTypes : List (String × String)) (body: List (Python.stmt SourceRange))
@@ -1552,8 +1546,9 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
       match funcDecl.ret.map fun (tys, md) => getReturnTypeEnsure md tys funcDecl.name with
         | some (some constraint) => [constraint]
         | _ => []
-    -- Declare an output parameter when the function has a return type annotation.
-    -- Return statements explicitly assign to LaurelResult and exit $body.
+
+    -- Translate return type
+    -- All methods return Any (void methods return Any via from_None)
     let outputs : List Parameter := [{ name := PyLauFuncReturnVar, type := AnyTy }]
 
     -- Translate function body
@@ -1677,7 +1672,7 @@ def translateMethod (ctx : TranslationContext) (className : String)
           | _ => pure ()
 
     -- Translate return type
-    -- All methods return Any (void methods return Any via from_none)
+    -- All methods return Any (void methods return Any via from_None)
     let outputs : List Parameter := [{name := "LaurelResult", type := AnyTy}]
 
     -- Translate method body with class context
