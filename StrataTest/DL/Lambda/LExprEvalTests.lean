@@ -254,7 +254,21 @@ private def testBuiltIn : @Factory TestParams :=
       inputs := [("x", mty[int]), ("y", mty[int])],
       output := mty[int],
       body := some esM[((~Int.Add x) y)]
-    }]
+    },
+
+    { name := "Int.Add3",
+      inputs := [("x", mty[int]), ("y", mty[int]), ("z", mty[int])],
+      output := mty[int],
+      concreteEval := some (fun _e args => match args with
+                        | [e1, e2, e3] =>
+                          let e1i := LExpr.denoteInt e1
+                          let e2i := LExpr.denoteInt e2
+                          let e3i := LExpr.denoteInt e3
+                          match e1i, e2i, e3i with
+                          | some x, some y, some z =>
+                            .some (.intConst e1.metadata (x + y + z))
+                          | _, _, _ => .none
+                        | _ => .none) }]
 
 private def testState : LState TestParams :=
   let ans := LState.addFactory LState.init testBuiltIn
@@ -410,8 +424,9 @@ example: stuck test15 := by
   case reduce_2 =>
     rename_i a
     cases a <;> try contradiction
-    · rename_i a a2 _
-      cases a2; cases a
+    case expand_fn =>
+      rename_i hbody _ hcall _
+      cases hcall; cases hbody
     · rename_i a a2 a3 he2
       cases a3
       cases a2; unfold denoteInt at he2; contradiction
@@ -657,6 +672,91 @@ example: stuck test25 := by
     cases a3
     cases a2; unfold denoteInt at he; contradiction
 
+
+-- Ternary function applied through a state variable.
+
+private def testStateFV : LState TestParams :=
+  { testState with state := [[("f", (none, esM[~Int.Add3]))]] }
+
+def test_ternary_fv := TestCase.mk
+  testStateFV
+  esM[((((f : int → int → int → int) #10) #20) #30)]
+  esM[#60]
+
+/-- info: true -/
+#guard_msgs in
+#eval check test_ternary_fv
+
+example: steps_well test_ternary_fv := by
+  unfold steps_well Scopes.toEnv test_ternary_fv testStateFV
+  take_step; apply Step.reduce_1
+  · inhabited_metadata
+  · apply Step.reduce_1
+    · inhabited_metadata
+    · apply Step.reduce_1
+      · inhabited_metadata
+      · apply Step.expand_fvar; rfl
+  take_step; apply Step.eval_fn <;> try rfl
+  · inhabited_metadata
+  take_refl
+
+
+/-! ### Polymorphic function inlining: type substitution
+
+When a polymorphic function is inlined via `expand_fn`, type variables in the
+body are substituted with their concrete instantiations derived from the
+operator's type annotation at the call site.
+-/
+
+-- polyEq<a>(x : a, y : a) : bool := ∀ (z : a), z == z
+private def polyFactory : @Factory TestParams :=
+  #[{ name := "polyEq",
+      typeArgs := ["a"],
+      attr := #[.inline],
+      inputs := [("x", mty[%a]), ("y", mty[%a])],
+      output := mty[bool],
+      body := some esM[∀ (%a): (%0 == %0)] }]
+
+private def polyState : LState TestParams :=
+  match LState.addFactory LState.init polyFactory with
+  | .error e => panic s!"{e}"
+  | .ok ok => ok
+
+-- polyEq<bool>(#true, #false): type substitution maps %a to bool in the body
+def test_poly_tysubst := TestCase.mk
+  polyState
+  esM[(((~polyEq : bool → bool → bool) #true) #false)]
+  esM[∀ (bool): (%0 == %0)]
+
+/-- info: true -/
+#guard_msgs in
+#eval check test_poly_tysubst
+
+-- polyPair<a, b>(x : a, y : b) : bool := ∀ (z : a), ∀ (w : b), z == w
+-- Tests that type substitution with distinct type parameters maps correctly:
+-- %a → int and %b → bool (not swapped).
+private def polyPairFactory : @Factory TestParams :=
+  #[{ name := "polyPair",
+      typeArgs := ["a", "b"],
+      attr := #[.inline],
+      inputs := [("x", mty[%a]), ("y", mty[%b])],
+      output := mty[bool],
+      body := some esM[∀ (%a): ∀ (%b): (%1 == %0)] }]
+
+private def polyPairState : LState TestParams :=
+  match LState.addFactory LState.init polyPairFactory with
+  | .error e => panic s!"{e}"
+  | .ok ok => ok
+
+-- polyPair<int, bool>(#42, #true): %a maps to int, %b maps to bool
+def test_poly_tysubst_distinct := TestCase.mk
+  polyPairState
+  esM[(((~polyPair : int → bool → bool) #42) #true)]
+  esM[∀ (int): ∀ (bool): (%1 == %0)]
+
+/-- info: true -/
+#guard_msgs in
+#eval check test_poly_tysubst_distinct
 
 end EvalTest
 ---------------------------------------------------------------------
