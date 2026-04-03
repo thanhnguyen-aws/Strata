@@ -21,7 +21,7 @@ datatype OptionInt () { None(), Some(val: int) };
 
 // --- Pure Functions ---
 function is_present(opt : OptionInt) : bool {
-    OptionInt..isOptSome(opt)
+    OptionInt..isSome(opt)
 }
 
 // --- Global State ---
@@ -65,7 +65,7 @@ spec {
     var result : OptionInt;
     call result := GetValue(101);
 
-    if (OptionInt..isOptSome(result)) {
+    if (OptionInt..isSome(result)) {
         assert [value_of_101]: OptionInt..val(result) == 500;
     } else {
         // Unreachable, based on `Register` ensures.
