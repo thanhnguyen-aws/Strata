@@ -1,4 +1,4 @@
-test_strings.py(5, 18): ✅ pass - Check PAdd!AnyMaybeExcept exception
+test_strings.py(5, 18): ✅ pass - Check PAdd exception
 test_strings.py(6, 4): ✅ pass - assert_assert(114)_calls_Any_to_bool_0
 test_strings.py(6, 4): ✅ pass - assert(114)
 test_strings.py(11, 4): ✅ pass - assert_assert(264)_calls_Any_to_bool_0
