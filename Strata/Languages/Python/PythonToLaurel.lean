@@ -100,6 +100,7 @@ structure TranslationContext where
   currentClassName : Option String := none
   loopBreakLabel : Option String := none
   loopContinueLabel : Option String := none
+  isInsideTryBlock : Bool := false
 deriving Inhabited
 
 /-! ## Error Handling -/
@@ -573,7 +574,8 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
     let index ←  match slice with
       | .Slice _ start stop step => translateSlice ctx start.val stop.val step.val
       | _ => translateExpr ctx slice
-    return mkStmtExprMdWithLoc (.StaticCall "Any_get" [dictOrList, index]) md
+    let AnyGetCoreFunction := if ctx.isInsideTryBlock then "Any_get!AnyMaybeExcept" else "Any_get"
+    return mkStmtExprMdWithLoc (.StaticCall AnyGetCoreFunction [dictOrList, index]) md
 
   -- Attribute access: obj.attr or obj.method
   | .Attribute _ obj attr _ => do
@@ -1129,6 +1131,11 @@ def createVarDeclStmtsAndCtx (ctx : TranslationContext) (newDecls : List (String
         if isCompositeType ctx ty then (n, ty) else (n, PyLauType.Any)) }
   return (hoistedDecls, hoistedCtx)
 
+def createIfStmt (condBlocks: List (StmtExprMd × StmtExprMd)) (elseBlock: Option StmtExprMd): Option StmtExprMd :=
+  match condBlocks with
+  | [] => elseBlock
+  | (cond, block)::remaining => mkStmtExprMd (.IfThenElse cond block (createIfStmt remaining elseBlock))
+
 def isMaybeExceptAnyFunc (funcName: String) : Bool := funcName.endsWith "!AnyMaybeExcept"
 
 partial def getMaybeExceptionExprs (e : StmtExprMd) : List StmtExprMd :=
@@ -1137,16 +1144,56 @@ partial def getMaybeExceptionExprs (e : StmtExprMd) : List StmtExprMd :=
     if isMaybeExceptAnyFunc funcname.text then
       [{e with md:= e.md.withPropertySummary $ "Check " ++ funcname.text ++ " exception"}]
     else args.flatMap getMaybeExceptionExprs
+  | .PrimitiveOp _ args => args.flatMap getMaybeExceptionExprs
   | .IfThenElse cond thenBranch elseBranch =>
       ([cond, thenBranch] ++ elseBranch.toList).flatMap getMaybeExceptionExprs
   | _ => []
 
-partial def getExceptionAssertions (e : StmtExprMd) : List StmtExprMd :=
-  let maybeExceptExprs := getMaybeExceptionExprs e
+partial def getExceptionAssertions (maybeExceptExprs: List StmtExprMd) : List StmtExprMd :=
   maybeExceptExprs.map (λ mbe => mkStmtExprMdWithLoc (.Assert $ mkStmtExprMd
     (.PrimitiveOp .Not [mkStmtExprMd $ .StaticCall "Any..isexception" [mbe]])) mbe.md)
 
+partial def getExceptionAssign (maybeExceptExprs: List StmtExprMd) : List StmtExprMd :=
+  let condBlock := maybeExceptExprs.map (λ mbe =>
+    (mkStmtExprMd $ .StaticCall "Any..isexception" [mbe],
+    mkStmtExprMd $ .Assign [maybeExceptVar] (mkStmtExprMd $ .StaticCall "Any..get_error!" [mbe])))
+  (createIfStmt condBlock none).toList
+
+partial def getExceptionCatch (ctx: TranslationContext) (e : StmtExprMd): List StmtExprMd :=
+  let maybeExceptExprs := getMaybeExceptionExprs e
+  if ctx.isInsideTryBlock then getExceptionAssign maybeExceptExprs else getExceptionAssertions maybeExceptExprs
+
+def errTyToGuard (errTy: String) : StmtExprMd := match errTy with
+  | "TypeError" => mkStmtExprMd (.StaticCall "Error..isTypeError" [maybeExceptVar])
+  | "ZeroDivisionError" => mkStmtExprMd (.StaticCall "Error..isUndefinedError" [maybeExceptVar])
+  | "IndexError" => mkStmtExprMd (.StaticCall "Error..isIndexError" [maybeExceptVar])
+  | "AssertionError" => mkStmtExprMd (.StaticCall "Error..isAssertionError" [maybeExceptVar])
+  | "Exception" => mkStmtExprMd (.StaticCall "isError" [maybeExceptVar])
+  | _ => mkStmtExprMd (.StaticCall "Error..isUnknownError" [maybeExceptVar])
+
 mutual
+
+partial def exceptHandlerToBlock
+        (ctx: TranslationContext)
+        (h : Python.excepthandler SourceRange) : Except TranslationError (StmtExprMd × StmtExprMd) := do
+  match h with
+  | .ExceptHandler sr errorTy _ body =>
+    let md := sourceRangeToMetaData ctx.filePath sr
+    let errorTy:= match errorTy.val with
+      | .some errorTy => pyExprToString errorTy
+      | .none => "exception"
+    let (_, bodyStmts) ← translateStmtList ctx body.val.toList
+    return (errTyToGuard errorTy, mkStmtExprMdWithLoc (StmtExpr.Block bodyStmts none) md)
+
+partial def exceptHandlersToIfStmt
+        (md: MetaData)
+        (ctx: TranslationContext)
+        (h : List (Python.excepthandler SourceRange)) : Except TranslationError (Option StmtExprMd) := do
+  let exceptionHandler ←  h.mapM $ exceptHandlerToBlock ctx
+  let assertUnCaughtMd := md.withPropertySummary "Assert No UnCaught Exception"
+  let assertUnCaught := mkStmtExprMdWithLoc (.Assert (mkStmtExprMd (.StaticCall "Error..isNoError" [maybeExceptVar]))) assertUnCaughtMd
+  return createIfStmt exceptionHandler assertUnCaught
+
 
 partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRange)
     : Except TranslationError (TranslationContext × List StmtExprMd) := do
@@ -1159,7 +1206,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
       throw (.unsupportedConstruct "Multiple assignment targets not yet supported" (toString (repr s)))
     let (newctx, stmts) ← translateAssign ctx targets.val[0]! none value md
     let rhs_exprs:= stmts.flatMap (λ s => match s.val with |.Assign _ value => [value] | _=> [])
-    let exceptionCheck := rhs_exprs.flatMap getExceptionAssertions
+    let exceptionCheck := rhs_exprs.flatMap $ getExceptionCatch ctx
     return (newctx, exceptionCheck ++ stmts)
 
   -- Annotated assignment: x: int = expr or x: ClassName = ClassName(args) or self.field: int = expr
@@ -1168,7 +1215,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     | some value =>
         let (newctx, stmts) ← translateAssign ctx target annotation value md
         let rhs_exprs:= stmts.flatMap (λ s => match s.val with |.Assign _ value => [value] | _=> [])
-        let exceptionCheck := rhs_exprs.flatMap getExceptionAssertions
+        let exceptionCheck := rhs_exprs.flatMap $ getExceptionCatch ctx
         return (newctx, exceptionCheck ++ stmts)
     | none =>
       -- Declaration without initializer (not allowed in pure context, but OK in procedures)
@@ -1194,7 +1241,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
       .ok (some (mkStmtExprMd (StmtExpr.Block elseStmts none)))
     let ifStmt := mkStmtExprMdWithLoc (StmtExpr.IfThenElse (Any_to_bool condExpr) bodyBlock elseBlock) md
 
-    return (bodyCtx, (getExceptionAssertions condExpr) ++ [ifStmt])
+    return (bodyCtx, (getExceptionCatch ctx condExpr) ++ [ifStmt])
 
   -- While loop
   | .While _ test body _orelse => do
@@ -1207,14 +1254,14 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     let bodyBlock := mkStmtExprMdWithLoc (StmtExpr.Block bodyStmts (some continueLabel)) md
     let whileStmt := mkStmtExprMdWithLoc (StmtExpr.While (Any_to_bool condExpr) [] none bodyBlock) md
     let whileWrapped := mkStmtExprMdWithLoc (StmtExpr.Block [whileStmt] (some breakLabel)) md
-    return (loopCtx, (getExceptionAssertions condExpr) ++ [whileWrapped])
+    return (loopCtx, (getExceptionCatch ctx condExpr) ++ [whileWrapped])
 
   -- Return statement: assign to the LaurelResult output parameter, then exit $body.
   | .Return _ value => do
     let stmts ← match value.val with
       | some expr => do
         let e ← translateExpr ctx expr
-        let exceptionCheck := getExceptionAssertions e
+        let exceptionCheck := getExceptionCatch ctx e
         let assign := mkStmtExprMd (StmtExpr.Assign [mkStmtExprMd (StmtExpr.Identifier "LaurelResult")] e)
         .ok $ exceptionCheck ++ [assign, mkStmtExprMd (StmtExpr.Exit "$body")]
       | none => .ok [mkStmtExprMd (StmtExpr.Exit "$body")]
@@ -1224,7 +1271,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   | .Assert _ test _msg => do
     let condExpr ← translateExpr ctx test
     let assertStmt := mkStmtExprMdWithLoc (StmtExpr.Assert (Any_to_bool condExpr)) md
-    return (ctx, (getExceptionAssertions condExpr) ++ [assertStmt])
+    return (ctx, (getExceptionCatch ctx condExpr) ++ [assertStmt])
 
   --Ignore comments in source code
   | .Expr _ (.Constant _ (.ConString _ _) _) => return (ctx, [])
@@ -1233,7 +1280,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   | .Expr _ value => do
     let expr ← translateExpr ctx value
     let expr := { expr with md := md }
-    let exceptionCheck := getExceptionAssertions expr
+    let exceptionCheck := getExceptionCatch ctx expr
 
     match expr.val with
     | .StaticCall fnname _ =>
@@ -1254,17 +1301,10 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   | .Try _ body handlers _ _ => do
     let tryLabel := s!"try_end_{s.toAst.ann.start.byteIdx}"
     let catchersLabel := s!"exception_handlers_{s.toAst.ann.start.byteIdx}"
-    let (bodyCtx, bodyStmts) ← translateStmtList ctx body.val.toList
+    let (bodyCtx, bodyStmts) ← translateStmtList {ctx with isInsideTryBlock:=true} body.val.toList
 
     -- Translate exception handlers
-    let mut handlerCtx := bodyCtx
-    let mut handlerStmts : List StmtExprMd := []
-    for handler in handlers.val do
-      match handler with
-      | .ExceptHandler _ _ _ handlerBody =>
-        let (hCtx, hStmts) ← translateStmtList ctx handlerBody.val.toList
-        handlerCtx := hCtx
-        handlerStmts := handlerStmts ++ hStmts
+     let handlerStmt ←  exceptHandlersToIfStmt md ctx handlers.val.toList
 
     -- Insert exception checks after each statement in try body
     let bodyStmtsWithChecks := bodyStmts.flatMap fun stmt =>
@@ -1283,12 +1323,9 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
 
     -- try block: catchers block + handler code
     let tryBlock := mkStmtExprMdWithLoc (StmtExpr.Block
-      ([catchersBlock] ++ handlerStmts) (some tryLabel)) md
-    let mergedVars := bodyCtx.variableTypes ++
-      (handlerCtx.variableTypes.filter fun (n, _) =>
-        !bodyCtx.variableTypes.any fun (bn, _) => bn == n)
-    let finalCtx := { bodyCtx with variableTypes := mergedVars }
-    return (finalCtx, [tryBlock])
+      ([catchersBlock] ++ handlerStmt.toList) (some tryLabel)) md
+
+    return ({bodyCtx with isInsideTryBlock := ctx.isInsideTryBlock}, [tryBlock])
 
   | .Raise _ _ _ => return (ctx, [mkStmtExprMd .Hole])
 
@@ -1348,7 +1385,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     let (finalCtx, bodyStmts) ← translateStmtList bodyCtx body.val.toList
     let innerBlock := mkStmtExprMd (StmtExpr.Block bodyStmts (some continueLabel))
     let loopBlock := mkStmtExprMdWithLoc (StmtExpr.Block [innerBlock] (some breakLabel)) md
-    return (finalCtx, (getExceptionAssertions iterExpr) ++ targetDecls ++ [loopBlock])
+    return (finalCtx, (getExceptionCatch ctx iterExpr) ++ targetDecls ++ [loopBlock])
 
   | .Break _ =>
     match ctx.loopBreakLabel with
@@ -1371,7 +1408,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
       | .Mod _      => mkStmtExprMd (StmtExpr.StaticCall "PMod!AnyMaybeExcept"      [targetExpr, valueExpr])
       | _           => mkStmtExprMd .Hole
     let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr] rhs) md
-    return (ctx, (getExceptionAssertions rhs) ++ [assignStmt])
+    return (ctx, (getExceptionCatch ctx rhs) ++ [assignStmt])
 
   | _ => throw (.unsupportedConstruct "Statement type not yet supported" (toString (repr s)))
 
