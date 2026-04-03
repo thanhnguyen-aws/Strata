@@ -32,10 +32,10 @@ spec {
   var o : OptionInt;
 
   o := Some(x);
-  assert OptionInt..isOptSome(o);
+  assert OptionInt..isSome(o);
   assert OptionInt..val(o) == x;
 
-  ok := OptionInt..isOptSome(o) && OptionInt..val(o) == x;
+  ok := OptionInt..isSome(o) && OptionInt..val(o) == x;
 };
 #end
 
