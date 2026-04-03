@@ -1422,13 +1422,19 @@ def pyFuncDefToPythonFunctionDecl  (ctx : TranslationContext) (f : Python.stmt S
 
 /-- Translate a Python function body: collect all variable declarations, hoist them
     to the top, and translate the remaining statements. --/
-def translateFunctionBody (ctx : TranslationContext) (inputTypes : List (String × String)) (body: List (Python.stmt SourceRange))
+def translateFunctionBody (ctx : TranslationContext) (inputs: List Parameter) (body: List (Python.stmt SourceRange))
   : Except TranslationError (StmtExprMd × TranslationContext) := do
-    let ctx := {ctx with variableTypes:= ("nullcall_ret", PyLauType.Any)::inputTypes}
     let newDecls := collectDeclaredNamesAndTypes ctx body
     let (varDecls, ctx) ←  createVarDeclStmtsAndCtx ctx newDecls
     let (newctx, bodyStmts) ← translateStmtList ctx body
     let bodyStmts := prependExceptHandlingHelper (varDecls ++ bodyStmts)
+    let nonSelfParams := inputs.filter (fun p => p.name.text != "self")
+    let paramCopies := nonSelfParams.map fun p =>
+      let origName := p.name.text
+      let renamedName := "$in_" ++ origName
+      mkStmtExprMd (StmtExpr.LocalVariable origName p.type
+        (some (mkStmtExprMd (StmtExpr.Identifier renamedName))))
+    let bodyStmts := paramCopies ++ bodyStmts
     let bodyStmts := (mkStmtExprMd (.LocalVariable "nullcall_ret" AnyTy (some AnyNone))) :: bodyStmts
     return (mkStmtExprMd (StmtExpr.Block bodyStmts none), newctx)
 
@@ -1437,9 +1443,7 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
     : Except TranslationError (Laurel.Procedure × TranslationContext) := do
 
     -- Translate parameters
-    let mut inputs : List Parameter := []
-
-    inputs ← funcDecl.args.mapM (fun (name, ty, _) => do
+    let mut inputs ← funcDecl.args.mapM (fun (name, ty, _) => do
         match ctx.importedSymbols[ty]? with
         | some (ImportedSymbol.compositeType _) =>
           pure { name := name, type := mkHighTypeMd (.UserDefined ty) }
@@ -1448,28 +1452,37 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
         | _ =>
           pure { name := name, type := AnyTy})
 
+    inputs := match ctx.currentClassName with
+    | some className =>
+    -- First parameter is self (typed as Composite to match call-site convention)
+      let selfParam : Parameter := {
+        name := "self"
+        type := mkHighTypeMd (.UserDefined (mkId className))
+      }
+      [selfParam] ++ inputs
+    | _ => inputs
+
     match funcDecl.kwargsName with
     | some kwargs => inputs:= inputs ++ [{ name := kwargs, type := mkCoreType PyLauType.DictStrAny}]
     | _ => pure ()
 
     -- Translate return type
-
-
-    -- Declare an output parameter when the function has a return type annotation.
-    -- Return statements explicitly assign to LaurelResult and exit $body.
-    let outputs : List Parameter :=
-      match funcDecl.ret with
-      | none => []
-      | some _ => [{ name := "LaurelResult", type := AnyTy }]
+    -- All methods return Any (void methods return Any via from_none)
+    let outputs : List Parameter := [{name := "LaurelResult", type := AnyTy}]
 
     -- Translate function body
     let inputTypes := funcDecl.args.map (λ (name, type, _) => (name, type))
-    let (bodyBlock, newCtx) ←  translateFunctionBody ctx inputTypes body
+    let ctx := {ctx with variableTypes:= ("nullcall_ret", PyLauType.Any)::inputTypes}
+    let (bodyBlock, newCtx) ←  translateFunctionBody ctx inputs body
+
+    let renamedInputs := inputs.map fun p =>
+      if p.name.text == "self" then p
+      else { p with name := mkId ("$in_" ++ p.name.text) }
 
     -- Create procedure with transparent body (no contracts for now)
     let proc : Procedure := {
       name := funcDecl.name
-      inputs := inputs
+      inputs := renamedInputs
       outputs := outputs
       preconditions := []
       determinism := .deterministic none -- TODO: need to set reads
@@ -1546,82 +1559,6 @@ def extractClassFields (ctx : TranslationContext) (classBody : Array (Python.stm
 
   return fields
 
-/-- Translate a Python method to a Laurel instance procedure -/
-def translateMethod (ctx : TranslationContext) (className : String)
-    (methodStmt : Python.stmt SourceRange)
-    : Except TranslationError Procedure := do
-  match methodStmt with
-  | .FunctionDef _ name args body _ _ret _ _ => do
-    let methodName := name.val
-
-    -- First parameter is self (typed as Composite to match call-site convention)
-    let selfParam : Parameter := {
-      name := "self"
-      type := mkHighTypeMd (.UserDefined (mkId className))
-    }
-
-    -- Translate remaining parameters (all typed as Any to match the
-    -- Python→Laurel pipeline's Any-wrapping convention for call sites).
-    let mut inputs : List Parameter := [selfParam]
-    match args with
-    | .mk_arguments _ _ argsList _ _ _ _ _ =>
-      -- Skip first arg (self), process rest
-      if argsList.val.size > 0 then
-        for arg in argsList.val.toList.tail! do
-          match arg with
-          | .mk_arg _ paramName _paramAnnotation _ =>
-            inputs := inputs ++ [{name := paramName.val, type := AnyTy}]
-    match args with
-      | .mk_arguments _ _ _ _ _ _ kwargs _ =>
-          match kwargs.val with
-          | some (.mk_arg _ name _ _ ) => inputs:= inputs ++ [{ name := name.val, type := mkCoreType PyLauType.DictStrAny }]
-          | _ => pure ()
-
-    -- Translate return type
-    -- All methods return Any (void methods return Any via from_none)
-    let outputs : List Parameter := [{name := "LaurelResult", type := AnyTy}]
-
-    -- Translate method body with class context
-    -- Add method parameters to variableTypes so that hoisting (e.g. in
-    -- try/except) does not re-declare them as local variables.
-    let paramTypes : List (String × String) := inputs.map (fun p => (p.name.text, PyLauType.Any))
-    let ctxWithClass := {ctx with currentClassName := some className,
-                                  variableTypes := paramTypes}
-    let newDecls := collectDeclaredNamesAndTypes ctxWithClass body.val.toList
-    let (varDecls, ctxWithClass) ←  createVarDeclStmtsAndCtx ctxWithClass newDecls
-    let (_, bodyStmts) ← translateStmtList ctxWithClass body.val.toList
-    let bodyStmts := prependExceptHandlingHelper (varDecls ++ bodyStmts)
-    -- In Python, parameters are mutable local variables.  In Core, input
-    -- parameters cannot be modified.  To bridge this gap we rename each
-    -- non-self input parameter to "$in_<name>" and prepend a local variable
-    -- declaration  var <name> := $in_<name>  so the body works with a
-    -- freely-modifiable local copy.
-    let nonSelfParams := inputs.filter (fun p => p.name.text != "self")
-    let renamedInputs := inputs.map fun p =>
-      if p.name.text == "self" then p
-      else { p with name := mkId ("$in_" ++ p.name.text) }
-    let paramCopies := nonSelfParams.map fun p =>
-      let origName := p.name.text
-      let renamedName := "$in_" ++ origName
-      mkStmtExprMd (StmtExpr.LocalVariable origName p.type
-        (some (mkStmtExprMd (StmtExpr.Identifier renamedName))))
-    let bodyStmts := paramCopies ++ bodyStmts
-    let bodyBlock := mkStmtExprMd (StmtExpr.Block bodyStmts none)
-
-    let md := sourceRangeToMetaData ctx.filePath methodStmt.ann
-    return {
-      name := className ++ "@" ++ methodName
-      inputs := renamedInputs
-      outputs := outputs
-      preconditions := [mkStmtExprMd (StmtExpr.LiteralBool true)]
-      determinism := .nondeterministic
-      isFunctional := false
-      decreases := none
-      body := .Transparent bodyBlock
-      md := md
-    }
-  | _ => throw (.internalError "Expected FunctionDef for method")
-
 /-- Extract fields from __init__ method body by scanning for self.field : type = expr patterns -/
 def extractFieldsFromInit (ctx : TranslationContext) (initBody : Array (Python.stmt SourceRange))
     : Except TranslationError (List Field) := do
@@ -1646,11 +1583,12 @@ def translateClass (ctx : TranslationContext) (classStmt : Python.stmt SourceRan
   | .ClassDef _ className _bases _ ⟨_, body⟩ _ _ =>
     let className := className.val
     let ctx := {ctx with currentClassName:= className}
-    let classFunDecls : List PythonFunctionDecl ← body.toList.filterMapM (λ s => do match s with
-      | .FunctionDef _ _ _ _ _ _ _ _ =>
+    let classFunDeclsAndBody  ← body.toList.filterMapM (λ s => do match s with
+      | .FunctionDef sr _ _ funcBody _ _ _ _ =>
           let funcDecl ← pyFuncDefToPythonFunctionDecl ctx s
-          .ok (some (funcDecl))
+          .ok (some (funcDecl, sr, funcBody.val.toList))
       | _ => .ok none)
+    let classFunDecls := classFunDeclsAndBody.unzip.fst
     let ctx := {ctx with functionSignatures:= ctx.functionSignatures ++ classFunDecls}
     -- Extract fields from class-level annotations and __init__ body, with dedup
     let classLevelFields ← extractClassFields ctx body
@@ -1672,11 +1610,13 @@ def translateClass (ctx : TranslationContext) (classStmt : Python.stmt SourceRan
 
     -- Translate each method
     let mut instanceProcedures : Array Procedure := #[]
-    for stmt in body do
-      if let .FunctionDef .. := stmt then
-        let proc ← translateMethod ctx className stmt
+
+    for (funcDecl, sr,  funcBody) in classFunDeclsAndBody do
+      let (proc, _) ← translateFunction ctx sr funcDecl funcBody
         -- TODO stop replacing the body of instance proceduces with an empty one
-        instanceProcedures := instanceProcedures.push { proc with body := .Opaque [] .none [] }
+      instanceProcedures := instanceProcedures.push
+        { proc with body := .Opaque [] .none [], preconditions := [mkStmtExprMd (StmtExpr.LiteralBool true)] }
+
 
     return ({
       name := className
