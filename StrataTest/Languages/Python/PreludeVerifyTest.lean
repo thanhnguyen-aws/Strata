@@ -114,6 +114,22 @@ Obligation: Any_get!AnyMaybeExcept_body_calls_List_get_1
 Property: assert
 Result: ✅ pass
 
+Obligation: Any_get!AnyMaybeExcept_body_calls_List_drop_2
+Property: assert
+Result: ✅ pass
+
+Obligation: Any_get!AnyMaybeExcept_body_calls_List_slice_3
+Property: assert
+Result: ✅ pass
+
+Obligation: Any_get_no_slice!AnyMaybeExcept_body_calls_DictStrAny_get_0
+Property: assert
+Result: ✅ pass
+
+Obligation: Any_get_no_slice!AnyMaybeExcept_body_calls_List_get_1
+Property: assert
+Result: ✅ pass
+
 Obligation: Any_set_body_calls_List_set_0
 Property: assert
 Result: ✅ pass
@@ -158,15 +174,15 @@ Obligation: postcondition
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(41885)
+Obligation: assert(43671)
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(41955)
+Obligation: assert(43738)
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(42066)
+Obligation: assert(43846)
 Property: assert
 Result: ✅ pass
 
