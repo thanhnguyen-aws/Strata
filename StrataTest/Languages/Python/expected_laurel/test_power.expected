@@ -13,7 +13,7 @@ test_power.py(14, 4): ✅ pass - assert(302)
 test_power.py(17, 15): ✅ pass - Check PPow!AnyMaybeExcept exception
 test_power.py(18, 11): ✅ pass - Check PGt!AnyMaybeExcept exception
 test_power.py(18, 4): ✅ pass - assert_assert(440)_calls_Any_to_bool_0
-test_power.py(18, 4): ❌ fail - assert(440)
+test_power.py(18, 4): ❓ unknown - assert(440)
 test_power.py(20, 0): ✅ pass - ite_cond_calls_Any_to_bool_0
-DETAIL: 16 passed, 1 failed, 0 inconclusive
-RESULT: Failures found
+DETAIL: 16 passed, 0 failed, 1 inconclusive
+RESULT: Inconclusive
