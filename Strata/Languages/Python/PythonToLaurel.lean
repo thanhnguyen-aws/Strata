@@ -1379,18 +1379,11 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     | none => return (ctx, [mkStmtExprMdWithLoc (StmtExpr.Assert (mkStmtExprMd .Hole)) md])
 
   -- Augmented assignment: x += expr  →  x = x op expr
-  | .AugAssign _ target op value => do
-    let targetExpr ← translateExpr ctx target
-    let valueExpr ← translateExpr ctx value
-    let rhs := match op with
-      | .Add _      => mkStmtExprMd (StmtExpr.StaticCall "PAdd"      [targetExpr, valueExpr])
-      | .Sub _      => mkStmtExprMd (StmtExpr.StaticCall "PSub"      [targetExpr, valueExpr])
-      | .Mult _     => mkStmtExprMd (StmtExpr.StaticCall "PMul"      [targetExpr, valueExpr])
-      | .FloorDiv _ => mkStmtExprMd (StmtExpr.StaticCall "PFloorDiv" [targetExpr, valueExpr])
-      | .Mod _      => mkStmtExprMd (StmtExpr.StaticCall "PMod"      [targetExpr, valueExpr])
-      | _           => mkStmtExprMd .Hole
-    let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr] rhs) md
-    return (ctx, [assignStmt])
+  | .AugAssign sr target op value => do
+    let rhs : Python.expr SourceRange := .BinOp default target op value
+    let pyNormalAssign : Python.stmt SourceRange :=
+      .Assign sr {val:= #[target], ann:= target.ann} rhs {val:= none, ann:= default}
+    translateStmt ctx pyNormalAssign
 
   | _ => throw (.unsupportedConstruct "Statement type not yet supported" (toString (repr s)))
 
