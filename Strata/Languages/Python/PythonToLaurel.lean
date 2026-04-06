@@ -1516,8 +1516,9 @@ def createBoolOrExpr (exprs: List StmtExprMd) : StmtExprMd :=
 
 def getUnionTypeConstraint (var: String) (md: MetaData) (tys: List String) (funcname: String): Option StmtExprMd :=
   let type_constraints := tys.filterMap (getSingleTypeConstraint var)
+  let originalVarName := if var.startsWith "$in_" then var.drop 4 else var
   if type_constraints.isEmpty then none else
-    let md: MetaData := md.withPropertySummary $ "(" ++ funcname ++ " requires) Type constraint of " ++ var
+    let md: MetaData := md.withPropertySummary $ "(" ++ funcname ++ " requires) Type constraint of " ++ originalVarName
     some {createBoolOrExpr type_constraints with md:=md}
 
 def getReturnTypeEnsure (md: MetaData) (tys: List String) (funcname: String): Option StmtExprMd :=
