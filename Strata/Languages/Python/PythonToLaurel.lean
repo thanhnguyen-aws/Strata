@@ -1382,7 +1382,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   | .AugAssign sr target op value => do
     let rhs : Python.expr SourceRange := .BinOp sr target op value
     let pyNormalAssign : Python.stmt SourceRange :=
-      .Assign sr {val:= #[target], ann:= target.ann} rhs {val:= none, ann:= default}
+      .Assign sr {val:= #[target], ann:= target.ann} rhs {val:= none, ann:= sr}
     translateStmt ctx pyNormalAssign
 
   | _ => throw (.unsupportedConstruct "Statement type not yet supported" (toString (repr s)))
