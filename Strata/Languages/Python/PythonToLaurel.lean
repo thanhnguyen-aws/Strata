@@ -87,8 +87,8 @@ structure TranslationContext where
   functionSignatures : List PythonFunctionDecl := []
   /-- Names of user-defined functions -/
   userFunctions : List String := []
-  /-- Function that may returns Any of exception -/
-  maybeExceptionfunctions : List String := []
+  /-- Function that may return Any of exception -/
+  maybeExceptionFunctions : List String := []
   /-- Names of user-defined classes -/
   userClasses : List String := []
   /-- Map ClassName -> (FieldName -> HighType) for field access coercions and type inference -/
@@ -1178,14 +1178,19 @@ def createVarDeclStmtsAndCtx (ctx : TranslationContext) (newDecls : List (String
         if isCompositeType ctx ty then (n, ty) else (n, PyLauType.Any)) }
   return (hoistedDecls, hoistedCtx)
 
-def isMaybeExceptAnyFunc (ctx : TranslationContext) (funcName: String) : Bool := funcName ∈ ctx.maybeExceptionfunctions
+--Check if a prelude function returns a value of Any type, which may be an exception (such as PAdd, PMul, ...)
+def isMaybeExceptAnyFunc (ctx : TranslationContext) (funcName: String) : Bool := funcName ∈ ctx.maybeExceptionFunctions
 
 partial def getMaybeExceptionExprs (ctx : TranslationContext) (e : StmtExprMd) : List StmtExprMd :=
   match e.val with
   | .StaticCall funcname args =>
+    /-When the prelude function returns a value of Any type, which may be an exception, it should
+    propagates the exceptions from its arguments (see the body of PAdd, PMul,..),
+    so we don't need to recurse this function here.-/
     if isMaybeExceptAnyFunc ctx funcname.text then
       [{e with md:= e.md.withPropertySummary $ "Check " ++ funcname.text ++ " exception"}]
     else args.flatMap $ getMaybeExceptionExprs ctx
+  | .PrimitiveOp _ args => args.flatMap $ getMaybeExceptionExprs ctx
   | .IfThenElse cond thenBranch elseBranch =>
       ([cond, thenBranch] ++ elseBranch.toList).flatMap $ getMaybeExceptionExprs ctx
   | _ => []
@@ -1194,6 +1199,15 @@ partial def getExceptionAssertions (ctx : TranslationContext) (e : StmtExprMd) :
   let maybeExceptExprs := getMaybeExceptionExprs ctx e
   maybeExceptExprs.map (λ mbe => mkStmtExprMdWithLoc (.Assert $ mkStmtExprMd
     (.PrimitiveOp .Not [mkStmtExprMd $ .StaticCall "Any..isexception" [mbe]])) mbe.md)
+
+def withExceptionChecks (ctx : TranslationContext)
+    (result : TranslationContext × List StmtExprMd)
+    : TranslationContext × List StmtExprMd :=
+  let (newctx, stmts) := result
+  let rhs_exprs := stmts.flatMap fun s =>
+    match s.val with | .Assign _ value => [value] | _ => []
+  let exceptionCheck := rhs_exprs.flatMap $ getExceptionAssertions ctx
+  (newctx, exceptionCheck ++ stmts)
 
 mutual
 
@@ -1206,19 +1220,14 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     -- For now, only support single target
     if targets.val.size != 1 then
       throw (.unsupportedConstruct "Multiple assignment targets not yet supported" (toString (repr s)))
-    let (newctx, stmts) ← translateAssign ctx targets.val[0]! none value md
-    let rhs_exprs:= stmts.flatMap (λ s => match s.val with |.Assign _ value => [value] | _=> [])
-    let exceptionCheck := rhs_exprs.flatMap $ getExceptionAssertions ctx
-    return (newctx, exceptionCheck ++ stmts)
+    return withExceptionChecks ctx (← translateAssign ctx targets.val[0]! none value md)
+
 
   -- Annotated assignment: x: int = expr or x: ClassName = ClassName(args) or self.field: int = expr
   | .AnnAssign _ target annotation value _ => do
     match value.val with
     | some value =>
-        let (newctx, stmts) ← translateAssign ctx target annotation value md
-        let rhs_exprs:= stmts.flatMap (λ s => match s.val with |.Assign _ value => [value] | _=> [])
-        let exceptionCheck := rhs_exprs.flatMap $ getExceptionAssertions ctx
-        return (newctx, exceptionCheck ++ stmts)
+        return withExceptionChecks ctx (← translateAssign ctx target annotation value md)
     | none =>
       -- Declaration without initializer (not allowed in pure context, but OK in procedures)
       let varType := pyExprToString annotation
@@ -1451,6 +1460,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
       | .FloorDiv _ => mkStmtExprMd (StmtExpr.StaticCall "PFloorDiv" [targetExpr, valueExpr])
       | .Mod _      => mkStmtExprMd (StmtExpr.StaticCall "PMod"      [targetExpr, valueExpr])
       | _           => mkStmtExprMd .Hole
+    let rhs := {rhs with md:= md}
     let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr] rhs) md
     return (ctx, (getExceptionAssertions ctx rhs) ++ [assignStmt])
 
@@ -1906,8 +1916,8 @@ structure PreludeInfo where
   functionSignatures : List PythonFunctionDecl := []
   /-- Function names (Core functions + datatype constructors/destructors/testers) -/
   functions : List String := []
-  /-- Function that may returns Any of exception -/
-  maybeExceptionfunctions : List String := []
+  /-- Function that may return Any of exception -/
+  maybeExceptionFunctions : List String := []
   /-- Procedure names (non-function callables) -/
   procedureNames : List String := []
   /-- Names of procedures with transparent bodies (can be inlined). -/
@@ -1989,7 +1999,7 @@ def PreludeInfo.ofLaurelProgram (prog : Laurel.Program) : PreludeInfo where
         ctors ++ destrs ++ testers
       | _ => []
     funcNames ++ dtFuncs
-  maybeExceptionfunctions :=  prog.staticProcedures.filterMap fun p =>
+  maybeExceptionFunctions :=  prog.staticProcedures.filterMap fun p =>
     if p.md.getPropertySummary.getD "" == "AnyMaybeExcept" then some p.name.text else none
   procedureNames :=
     prog.staticProcedures.filterMap fun p =>
@@ -2005,7 +2015,7 @@ def PreludeInfo.merge (a b : PreludeInfo) : PreludeInfo where
   procedures := b.procedures.fold (init := a.procedures) fun m k v => m.insert k v
   functionSignatures := a.functionSignatures ++ b.functionSignatures
   functions := a.functions ++ b.functions
-  maybeExceptionfunctions := a.maybeExceptionfunctions ++ b.maybeExceptionfunctions
+  maybeExceptionFunctions := a.maybeExceptionFunctions ++ b.maybeExceptionFunctions
   procedureNames := a.procedureNames ++ b.procedureNames
   inlinableProcedures := b.inlinableProcedures.fold (init := a.inlinableProcedures) fun s n => s.insert n
   importedSymbols := b.importedSymbols.fold (init := a.importedSymbols) fun m k v => m.insert k v
@@ -2090,7 +2100,7 @@ def pythonToLaurel' (info : PreludeInfo)
     preludeTypes := info.types,
     preludeProcedures := info.procedures,
     userFunctions := userFunctions,
-    maybeExceptionfunctions := info.maybeExceptionfunctions
+    maybeExceptionFunctions := info.maybeExceptionFunctions
     classFieldHighType := classFieldHighType,
     overloadTable := overloadTable,
     importedSymbols := importedSymbols,
