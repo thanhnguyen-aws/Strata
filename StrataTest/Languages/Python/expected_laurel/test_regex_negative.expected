@@ -60,13 +60,11 @@ test_regex_negative.py(99, 4): ✅ pass - set_m_calls_re_fullmatch_0
 test_regex_negative.py(100, 4): ✅ pass - unsupported: fullmatch [\w\-]+ on word with dash
 test_regex_negative.py(100, 4): ❓ unknown - unsupported: fullmatch [\w\-]+ on word with dash
 test_regex_negative.py(103, 4): ✅ pass - set_m_calls_re_search_0
-test_regex_negative.py(104, 4): ✅ pass - unsupported: search 	+ on tab string
-test_regex_negative.py(104, 4): ❓ unknown - unsupported: search 	+ on tab string
+test_regex_negative.py(104, 4): ✅ pass - unsupported: search \t+ on tab string
+test_regex_negative.py(104, 4): ❓ unknown - unsupported: search \t+ on tab string
 test_regex_negative.py(106, 4): ✅ pass - set_m_calls_re_fullmatch_0
-test_regex_negative.py(107, 4): ✅ pass - unsupported: fullmatch [^
-]+ on non-newline string
-test_regex_negative.py(107, 4): ❓ unknown - unsupported: fullmatch [^
-]+ on non-newline string
+test_regex_negative.py(107, 4): ✅ pass - unsupported: fullmatch [^\n]+ on non-newline string
+test_regex_negative.py(107, 4): ❓ unknown - unsupported: fullmatch [^\n]+ on non-newline string
 test_regex_negative.py(110, 4): ✅ pass - set_m_calls_re_search_0
 test_regex_negative.py(111, 4): ✅ pass - unsupported: non-greedy .*? quantifier
 test_regex_negative.py(111, 4): ❓ unknown - unsupported: non-greedy .*? quantifier
