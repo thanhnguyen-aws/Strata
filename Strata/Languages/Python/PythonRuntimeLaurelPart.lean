@@ -439,7 +439,7 @@ function DictStrAny_insert (d : DictStrAny, key: string, val: Any) : DictStrAny
 
 function Any_get (dictOrList: Any, index: Any): Any
   requires  (Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index) && DictStrAny_contains(Any..as_Dict!(dictOrList), Any..as_string!(index))) ||
-            (Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) && Any..as_int!(index) >= 0 && Any..as_int!(index) < List_len(Any..as_ListAny!(dictOrList)))||
+            (Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) && Any..as_int!(index) >= - List_len(Any..as_ListAny!(dictOrList)) && Any..as_int!(index) < List_len(Any..as_ListAny!(dictOrList)))||
             (Any..isfrom_ListAny(dictOrList) && Any..isfrom_Slice(index) && Any..start!(index) >= 0 && Any..start!(index) < List_len(Any..as_ListAny!(dictOrList)) &&
                 ((OptionInt..isOptSome(Any..stop!(index))) &&  OptionInt..unwrap!(Any..stop!(index)) >= 0 && OptionInt..unwrap!(Any..stop!(index)) <= List_len(Any..as_ListAny!(dictOrList)) && Any..start!(index) <= OptionInt..unwrap!(Any..stop!(index))
                   || (OptionInt..isOptNone(Any..stop!(index)))))
@@ -447,7 +447,10 @@ function Any_get (dictOrList: Any, index: Any): Any
   if Any..isfrom_DictStrAny(dictOrList) then
     DictStrAny_get(Any..as_Dict!(dictOrList), Any..as_string!(index))
   else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) then
-    List_get(Any..as_ListAny!(dictOrList), Any..as_int!(index))
+    if Any..as_int!(index) >= 0 then
+      List_get(Any..as_ListAny!(dictOrList), Any..as_int!(index))
+    else
+      List_get(Any..as_ListAny!(dictOrList), List_len(Any..as_ListAny!(dictOrList)) + Any..as_int!(index))
   else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_Slice(index) && OptionInt..isOptSome(Any..stop!(index)) then
     from_ListAny(List_slice(Any..as_ListAny!(dictOrList), Any..start!(index), OptionInt..unwrap!(Any..stop!(index))))
   else
@@ -462,8 +465,11 @@ function Any_get! (dictOrList: Any, index: Any): Any
     exception (TypeError("Invalid subscription type"))
   else if Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index) && DictStrAny_contains(Any..as_Dict!(dictOrList), Any..as_string!(index)) then
     DictStrAny_get(Any..as_Dict!(dictOrList), Any..as_string!(index))
-  else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) && Any..as_int!(index) >= 0 && Any..as_int!(index) < List_len(Any..as_ListAny!(dictOrList)) then
-    List_get(Any..as_ListAny!(dictOrList), Any..as_int!(index))
+  else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) && Any..as_int!(index) >= - List_len(Any..as_ListAny!(dictOrList)) && Any..as_int!(index) < List_len(Any..as_ListAny!(dictOrList)) then
+    if Any..as_int!(index) >= 0 then
+      List_get(Any..as_ListAny!(dictOrList), Any..as_int!(index))
+    else
+      List_get(Any..as_ListAny!(dictOrList), List_len(Any..as_ListAny!(dictOrList)) + Any..as_int!(index))
   else
     exception (IndexError("Invalid subscription"))
 };
