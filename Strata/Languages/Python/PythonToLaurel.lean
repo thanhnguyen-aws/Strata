@@ -1410,10 +1410,26 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
 
   -- Augmented assignment: x += expr  →  x = x op expr
   | .AugAssign sr target op value => do
+    let (target, tempVars, slices) := match target with
+      | .Subscript _ _ _ _ =>
+        match getSubscriptList target with
+        | target :: slices =>
+            let tempVars := (List.range slices.length).map λ n => s!"augAssignTempVar_{sr.start}_{n}"
+            let tempVarExprs: List (Python.expr SourceRange) := tempVars.map
+                (fun var => .Name default {val:= var, ann:= default} default)
+            let target: Python.expr SourceRange := tempVarExprs.foldl (λ s t =>
+              .Subscript default s t default) target
+            (target, tempVars, slices)
+        | _ =>  (target, [], [])
+      | _ => (target, [], [])
+    let slices ← slices.mapM (translateExpr ctx)
+    let tempVarDecls := (tempVars.zip slices).map λ (var, slice) =>
+              mkStmtExprMd (.LocalVariable {text:= var} AnyTy slice)
     let rhs : Python.expr SourceRange := .BinOp sr target op value
     let pyNormalAssign : Python.stmt SourceRange :=
-      .Assign sr {val:= #[target], ann:= target.ann} rhs {val:= none, ann:= sr}
-    translateStmt ctx pyNormalAssign
+          .Assign sr {val:= #[target], ann:= target.ann} rhs {val:= none, ann:= sr}
+    let (ctx, assignStmt) ← translateStmt ctx pyNormalAssign
+    return (ctx, tempVarDecls ++ assignStmt)
 
   | _ => throw (.unsupportedConstruct "Statement type not yet supported" (toString (repr s)))
 
