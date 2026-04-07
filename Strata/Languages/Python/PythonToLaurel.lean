@@ -1380,7 +1380,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
 
   -- Augmented assignment: x += expr  →  x = x op expr
   | .AugAssign sr target op value => do
-    let rhs : Python.expr SourceRange := .BinOp default target op value
+    let rhs : Python.expr SourceRange := .BinOp sr target op value
     let pyNormalAssign : Python.stmt SourceRange :=
       .Assign sr {val:= #[target], ann:= target.ann} rhs {val:= none, ann:= default}
     translateStmt ctx pyNormalAssign
