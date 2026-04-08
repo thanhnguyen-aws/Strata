@@ -66,7 +66,15 @@ Obligation: postcondition
 Property: assert
 Result: ✅ pass
 
-Obligation: List_get_body_calls_List_get_0
+Obligation: List_get_non_neg_body_calls_List_get_0
+Property: assert
+Result: ✅ pass
+
+Obligation: List_get_body_calls_List_get_non_neg_0
+Property: assert
+Result: ✅ pass
+
+Obligation: List_get_body_calls_List_get_non_neg_1
 Property: assert
 Result: ✅ pass
 
@@ -78,7 +86,15 @@ Obligation: List_slice_body_calls_List_take_1
 Property: assert
 Result: ✅ pass
 
-Obligation: List_set_body_calls_List_set_0
+Obligation: List_set_non_neg_body_calls_List_set_0
+Property: assert
+Result: ✅ pass
+
+Obligation: List_set_body_calls_List_set_non_neg_0
+Property: assert
+Result: ✅ pass
+
+Obligation: List_set_body_calls_List_set_non_neg_1
 Property: assert
 Result: ✅ pass
 
@@ -98,15 +114,11 @@ Obligation: Any_get_body_calls_List_get_1
 Property: assert
 Result: ✅ pass
 
-Obligation: Any_get_body_calls_List_get_2
+Obligation: Any_get_body_calls_List_slice_2
 Property: assert
 Result: ✅ pass
 
-Obligation: Any_get_body_calls_List_slice_3
-Property: assert
-Result: ✅ pass
-
-Obligation: Any_get_body_calls_List_drop_4
+Obligation: Any_get_body_calls_List_drop_3
 Property: assert
 Result: ✅ pass
 
@@ -115,10 +127,6 @@ Property: assert
 Result: ✅ pass
 
 Obligation: Any_get!_body_calls_List_get_1
-Property: assert
-Result: ✅ pass
-
-Obligation: Any_get!_body_calls_List_get_2
 Property: assert
 Result: ✅ pass
 
@@ -166,15 +174,15 @@ Obligation: postcondition
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(42158)
+Obligation: assert(42358)
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(42225)
+Obligation: assert(42425)
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(42333)
+Obligation: assert(42533)
 Property: assert
 Result: ✅ pass
 
