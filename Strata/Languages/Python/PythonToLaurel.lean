@@ -526,7 +526,7 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
         | .IsNot _ => match comparators.val[0]'hComp with
             | .Constant _ (.ConNone _) _ => .ok "PNEq"
             | _ => throw (.unsupportedConstruct "`is not` is only supported with None" (toString (repr e)))
-      return mkStmtExprMd (StmtExpr.StaticCall preludeOpnames [leftExpr, rightExpr])
+      return mkStmtExprMdWithLoc (StmtExpr.StaticCall preludeOpnames [leftExpr, rightExpr]) md
 
   -- Boolean operations
   | .BoolOp _ op values => do
