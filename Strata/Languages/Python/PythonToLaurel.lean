@@ -1429,7 +1429,8 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
             let tempVars := (List.range slices.length).map λ n => s!"augAssignTempVar_{sr.start}_{n}"
             let tempVarExprs: List (Python.expr SourceRange) := tempVars.map
                 (fun var => .Name default {val:= var, ann:= default} default)
-            let target: Python.expr SourceRange := tempVarExprs.foldl (λ s t =>
+            let tempVarExprs: List (Python.expr SourceRange) := tempVars.map
+                (fun var => .Name sr {val:= var, ann:= sr} (.Load sr))
               .Subscript default s t default) target
             (target, tempVars, slices)
         | _ =>  (target, [], [])
