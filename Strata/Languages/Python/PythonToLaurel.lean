@@ -1422,16 +1422,18 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
 
   -- Augmented assignment: x += expr  →  x = x op expr
   | .AugAssign sr target op value => do
+    -- For subscript targets like l[i][j], we extract the index expressions,
+    -- bind them to temp variables (to avoid double-evaluation), and
+    -- reconstruct the target using the temp var names.
     let (target, tempVars, slices) := match target with
       | .Subscript _ _ _ _ =>
         match getSubscriptList target with
-        | target :: slices =>
-            let tempVars := (List.range slices.length).map λ n => s!"augAssignTempVar_{sr.start}_{n}"
-            let tempVarExprs: List (Python.expr SourceRange) := tempVars.map
-                (fun var => .Name default {val:= var, ann:= default} default)
+        | base :: slices =>
+            let tempVars := (List.range slices.length).map λ n => s!"$augAssignTempVar_{sr.start}_{n}"
             let tempVarExprs: List (Python.expr SourceRange) := tempVars.map
                 (fun var => .Name sr {val:= var, ann:= sr} (.Load sr))
-              .Subscript default s t default) target
+            let target: Python.expr SourceRange := tempVarExprs.foldl (λ s t =>
+              .Subscript sr s t (.Load sr)) base
             (target, tempVars, slices)
         | _ =>  (target, [], [])
       | _ => (target, [], [])
