@@ -60,7 +60,13 @@ def collectExpr (expr : StmtExpr) : StateM AnalysisResult Unit := do
   | .FieldSelect target _ =>
       modify fun s => { s with readsHeapDirectly := true }; collectExprMd target
   | .InstanceCall target _ args => collectExprMd target; for a in args do collectExprMd a
-  | .StaticCall callee args => modify fun s => { s with callees := callee :: s.callees }; for a in args do collectExprMd a
+  | .StaticCall callee args =>
+      if callee.text == "readField" then
+        modify fun s => { s with readsHeapDirectly := true }
+      else if callee.text == "updateField" then
+        modify fun s => { s with writesHeapDirectly := true }
+      else
+        modify fun s => { s with callees := callee :: s.callees }; for a in args do collectExprMd a
   | .IfThenElse c t e => collectExprMd c; collectExprMd t; if let some x := e then collectExprMd x
   | .Block stmts _ => for s in stmts do collectExprMd s
   | .LocalVariable _ _ i => if let some x := i then collectExprMd x
