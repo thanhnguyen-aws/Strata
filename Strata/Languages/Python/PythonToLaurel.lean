@@ -1445,14 +1445,18 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
         let targetVar := mkStmtExprMd (StmtExpr.Identifier n.val)
         match iterExpr.val with
           | .StaticCall "range" [intExpr] =>
-            let assumeTypeInt := mkStmtExprMd (.Assume $ mkStmtExprMd (.StaticCall "Any..isfrom_int" [targetVar]))
             let asIntRange := mkStmtExprMd $ .StaticCall "Any..as_int!" [intExpr]
+            let emptyRangeExit := mkStmtExprMd $ .IfThenElse
+              (mkStmtExprMd $ .PrimitiveOp .Leq [asIntRange, mkStmtExprMd $ .LiteralInt 0])
+              (mkStmtExprMd $ .Exit breakLabel)
+              none
+            let assumeTypeInt := mkStmtExprMd (.Assume $ mkStmtExprMd (.StaticCall "Any..isfrom_int" [targetVar]))
             let asIntTarget := mkStmtExprMd $ .StaticCall "Any..as_int!" [targetVar]
             let inRangeExpr := mkStmtExprMd $ .PrimitiveOp .And [
                   (mkStmtExprMd $ .PrimitiveOp .Geq [asIntTarget, mkStmtExprMd $ .LiteralInt 0]),
                   (mkStmtExprMd $ .PrimitiveOp .Lt [asIntTarget, asIntRange]) ]
             let assumeInRange := mkStmtExprMd (.Assume inRangeExpr)
-            [assumeTypeInt, assumeInRange]
+            [emptyRangeExit, assumeTypeInt, assumeInRange]
           | _ =>
             let targetInIter := mkStmtExprMd (.StaticCall "PIn" [targetVar, iterExpr])
             let assumeInStmt := mkStmtExprMd (.Assume (Any_to_bool targetInIter))

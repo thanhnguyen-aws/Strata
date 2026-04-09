@@ -6,5 +6,8 @@ for i in range(5):
     j = numbers [i]
     assert j < 10
 
+x = 15
 for i in range(-10):
-    assert False
+    x = 2 
+
+assert x == 15
