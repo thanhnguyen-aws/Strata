@@ -914,8 +914,7 @@ function PPow (v1: Any, v2: Any) : Any
 
 function PMod (v1: Any, v2: Any) : Any
 {
-  if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
-  else PSub(v1, PMul(v2, PFloorDiv(v1, v2)))
+  exception(UnimplementedError ("Mod operator is not supported"))
 };
 
 // /////////////////////////////////////////////////////////////////////////////////////
