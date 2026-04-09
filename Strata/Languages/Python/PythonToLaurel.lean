@@ -1440,28 +1440,32 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
       loopBreakLabel := some breakLabel
       loopContinueLabel := some continueLabel }
     let (finalCtx, bodyStmts) ← translateStmtList bodyCtx body.val.toList
-    let assumeStmts : List StmtExprMd := match target with
+    let assumeStmts : List StmtExprMd ← do match target with
       | .Name _ n _ =>
         let targetVar := mkStmtExprMd (StmtExpr.Identifier n.val)
+        let isNone (s: StmtExprMd) := match s.val with
+          | .StaticCall "from_None" _ => true | _ => false
         match iterExpr.val with
-          | .StaticCall "range" [intExpr] =>
-            let asIntRange := mkStmtExprMd $ .StaticCall "Any..as_int!" [intExpr]
+          | .StaticCall "range" (startExpr::stopExpr::stepExpr::_) =>
+            if ¬ (isNone stopExpr && isNone stepExpr) then
+              throw (.unsupportedConstruct "Unsupport range function with more than 1 input" (toString (repr iter)))
+            let asIntStart := mkStmtExprMd $ .StaticCall "Any..as_int!" [startExpr]
             let emptyRangeExit := mkStmtExprMd $ .IfThenElse
-              (mkStmtExprMd $ .PrimitiveOp .Leq [asIntRange, mkStmtExprMd $ .LiteralInt 0])
+              (mkStmtExprMd $ .PrimitiveOp .Leq [asIntStart, mkStmtExprMd $ .LiteralInt 0])
               (mkStmtExprMd $ .Exit breakLabel)
               none
             let assumeTypeInt := mkStmtExprMd (.Assume $ mkStmtExprMd (.StaticCall "Any..isfrom_int" [targetVar]))
             let asIntTarget := mkStmtExprMd $ .StaticCall "Any..as_int!" [targetVar]
             let inRangeExpr := mkStmtExprMd $ .PrimitiveOp .And [
                   (mkStmtExprMd $ .PrimitiveOp .Geq [asIntTarget, mkStmtExprMd $ .LiteralInt 0]),
-                  (mkStmtExprMd $ .PrimitiveOp .Lt [asIntTarget, asIntRange]) ]
+                  (mkStmtExprMd $ .PrimitiveOp .Lt [asIntTarget, asIntStart]) ]
             let assumeInRange := mkStmtExprMd (.Assume inRangeExpr)
-            [emptyRangeExit, assumeTypeInt, assumeInRange]
+            pure [emptyRangeExit, assumeTypeInt, assumeInRange]
           | _ =>
             let targetInIter := mkStmtExprMd (.StaticCall "PIn" [targetVar, iterExpr])
             let assumeInStmt := mkStmtExprMd (.Assume (Any_to_bool targetInIter))
-            [assumeInStmt]
-      | _ => []
+            pure [assumeInStmt]
+      | _ => pure []
     let bodyStmts := assumeStmts ++ bodyStmts
     let innerBlock := mkStmtExprMd (StmtExpr.Block bodyStmts (some continueLabel))
     let loopBlock := mkStmtExprMdWithLoc (StmtExpr.Block [innerBlock] (some breakLabel)) md
