@@ -31,7 +31,7 @@ private def verifyPrelude : IO Core.VCResults := do
         (moreFns := Strata.Python.ReFactory)
         (externalPhases := [Strata.frontEndPhase]))
     return r
-
+#eval verifyPrelude
 /--
 info:
 Obligation: postcondition
@@ -74,7 +74,15 @@ Obligation: postcondition
 Property: assert
 Result: ✅ pass
 
-Obligation: List_get_body_calls_List_get_0
+Obligation: List_get_non_neg_body_calls_List_get_0
+Property: assert
+Result: ✅ pass
+
+Obligation: List_get_body_calls_List_get_non_neg_0
+Property: assert
+Result: ✅ pass
+
+Obligation: List_get_body_calls_List_get_non_neg_1
 Property: assert
 Result: ✅ pass
 
@@ -86,7 +94,15 @@ Obligation: List_slice_body_calls_List_take_1
 Property: assert
 Result: ✅ pass
 
-Obligation: List_set_body_calls_List_set_0
+Obligation: List_set_non_neg_body_calls_List_set_0
+Property: assert
+Result: ✅ pass
+
+Obligation: List_set_body_calls_List_set_non_neg_0
+Property: assert
+Result: ✅ pass
+
+Obligation: List_set_body_calls_List_set_non_neg_1
 Property: assert
 Result: ✅ pass
 
@@ -182,15 +198,15 @@ Obligation: postcondition
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(43512)
+Obligation: assert(42486)
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(43579)
+Obligation: assert(42553)
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(43687)
+Obligation: assert(42661)
 Property: assert
 Result: ✅ pass
 
