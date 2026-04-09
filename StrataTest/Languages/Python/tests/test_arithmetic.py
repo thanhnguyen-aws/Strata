@@ -27,5 +27,9 @@ def main():
     rem: int = x % y
     assert rem == 2, "mod implemented incorrectly"
 
+    # Negative Mod
+    neg_rem1: int = (-7) % 3
+    assert neg_rem1 == 2, "negative mod should follow Python floored semantics"
+
 if __name__ == "__main__":
     main()
