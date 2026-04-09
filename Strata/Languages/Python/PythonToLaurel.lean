@@ -1448,14 +1448,9 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
             let assumeTypeInt := mkStmtExprMd (.Assume $ mkStmtExprMd (.StaticCall "Any..isfrom_int" [targetVar]))
             let asIntRange := mkStmtExprMd $ .StaticCall "Any..as_int!" [intExpr]
             let asIntTarget := mkStmtExprMd $ .StaticCall "Any..as_int!" [targetVar]
-            let inRangeExpr := mkStmtExprMd $ .IfThenElse
-              (mkStmtExprMd $ .PrimitiveOp .Geq [asIntRange, mkStmtExprMd $ .LiteralInt 0])
-              (mkStmtExprMd $ .PrimitiveOp .And [
+            let inRangeExpr := mkStmtExprMd $ .PrimitiveOp .And [
                   (mkStmtExprMd $ .PrimitiveOp .Geq [asIntTarget, mkStmtExprMd $ .LiteralInt 0]),
-                  (mkStmtExprMd $ .PrimitiveOp .Lt [asIntTarget, asIntRange]) ])
-              (mkStmtExprMd $ .PrimitiveOp .And [
-                  (mkStmtExprMd $ .PrimitiveOp .Lt [asIntTarget, mkStmtExprMd $ .LiteralInt 0]),
-                  (mkStmtExprMd $ .PrimitiveOp .Geq [asIntTarget, asIntRange]) ])
+                  (mkStmtExprMd $ .PrimitiveOp .Lt [asIntTarget, asIntRange]) ]
             let assumeInRange := mkStmtExprMd (.Assume inRangeExpr)
             [assumeTypeInt, assumeInRange]
           | _ =>
