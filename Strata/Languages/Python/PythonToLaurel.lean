@@ -1440,14 +1440,30 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
       loopBreakLabel := some breakLabel
       loopContinueLabel := some continueLabel }
     let (finalCtx, bodyStmts) ← translateStmtList bodyCtx body.val.toList
-    let assumeInStmts :=match target with
-    | .Name _ n _ =>
-      let targetVar := mkStmtExprMd (StmtExpr.Identifier n.val)
-      let targetInIter := mkStmtExprMd (.StaticCall "PIn" [targetVar, iterExpr])
-      let assumeInStmt := mkStmtExprMd (.Assume (Any_to_bool targetInIter))
-      [assumeInStmt]
-    | _ => []
-    let bodyStmts := assumeInStmts ++ bodyStmts
+    let assumeStmts : List StmtExprMd := match target with
+      | .Name _ n _ =>
+        let targetVar := mkStmtExprMd (StmtExpr.Identifier n.val)
+        match iterExpr.val with
+          | .StaticCall "range" [intExpr] =>
+            let assumeTypeInt := mkStmtExprMd (.Assume $ mkStmtExprMd (.StaticCall "Any..isfrom_int" [targetVar]))
+            let asIntRange := mkStmtExprMd $ .StaticCall "Any..as_int!" [intExpr]
+            let asIntTarget := mkStmtExprMd $ .StaticCall "Any..as_int!" [targetVar]
+            let inRangeExpr := mkStmtExprMd $ .IfThenElse
+              (mkStmtExprMd $ .PrimitiveOp .Geq [asIntRange, mkStmtExprMd $ .LiteralInt 0])
+              (mkStmtExprMd $ .PrimitiveOp .And [
+                  (mkStmtExprMd $ .PrimitiveOp .Geq [asIntTarget, mkStmtExprMd $ .LiteralInt 0]),
+                  (mkStmtExprMd $ .PrimitiveOp .Lt [asIntTarget, asIntRange]) ])
+              (mkStmtExprMd $ .PrimitiveOp .And [
+                  (mkStmtExprMd $ .PrimitiveOp .Lt [asIntTarget, mkStmtExprMd $ .LiteralInt 0]),
+                  (mkStmtExprMd $ .PrimitiveOp .Geq [asIntTarget, asIntRange]) ])
+            let assumeInRange := mkStmtExprMd (.Assume inRangeExpr)
+            [assumeTypeInt, assumeInRange]
+          | _ =>
+            let targetInIter := mkStmtExprMd (.StaticCall "PIn" [targetVar, iterExpr])
+            let assumeInStmt := mkStmtExprMd (.Assume (Any_to_bool targetInIter))
+            [assumeInStmt]
+      | _ => []
+    let bodyStmts := assumeStmts ++ bodyStmts
     let innerBlock := mkStmtExprMd (StmtExpr.Block bodyStmts (some continueLabel))
     let loopBlock := mkStmtExprMdWithLoc (StmtExpr.Block [innerBlock] (some breakLabel)) md
     return (finalCtx, (getExceptionAssertions ctx iterExpr) ++ targetDecls ++ [loopBlock])

@@ -392,13 +392,8 @@ function List_set (l : ListAny, i : int, v: Any) : ListAny
 //Require recursive function on int
 function List_repeat (l: ListAny, n: int): ListAny;
 
-function ListAny_range(i: Any) : ListAny;
-
 function range (i: Any) : Any
-  requires Any..isfrom_int(i)
-{
-  from_ListAny (ListAny_range(i))
-};
+  requires Any..isfrom_int(i);
 
 // /////////////////////////////////////////////////////////////////////////////////////
 // DictStrAny functions
@@ -903,7 +898,8 @@ function PPow (v1: Any, v2: Any) : Any
 
 function PMod (v1: Any, v2: Any) : Any
 {
-  exception(UnimplementedError ("Mod operator is not supported"))
+  if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
+  else PSub(v1, PMul(v2, PFloorDiv(v1, v2)))
 };
 
 // /////////////////////////////////////////////////////////////////////////////////////
