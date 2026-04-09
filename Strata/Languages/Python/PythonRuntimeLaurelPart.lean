@@ -917,9 +917,26 @@ function PPow (v1: Any, v2: Any) : Any
     exception(UnimplementedError("Pow is not defined on these input types"))
 };
 
-function PMod (v1: Any, v2: Any) : Any
+function int_mod (i1: int, i2: int) : int
+  requires i2 != 0
 {
-  exception(UnimplementedError ("Mod operator is not supported"))
+  i1 - i2 * (i1/i2)
+};
+
+function PMod (v1: Any, v2: Any) : Any
+  requires (Any..isfrom_bool(v2)==>Any..as_bool!(v2)) && (Any..isfrom_int(v2)==>Any..as_int!(v2)!=0)
+{
+  if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
+  else if Any..isfrom_bool(v1) && Any..isfrom_bool(v2) then
+    from_int(int_mod(bool_to_int(Any..as_bool!(v1)) , bool_to_int(Any..as_bool!(v2))))
+  else if Any..isfrom_bool(v1) && Any..isfrom_int(v2) then
+    from_int(int_mod(bool_to_int(Any..as_bool!(v1)) , Any..as_int!(v2)))
+  else if Any..isfrom_int(v1) && Any..isfrom_bool(v2) then
+    from_int(int_mod(Any..as_int!(v1) , bool_to_int(Any..as_bool!(v2))))
+  else if Any..isfrom_int(v1) && Any..isfrom_int(v2) then
+    from_int(int_mod(Any..as_int!(v1) , Any..as_int!(v2)))
+  else
+    exception(UndefinedError ("Operand Type is not defined"))
 };
 
 // /////////////////////////////////////////////////////////////////////////////////////

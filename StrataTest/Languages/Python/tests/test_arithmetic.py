@@ -23,5 +23,9 @@ def main():
     quot: int = a // b
     assert quot == 5, "floor division implemented incorrectly"
 
+    # Mod
+    rem: int = x % y
+    assert rem == 2, "mod implemented incorrectly"
+
 if __name__ == "__main__":
     main()
