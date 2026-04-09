@@ -1331,6 +1331,8 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
       | some expr => do
         let e ← translateExpr ctx expr
         let exceptionCheck := getExceptionCatch ctx e
+        -- Coerce Composite return values to Any for LaurelResult : Any
+        let e ← coerceToAny ctx expr e
         let assign := mkStmtExprMd (StmtExpr.Assign [mkStmtExprMd (StmtExpr.Identifier PyLauFuncReturnVar)] e)
         .ok $ exceptionCheck ++ [assign, mkStmtExprMd (StmtExpr.Exit "$body")]
       | none => .ok [mkStmtExprMd (StmtExpr.Exit "$body")]
