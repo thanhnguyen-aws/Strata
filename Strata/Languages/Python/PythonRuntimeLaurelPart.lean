@@ -455,7 +455,7 @@ function Any_get (dictOrList: Any, index: Any): Any
     from_ListAny(List_drop(Any..as_ListAny!(dictOrList), Any..start!(index)))
 };
 
-function Any_get!AnyMaybeExcept (dictOrList: Any, index: Any): Any
+function Any_get! (dictOrList: Any, index: Any): Any
 {
   if Any..isexception(dictOrList) then dictOrList
   else if Any..isexception(index) then index
@@ -476,7 +476,7 @@ function Any_get!AnyMaybeExcept (dictOrList: Any, index: Any): Any
     exception (IndexError("Invalid subscription"))
 };
 
-function Any_get_no_slice!AnyMaybeExcept (dictOrList: Any, index: Any): Any
+function Any_get_no_slice! (dictOrList: Any, index: Any): Any
 {
   if Any..isexception(dictOrList) then dictOrList
   else if Any..isexception(index) then index
@@ -500,7 +500,7 @@ function Any_set (dictOrList: Any, index: Any, val: Any): Any
     from_ListAny(List_set(Any..as_ListAny!(dictOrList), Any..as_int!(index), val))
 };
 
-function Any_set!AnyMaybeExcept (dictOrList: Any, index: Any, val: Any): Any
+function Any_set! (dictOrList: Any, index: Any, val: Any): Any
 {
   if Any..isexception(dictOrList) then dictOrList
   else if Any..isexception(index) then index
@@ -515,12 +515,12 @@ function Any_set!AnyMaybeExcept (dictOrList: Any, index: Any, val: Any): Any
     exception (IndexError("Index out of bound"))
 };
 
-function Any_sets!AnyMaybeExcept (indices: ListAny, dictOrList: Any, val: Any): Any
+function Any_sets! (indices: ListAny, dictOrList: Any, val: Any): Any
 {
   if ListAny..isListAny_nil(indices) then dictOrList
-  else if ListAny..isListAny_nil(ListAny..tail!(indices)) then Any_set!AnyMaybeExcept(dictOrList, ListAny..head!(indices), val)
-  else Any_set!AnyMaybeExcept(dictOrList, ListAny..head!(indices),
-    Any_sets!AnyMaybeExcept(ListAny..tail!(indices), Any_get_no_slice!AnyMaybeExcept(dictOrList, ListAny..head!(indices)), val))
+  else if ListAny..isListAny_nil(ListAny..tail!(indices)) then Any_set!(dictOrList, ListAny..head!(indices), val)
+  else Any_set!(dictOrList, ListAny..head!(indices),
+    Any_sets!(ListAny..tail!(indices), Any_get_no_slice!(dictOrList, ListAny..head!(indices)), val))
 };
 
 function PIn (v: Any, dictOrList: Any) : Any
@@ -583,7 +583,7 @@ function bool_to_real (b: bool) : real {if b then 1.0 else 0.0};
 // Modelling of Python unary operations
 // /////////////////////////////////////////////////////////////////////////////////////
 
-function PNeg!AnyMaybeExcept (v: Any) : Any
+function PNeg (v: Any) : Any
 {
   if Any..isexception(v) then v
   else if Any..isfrom_bool(v) then
@@ -596,7 +596,7 @@ function PNeg!AnyMaybeExcept (v: Any) : Any
     exception(TypeError ("Operand Type is not defined"))
 };
 
-function PNot!AnyMaybeExcept (v: Any) : Any
+function PNot (v: Any) : Any
 {
   if Any..isexception(v) then v
   else if Any..isfrom_bool(v) then
@@ -619,7 +619,7 @@ function PNot!AnyMaybeExcept (v: Any) : Any
 
 function Str.Concat(s: string, s2: string): string external;
 
-function PAdd!AnyMaybeExcept (v1: Any, v2: Any) : Any
+function PAdd (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if Any..isfrom_bool(v1) && Any..isfrom_bool(v2) then
@@ -648,7 +648,7 @@ function PAdd!AnyMaybeExcept (v1: Any, v2: Any) : Any
     exception(TypeError ("Operand Type is not defined"))
 };
 
-function PSub!AnyMaybeExcept (v1: Any, v2: Any) : Any
+function PSub (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if Any..isfrom_bool(v1) && Any..isfrom_bool(v2) then
@@ -679,7 +679,7 @@ function PSub!AnyMaybeExcept (v1: Any, v2: Any) : Any
 
 function string_repeat (s: string, i: int) : string;
 
-function PMul!AnyMaybeExcept (v1: Any, v2: Any) : Any
+function PMul (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if Any..isfrom_bool(v1) && Any..isfrom_bool(v2) then
@@ -716,7 +716,7 @@ function PMul!AnyMaybeExcept (v1: Any, v2: Any) : Any
     exception(TypeError ("Operand Type is not defined"))
 };
 
-function PFloorDiv!AnyMaybeExcept (v1: Any, v2: Any) : Any
+function PFloorDiv (v1: Any, v2: Any) : Any
   requires (Any..isfrom_bool(v2)==>Any..as_bool!(v2)) && (Any..isfrom_int(v2)==>Any..as_int!(v2)!=0)
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
@@ -745,7 +745,7 @@ function List_le (l1: ListAny, l2: ListAny): bool;
 function List_gt (l1: ListAny, l2: ListAny): bool;
 function List_ge (l1: ListAny, l2: ListAny): bool;
 
-function PLt!AnyMaybeExcept (v1: Any, v2: Any) : Any
+function PLt (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if Any..isfrom_bool(v1) && Any..isfrom_bool(v2) then
@@ -776,7 +776,7 @@ function PLt!AnyMaybeExcept (v1: Any, v2: Any) : Any
     exception(TypeError ("Operand Type is not defined"))
 };
 
-function PLe!AnyMaybeExcept (v1: Any, v2: Any) : Any
+function PLe (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if Any..isfrom_bool(v1) && Any..isfrom_bool(v2) then
@@ -807,7 +807,7 @@ function PLe!AnyMaybeExcept (v1: Any, v2: Any) : Any
     exception(TypeError ("Operand Type is not defined"))
 };
 
-function PGt!AnyMaybeExcept (v1: Any, v2: Any) : Any
+function PGt (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if Any..isfrom_bool(v1) && Any..isfrom_bool(v2) then
@@ -838,7 +838,7 @@ function PGt!AnyMaybeExcept (v1: Any, v2: Any) : Any
     exception(TypeError ("Operand Type is not defined"))
 };
 
-function PGe!AnyMaybeExcept (v1: Any, v2: Any) : Any
+function PGe (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if Any..isfrom_bool(v1) && Any..isfrom_bool(v2) then
@@ -882,14 +882,16 @@ function PNEq (v: Any, v': Any) : Any {
 // /////////////////////////////////////////////////////////////////////////////////////
 
 function PAnd (v1: Any, v2: Any) : Any
-  requires (Any..isfrom_bool(v1) || Any..isfrom_None(v1) || Any..isfrom_str(v1) || Any..isfrom_int(v1))
+  requires (Any..isexception(v1) || Any..isfrom_bool(v1) || Any..isfrom_None(v1) || Any..isfrom_str(v1) || Any..isfrom_int(v1))
 {
+  if Any..isexception(v1) then v1 else
   if ! Any_to_bool (v1) then v1 else v2
 };
 
 function POr (v1: Any, v2: Any) : Any
-  requires (Any..isfrom_bool(v1) || Any..isfrom_None(v1) || Any..isfrom_str(v1) || Any..isfrom_int(v1))
+  requires (Any..isexception(v1) || Any..isfrom_bool(v1) || Any..isfrom_None(v1) || Any..isfrom_str(v1) || Any..isfrom_int(v1))
 {
+  if Any..isexception(v1) then v1 else
   if Any_to_bool (v1) then v1 else v2
 };
 
@@ -904,7 +906,7 @@ function int_pow (base: int, exp: int) : int
 function float_pow (base: real, exp: real) : real
   external;
 
-function PPow!AnyMaybeExcept (v1: Any, v2: Any) : Any
+function PPow (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if (Any..isfrom_int(v1) && Any..isfrom_int(v2) && Any..as_int!(v2) >= 0) then
@@ -921,7 +923,7 @@ function PPow!AnyMaybeExcept (v1: Any, v2: Any) : Any
     exception(UnimplementedError("Pow is not defined on these input types"))
 };
 
-function PMod!AnyMaybeExcept (v1: Any, v2: Any) : Any
+function PMod (v1: Any, v2: Any) : Any
 {
   exception(UnimplementedError ("Mod operator is not supported"))
 };
@@ -959,7 +961,7 @@ procedure datetime_date(d: Any) returns (ret: Any, error: Error)
   }
 };
 
-procedure datetime_now() returns (ret: Any)
+procedure datetime_now(tz: Any) returns (ret: Any)
   ensures Any..isfrom_datetime(ret) summary "ret_type"
 {
   var d: int;
@@ -1007,9 +1009,20 @@ procedure print(msg : Any) returns ();
 /--
 Parse the Laurel DDM prelude into a Laurel Program.
 -/
+
+-- Prelude functions that may return an exception value as Any.
+-- We should make sure that all functions in this list propagate the exceptions from their arguments.
+def AnyMaybeExceptionList := ["Any_get!", "Any_set!", "Any_sets!", "PNeg", "PNot", "PAdd", "PSub", "PMul",
+   "PFloorDiv", "PLt", "PLe", "PGt", "PGe", "PPow", "PMod", "PAnd", "POr"]
+
 public def pythonRuntimeLaurelPart : Laurel.Program :=
   match Laurel.TransM.run (some $ .file "") (Laurel.parseProgram pythonRuntimeLaurelPartDDM) with
-  | .ok p => p
+  | .ok p =>
+    let addExceptionMd := p.staticProcedures.map (λ f =>
+      if f.name.text ∈ AnyMaybeExceptionList then
+        {f with md:= f.md.withPropertySummary "AnyMaybeExcept" }
+      else f)
+    {p with staticProcedures := addExceptionMd}
   | .error e => dbg_trace s!"SOUND BUG: Failed to parse Python runtime Laurel part: {e}"; default
 
 end Python
