@@ -31,7 +31,7 @@ private def verifyPrelude : IO Core.VCResults := do
         (moreFns := Strata.Python.ReFactory)
         (externalPhases := [Strata.frontEndPhase]))
     return r
-#eval verifyPrelude
+
 /--
 info:
 Obligation: postcondition
@@ -198,15 +198,15 @@ Obligation: postcondition
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(42486)
+Obligation: assert(44100)
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(42553)
+Obligation: assert(44167)
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(42661)
+Obligation: assert(44275)
 Property: assert
 Result: ✅ pass
 
