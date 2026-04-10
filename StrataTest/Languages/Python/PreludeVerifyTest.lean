@@ -194,15 +194,15 @@ Obligation: postcondition
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(43078)
+Obligation: assert(43079)
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(43145)
+Obligation: assert(43146)
 Property: assert
 Result: ✅ pass
 
-Obligation: assert(43253)
+Obligation: assert(43254)
 Property: assert
 Result: ✅ pass
 
