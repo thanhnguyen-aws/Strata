@@ -218,6 +218,7 @@ def PyLauType.ListAny := "ListAny"
 def PyLauType.ListStr := "ListStr"
 def PyLauType.Package := "Package"
 def PyLauType.Any := "Any"
+def AnyConstructor.None := "from_None"
 
 def isOfAnyType (ty: String): Bool := ty ∈ [PyLauType.None, PyLauType.Bool, PyLauType.Int, PyLauType.Float,
                            PyLauType.Str, PyLauType.Datetime, PyLauType.Bytes, PyLauType.ListAny, PyLauType.DictStrAny, PyLauType.Any]
@@ -1443,11 +1444,11 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     let assumeStmts : List StmtExprMd ← do match target with
       | .Name _ n _ =>
         let targetVar := mkStmtExprMd (StmtExpr.Identifier n.val)
-        let isNone (s: StmtExprMd) := match s.val with
-          | .StaticCall "from_None" _ => true | _ => false
+        let isAnyNone (s: StmtExprMd) := match s.val with
+          | .StaticCall constructor _ => constructor == AnyConstructor.None | _ => false
         match iterExpr.val with
           | .StaticCall "range" (startExpr::stopExpr::stepExpr::_) =>
-            if ¬ (isNone stopExpr && isNone stepExpr) then
+            if ¬ (isAnyNone stopExpr && isAnyNone stepExpr) then
               throw (.unsupportedConstruct "Unsupport range function with more than 1 input" (toString (repr iter)))
             let asIntStart := mkStmtExprMd $ .StaticCall "Any..as_int!" [startExpr]
             let emptyRangeExit := mkStmtExprMd $ .IfThenElse
