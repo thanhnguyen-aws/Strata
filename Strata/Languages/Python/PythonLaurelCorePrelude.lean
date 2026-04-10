@@ -71,6 +71,8 @@ datatype OptionInt {
   OptNone ()
 };
 
+type Composite;
+
 datatype Any () {
   from_None (),
   from_bool (as_bool : bool),
@@ -82,6 +84,7 @@ datatype Any () {
   from_DictStrAny (as_Dict: DictStrAny),
   from_ListAny (as_ListAny : ListAny),
   from_ClassInstance (classname : string, instance_attributes: DictStrAny),
+  from_Composite (as_composite : Composite),
   from_Slice(start: int, stop: OptionInt),
   exception (get_error: Error)
 }

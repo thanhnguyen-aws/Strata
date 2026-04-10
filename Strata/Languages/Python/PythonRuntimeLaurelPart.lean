@@ -79,6 +79,7 @@ datatype Any {
   from_DictStrAny (as_Dict: DictStrAny),
   from_ListAny (as_ListAny : ListAny),
   from_ClassInstance (classname : string, instance_attributes: DictStrAny),
+  from_Composite (as_composite : Composite),
   from_Slice(start: int, stop: OptionInt),
   exception (get_error: Error)
 }
@@ -510,6 +511,13 @@ function Any_sets! (indices: ListAny, dictOrList: Any, val: Any): Any
   else if ListAny..isListAny_nil(ListAny..tail!(indices)) then Any_set!(dictOrList, ListAny..head!(indices), val)
   else Any_set!(dictOrList, ListAny..head!(indices),
     Any_sets!(ListAny..tail!(indices), Any_get!(dictOrList, ListAny..head!(indices)), val))
+};
+
+function Any_field_name (anyComposite: Any, attr: string) : Field;
+
+function Any_field_select (heap: Heap, anyComposite: Any, attr: Field) : Any
+{
+  Box..AnyVal(readField(heap, Any..as_composite(anyComposite), attr))
 };
 
 function PIn (v: Any, dictOrList: Any) : Any

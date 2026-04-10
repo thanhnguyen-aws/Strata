@@ -290,6 +290,8 @@ def boolToAny (b: Bool) := mkStmtExprMd (.StaticCall "from_bool" [mkStmtExprMd (
 def AnyNone := mkStmtExprMd (.StaticCall "from_None" [])
 def Any_to_bool (b: StmtExprMd) := mkStmtExprMd (.StaticCall "Any_to_bool" [b])
 
+def heapVar := mkStmtExprMd (.Identifier {text:= "$heap", md:= default})
+
 /-- Wrap a field access expression in the appropriate Any constructor based on HighType.
     After heap parameterization, field reads return concrete types (int, bool, etc.)
     but Python operators expect Any. This coercion bridges the gap. -/
@@ -630,11 +632,13 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
       else
         -- Regular object.field access
         let objExpr ← translateExpr ctx obj
-        let fieldExpr := mkStmtExprMd (StmtExpr.FieldSelect objExpr attr.val)
-        let objType ← inferExprType ctx obj
-        match tryLookupFieldHighType ctx objType attr.val with
-          | some ty => wrapFieldInAny ty fieldExpr
-          | none => return fieldExpr
+        let objExprCom := mkStmtExprMd (.StaticCall "Any..as_composite" [objExpr])
+        let fieldExpr := mkStmtExprMd (StmtExpr.FieldSelect objExprCom attr.val)
+        let ty ← inferExprType ctx obj
+        let field := mkStmtExprMd (.StaticCall s!"{ty}.{attr.val}" [])
+        let readFieldExpr := mkStmtExprMd (.StaticCall "readField" [heapVar, objExprCom, field])
+        let unboxExpr := mkStmtExprMd (.StaticCall "Box..AnyVal" [readFieldExpr])
+        return unboxExpr
     | _ =>
       -- Complex object expression - translate and access field
       let objExpr ← translateExpr ctx obj
@@ -1050,14 +1054,16 @@ partial def translateAssign  (ctx : TranslationContext)
             if let some (ImportedSymbol.compositeType laurelName) := ctx.importedSymbols[fnname.text]? then
               let resolvedId := mkId laurelName
               let newExpr := mkStmtExprMd (StmtExpr.New resolvedId)
+              let newExprWrapped := mkStmtExprMd (.StaticCall "from_Composite" [newExpr])
               let varType := mkHighTypeMd (.UserDefined resolvedId)
               let selfRef := mkStmtExprMd (StmtExpr.Identifier n.val)
+              let selfRef := mkStmtExprMd (.StaticCall "Any..as_composite" [selfRef])
               let initStmt := mkInstanceMethodCall laurelName "__init__" selfRef args md
               if n.val ∈ ctx.variableTypes.unzip.1 then
-                let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr] newExpr) md
+                let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr] newExprWrapped) md
                 [assignStmt, initStmt]
               else
-                let newStmt := mkStmtExprMdWithLoc (StmtExpr.LocalVariable n.val varType (some newExpr)) md
+                let newStmt := mkStmtExprMdWithLoc (StmtExpr.LocalVariable n.val varType (some newExprWrapped)) md
                 [newStmt, initStmt]
             else if withException ctx fnname.text then
               [mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr, maybeExceptVar] rhs_trans) md]
@@ -1114,8 +1120,13 @@ partial def translateAssign  (ctx : TranslationContext)
           let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [fieldAccess] rhs_trans) md
           return (ctx, [assignStmt])
         else
-          let targetExpr ← translateExpr ctx lhs  -- This will handle self.field via translateExpr
-          let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr] rhs_trans) md
+          let objExpr ← translateExpr ctx obj
+          let objExpr :=  mkStmtExprMd (.StaticCall "Any..as_composite" [objExpr])
+          let ty ← inferExprType ctx obj
+          let field := mkStmtExprMd (.StaticCall s!"{ty}.{attr.val}" [])
+          let rhs_trans :=  mkStmtExprMd (.StaticCall "Box..Any" [rhs_trans])
+          let fieldExpr := mkStmtExprMd (.StaticCall "updateField" [heapVar, objExpr, field, rhs_trans])
+          let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [heapVar] fieldExpr) md
           return (ctx, [assignStmt])
       | _ => throw (.unsupportedConstruct "Assignment targets not yet supported" (toString (repr lhs)))
     | _ => throw (.unsupportedConstruct "Assignment targets not yet supported" (toString (repr lhs)))
@@ -1185,7 +1196,7 @@ def createVarDeclStmtsAndCtx (ctx : TranslationContext) (newDecls : List (String
       then acc else acc ++ [(n, ty)]) []
   let hoistedDecls : List StmtExprMd ←  newDecls.mapM fun (name, tyStr) => do
       let ty ← translateType ctx tyStr
-      pure $ mkStmtExprMd (StmtExpr.LocalVariable (name : String) ty (some (mkStmtExprMd .Hole)))
+      pure $ mkStmtExprMd (StmtExpr.LocalVariable (name : String) AnyTy (some (mkStmtExprMd .Hole)))
   let hoistedCtx := { ctx with variableTypes := ctx.variableTypes ++
       (newDecls.map fun (n, ty) =>
         if isCompositeType ctx ty then (n, ty) else (n, PyLauType.Any)) }
@@ -1669,9 +1680,9 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
     let mut inputs : List Parameter := []
 
     inputs := funcDecl.args.map (fun arg =>
-        if arg.tys.length == 1 && isCompositeType ctx arg.tys[0]! then
-          { name := arg.name, type := mkHighTypeMd (.UserDefined {text:= arg.tys[0]!, md := default}) }
-        else
+        --if arg.tys.length == 1 && isCompositeType ctx arg.tys[0]! then
+        --  { name := arg.name, type := mkHighTypeMd (.UserDefined {text:= arg.tys[0]!}) }
+        --else
           { name := arg.name, type := AnyTy})
 
     match funcDecl.kwargsName with
