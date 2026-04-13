@@ -198,6 +198,9 @@ def defineNameCheckDup (iden : Identifier) (node : AstNode) (overrideResolutionN
   else
     defineName iden node overrideResolutionName
 
+def inHeapParameterizationConstants (name : Identifier) : Bool :=
+  name.text ∈ ["Composite", "readField", "updateField", "$heap"] || name.text.startsWith "Box.."
+
 /-- Resolve a reference: look up the name in scope and assign the definition's ID.
     Returns the identifier with its ID filled in. -/
 def resolveRef (name : Identifier) (md : Imperative.MetaData Core.Expression := .empty) : ResolveM Identifier := do
@@ -207,8 +210,9 @@ def resolveRef (name : Identifier) (md : Imperative.MetaData Core.Expression := 
     let name' := { name with uniqueId := some defId }
     return name'
   | none =>
-    let diag := md.toDiagnostic s!"Resolution failed: '{name}' is not defined"
-    modify fun s => { s with errors := s.errors.push diag }
+    if ¬ inHeapParameterizationConstants name then
+      let diag := md.toDiagnostic s!"Resolution failed: '{name}' is not defined"
+      modify fun s => { s with errors := s.errors.push diag }
     return { name with uniqueId := none }
 
 /-- Extract the UserDefined type name from a resolved target expression by looking up its scope entry. -/

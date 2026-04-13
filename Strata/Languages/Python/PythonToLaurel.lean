@@ -634,12 +634,12 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
       else
         -- Regular object.field access
         let objExpr ← translateExpr ctx obj
-        let objExprCom := mkStmtExprMd (.StaticCall "Any..as_composite" [objExpr])
+        let objExprCom := mkStmtExprMd (.StaticCall "Any..as_composite!" [objExpr])
         let fieldExpr := mkStmtExprMd (StmtExpr.FieldSelect objExprCom attr.val)
         let ty ← inferExprType ctx obj
         let field := mkStmtExprMd (.StaticCall s!"{ty}.{attr.val}" [])
         let readFieldExpr := mkStmtExprMd (.StaticCall "readField" [heapVar, objExprCom, field])
-        let unboxExpr := mkStmtExprMd (.StaticCall "Box..AnyVal" [readFieldExpr])
+        let unboxExpr := mkStmtExprMd (.StaticCall "Box..AnyVal!" [readFieldExpr])
         return unboxExpr
     | _ =>
       -- Complex object expression - translate and access field
@@ -1055,7 +1055,7 @@ partial def translateAssign  (ctx : TranslationContext)
               let newExprWrapped := mkStmtExprMd (.StaticCall "from_Composite" [newExpr])
               let varType := mkHighTypeMd (.UserDefined resolvedId)
               let selfRef := mkStmtExprMd (StmtExpr.Identifier n.val)
-              let selfRef := mkStmtExprMd (.StaticCall "Any..as_composite" [selfRef])
+              let selfRef := mkStmtExprMd (.StaticCall "Any..as_composite!" [selfRef])
               let initStmt := mkInstanceMethodCall laurelName "__init__" selfRef args md
               if n.val ∈ ctx.variableTypes.unzip.1 then
                 let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr] newExprWrapped) md
@@ -1119,7 +1119,7 @@ partial def translateAssign  (ctx : TranslationContext)
           return (ctx, [assignStmt])
         else
           let objExpr ← translateExpr ctx obj
-          let objExpr :=  mkStmtExprMd (.StaticCall "Any..as_composite" [objExpr])
+          let objExpr :=  mkStmtExprMd (.StaticCall "Any..as_composite!" [objExpr])
           let ty ← inferExprType ctx obj
           let field := mkStmtExprMd (.StaticCall s!"{ty}.{attr.val}" [])
           let rhs_trans :=  mkStmtExprMd (.StaticCall "Box..Any" [rhs_trans])
@@ -1934,7 +1934,7 @@ def translateClass (ctx : TranslationContext) (classStmt : Python.stmt SourceRan
       if let .FunctionDef .. := stmt then
         let proc ← translateMethod ctx className stmt
         -- TODO stop replacing the body of instance proceduces with an empty one
-        instanceProcedures := instanceProcedures.push { proc with body := .Opaque [] .none [] }
+        instanceProcedures := instanceProcedures.push proc
     -- Add synthesized default __init__ if needed
     if let some initProc := defaultInitProc then
       instanceProcedures := instanceProcedures.push initProc
