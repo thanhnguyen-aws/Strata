@@ -477,14 +477,14 @@ function Any_get (dictOrList: Any, index: Any): Any
 };
 
 function Any_get_slice (list: Any, index: Any): Any
-  requires (Any..isfrom_ListAny(dictOrList) && Any..isfrom_Slice(index))
+  requires (Any..isfrom_ListAny(list) && Any..isfrom_Slice(index))
 {
   from_ListAny(List_slice(
-    Any..as_ListAny!(dictOrList),
+    Any..as_ListAny!(list),
     Any..start!(index),
     if OptionInt..isOptSome(Any..stop!(index))
     then OptionInt..unwrap!(Any..stop!(index))
-    else List_len(Any..as_ListAny!(dictOrList))))
+    else List_len(Any..as_ListAny!(list))))
 };
 
 function Any_get! (dictOrList: Any, index: Any): Any
