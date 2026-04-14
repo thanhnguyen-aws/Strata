@@ -476,7 +476,7 @@ function Any_get (dictOrList: Any, index: Any): Any
     List_get(Any..as_ListAny!(dictOrList), Any..as_int!(index))
 };
 
-function Any_get_slice (dictOrList: Any, index: Any): Any
+function Any_get_slice (list: Any, index: Any): Any
   requires (Any..isfrom_ListAny(dictOrList) && Any..isfrom_Slice(index))
 {
   from_ListAny(List_slice(Any..as_ListAny!(dictOrList), Any..start!(index),
