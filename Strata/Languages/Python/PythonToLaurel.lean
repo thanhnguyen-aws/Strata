@@ -1338,11 +1338,13 @@ partial def getExceptionCatch (ctx: TranslationContext) (e : StmtExprMd): List S
 
 def errTyToGuard (errTy: String) : StmtExprMd := match errTy with
   | "TypeError" => mkStmtExprMd (.StaticCall "Error..isTypeError" [maybeExceptVar])
-  | "ZeroDivisionError" => mkStmtExprMd (.StaticCall "Error..isUndefinedError" [maybeExceptVar])
+  | "ZeroDivisionError" => mkStmtExprMd (.StaticCall "Error..isZeroDivisionError" [maybeExceptVar])
   | "IndexError" => mkStmtExprMd (.StaticCall "Error..isIndexError" [maybeExceptVar])
   | "AssertionError" => mkStmtExprMd (.StaticCall "Error..isAssertionError" [maybeExceptVar])
+  | "AttributeError" => mkStmtExprMd (.StaticCall "Error..isAttributeError" [maybeExceptVar])
   | "Exception" => mkStmtExprMd (.StaticCall "isError" [maybeExceptVar])
   | _ => mkStmtExprMd (.StaticCall "Error..isUnknownError" [maybeExceptVar])
+  -- TODO: extend Error datatype with more Python exception types
 
 def withExceptionChecks (ctx : TranslationContext)
     (result : TranslationContext × List StmtExprMd)
@@ -1538,7 +1540,11 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   | .Import _ _ | .ImportFrom _ _ _ _ |.Pass _ => return (ctx, [])
 
   -- Try/except - wrap body with exception checks and handlers
-  | .Try _ body handlers _ _ => do
+  | .Try _ body handlers orelse final => do
+    if orelse.val.size > 0 then
+      throw (.unsupportedConstruct "Unsupport or_else block in Try statement" (toString (repr s)))
+    if final.val.size > 0 then
+      throw (.unsupportedConstruct "Unsupport finalize block in Try statement" (toString (repr s)))
     let tryLabel := s!"try_end_{s.toAst.ann.start.byteIdx}"
     let catchersLabel := s!"exception_handlers_{s.toAst.ann.start.byteIdx}"
     let (bodyCtx, bodyStmts) ← translateStmtList {ctx with isInsideTryBlock:=true} body.val.toList

@@ -40,6 +40,7 @@ datatype Error {
   TypeError (Type_msg : string),
   AttributeError (Attribute_msg : string),
   AssertionError (Assertion_msg : string),
+  ZeroDivisionError (),
   UnimplementedError (Unimplement_msg : string),
   UndefinedError (Undefined_msg : string),
   IndexError (IndexError_msg : string),
@@ -760,9 +761,9 @@ function PFloorDiv (v1: Any, v2: Any) : Any
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if Any..isfrom_bool(v2) && !Any..as_bool!(v2) then
-    exception(UndefinedError ("Division by zero"))
+    exception(ZeroDivisionError())
   else if Any..isfrom_int(v2) && Any..as_int!(v2) == 0 then
-    exception(UndefinedError ("Division by zero"))
+    exception(ZeroDivisionError())
   else if Any..isfrom_bool(v1) && Any..isfrom_bool(v2) then
     from_int( bool_to_int(Any..as_bool!(v1)) / bool_to_int(Any..as_bool!(v2)))
   else if Any..isfrom_bool(v1) && Any..isfrom_int(v2) then
@@ -973,13 +974,12 @@ function PPow (v1: Any, v2: Any) : Any
 };
 
 function PMod (v1: Any, v2: Any) : Any
-  requires (Any..isfrom_bool(v2)==>Any..as_bool!(v2)) && (Any..isfrom_int(v2)==>Any..as_int!(v2)!=0)
 {
   if Any..isexception(v1) then v1 else if Any..isexception(v2) then v2
   else if Any..isfrom_bool(v2) && !Any..as_bool!(v2) then
-    exception(UndefinedError ("Division by zero"))
+    exception(ZeroDivisionError())
   else if Any..isfrom_int(v2) && Any..as_int!(v2) == 0 then
-    exception(UndefinedError ("Division by zero"))
+    exception(ZeroDivisionError())
   else if Any..isfrom_bool(v1) && Any..isfrom_bool(v2) then
     from_int( bool_to_int(Any..as_bool!(v1)) % bool_to_int(Any..as_bool!(v2)))
   else if Any..isfrom_bool(v1) && Any..isfrom_int(v2) then
