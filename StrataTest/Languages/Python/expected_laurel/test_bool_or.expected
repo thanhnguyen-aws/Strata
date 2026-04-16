@@ -1,2 +1,8 @@
-DETAIL: Laurel to Core translation failed: [(38634-38635) Resolution failed: 'v' is not defined, (38657-38658) Resolution failed: 'v' is not defined, (38679-38680) Resolution failed: 'v' is not defined, (38701-38702) Resolution failed: 'v' is not defined, (38730-38731) Resolution failed: 'v' is not defined, (38756-38757) Resolution failed: 'v' is not defined]
-RESULT: Internal error
+test_bool_or.py(2, 4): ✅ pass - assert(24)
+test_bool_or.py(3, 4): ✅ pass - assert(43)
+test_bool_or.py(4, 4): ✅ pass - assert_assert(63)_calls_Any_to_bool_0
+test_bool_or.py(4, 4): ✅ pass - true or false
+test_bool_or.py(5, 4): ✅ pass - assert_assert(98)_calls_Any_to_bool_0
+test_bool_or.py(5, 4): ✅ pass - false or false
+DETAIL: 6 passed, 0 failed, 0 inconclusive
+RESULT: Analysis success

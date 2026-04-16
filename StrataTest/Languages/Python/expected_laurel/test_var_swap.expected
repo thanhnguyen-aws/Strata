@@ -1,2 +1,7 @@
-DETAIL: Laurel to Core translation failed: [(38281-38282) Resolution failed: 'v' is not defined, (38304-38305) Resolution failed: 'v' is not defined, (38326-38327) Resolution failed: 'v' is not defined, (38348-38349) Resolution failed: 'v' is not defined, (38377-38378) Resolution failed: 'v' is not defined, (38403-38404) Resolution failed: 'v' is not defined]
-RESULT: Internal error
+test_var_swap.py(2, 4): ✅ pass - assert(25)
+test_var_swap.py(3, 4): ✅ pass - assert(40)
+test_var_swap.py(4, 4): ✅ pass - assert(55)
+test_var_swap.py(7, 4): ✅ pass - assert_assert(90)_calls_Any_to_bool_0
+test_var_swap.py(7, 4): ✅ pass - swap
+DETAIL: 5 passed, 0 failed, 0 inconclusive
+RESULT: Analysis success
