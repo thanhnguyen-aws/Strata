@@ -663,9 +663,15 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
           let readFieldExpr := mkStmtExprMd (.StaticCall "readField" [heapVar, objExprCom, field])
           let unboxExpr := mkStmtExprMd (.StaticCall "Box..AnyVal!" [readFieldExpr])
           return unboxExpr
-        else
+        else if ty == "Any" then
           let readFieldExpr := mkStmtExprMd (.StaticCall "Any_read_field" [objExpr, mkStmtExprMd $ .LiteralString attr.val])
           return readFieldExpr
+        else
+          let fieldExpr := mkStmtExprMd (StmtExpr.FieldSelect objExpr attr.val)
+          let objType ← inferExprType ctx obj
+          match tryLookupFieldHighType ctx objType attr.val with
+          | some ty => wrapFieldInAny ty fieldExpr
+          | none => return fieldExpr
     | _ =>
       -- Complex object expression - translate and access field
       let objExpr ← translateExpr ctx obj
@@ -1187,16 +1193,20 @@ partial def translateAssign  (ctx : TranslationContext)
           let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [fieldAccess] rhs') md
           return (ctx, [assignStmt])
         else
+          let targetExpr ← translateExpr ctx lhs
           let objExpr ← translateExpr ctx obj
           let ty ← inferExprType ctx obj
-          let updateFieldExpr := if isCompositeType ctx ty then
+          let assignStmt := if isCompositeType ctx ty then
             let field := mkStmtExprMd (.StaticCall s!"{ty}.{attr.val}" [])
-            let objExpr :=  mkStmtExprMd (.StaticCall "Any..as_composite!" [objExpr])
+            let objExprUnwrap :=  mkStmtExprMd (.StaticCall "Any..as_composite!" [objExpr])
             let rhs_trans :=  mkStmtExprMd (.StaticCall "Box..Any" [rhs_trans])
-            mkStmtExprMd (.StaticCall "updateField" [heapVar, objExpr, field, rhs_trans])
+            let updateFieldExpr := mkStmtExprMd (.StaticCall "updateField" [heapVar, objExprUnwrap, field, rhs_trans])
+            mkStmtExprMdWithLoc (StmtExpr.Assign [heapVar] updateFieldExpr) md
+          else if ty == "Any" then
+            let updateFieldExpr := mkStmtExprMd (.StaticCall "Any_update_field" [objExpr, mkStmtExprMd $ .LiteralString attr.val, rhs_trans])
+            mkStmtExprMdWithLoc (StmtExpr.Assign [heapVar] updateFieldExpr) md
           else
-            mkStmtExprMd (.StaticCall "Any_update_field" [objExpr, mkStmtExprMd $ .LiteralString attr.val, rhs_trans])
-          let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [heapVar] updateFieldExpr) md
+            mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr] rhs_trans) md
           return (ctx, [assignStmt])
       | _ => throw (.unsupportedConstruct "Assignment targets not yet supported" (toString (repr lhs)))
     | _ => throw (.unsupportedConstruct "Assignment targets not yet supported" (toString (repr lhs)))
