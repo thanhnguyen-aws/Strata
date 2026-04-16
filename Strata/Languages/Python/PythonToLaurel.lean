@@ -2447,7 +2447,7 @@ def pythonToLaurel' (info : PreludeInfo)
         isFunctional := false }
 
   let getFieldConstructorFunction := mkGetFieldConstructFunction ctx.classFieldHighType
-  let fieldProcs:= [boxAnyTriggerProc, getFieldConstructorFunction, anyGetFieldFunction] -- anyUpdateFieldFunction]
+  let fieldProcs:= [boxAnyTriggerProc, getFieldConstructorFunction, anyGetFieldFunction, anyUpdateFieldFunction]
 
   let program : Laurel.Program := {
     staticProcedures := fieldProcs ++ (procedures.push mainProc).toList
