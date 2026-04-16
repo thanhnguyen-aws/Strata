@@ -1,5 +1,5 @@
-test_var_swap.py(7, 11): ✅ pass - assert_assert(97)_calls_PAnd_0
-test_var_swap.py(7, 11): ✅ pass - Check PAnd exception
+unknown location: ✅ pass - set_LaurelResult_calls_PAnd_0
+test_var_swap.py(7, 11): ✅ pass - ite_cond_calls_PAnd_0
 test_var_swap.py(7, 4): ✅ pass - assert_assert(90)_calls_PAnd_0
 test_var_swap.py(7, 4): ✅ pass - assert_assert(90)_calls_Any_to_bool_1
 test_var_swap.py(7, 4): ✅ pass - swap

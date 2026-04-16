@@ -1,10 +1,10 @@
-test_bool_and.py(5, 11): ✅ pass - assert_assert(90)_calls_PAnd_0
-test_bool_and.py(5, 11): ✅ pass - Check PAnd exception
+unknown location: ✅ pass - set_LaurelResult_calls_PAnd_0
+unknown location: ✅ pass - set_LaurelResult_calls_PAnd_0
+test_bool_and.py(5, 11): ✅ pass - ite_cond_calls_PAnd_0
 test_bool_and.py(5, 4): ✅ pass - assert_assert(83)_calls_PAnd_0
 test_bool_and.py(5, 4): ✅ pass - assert_assert(83)_calls_Any_to_bool_1
 test_bool_and.py(5, 4): ✅ pass - true and true
-test_bool_and.py(6, 11): ✅ pass - assert_assert(126)_calls_PAnd_0
-test_bool_and.py(6, 11): ✅ pass - Check PNot exception
+test_bool_and.py(6, 11): ✅ pass - ite_cond_calls_PAnd_0
 test_bool_and.py(6, 4): ✅ pass - assert_assert(119)_calls_PAnd_0
 test_bool_and.py(6, 4): ✅ pass - assert_assert(119)_calls_Any_to_bool_1
 test_bool_and.py(6, 4): ✅ pass - true and false

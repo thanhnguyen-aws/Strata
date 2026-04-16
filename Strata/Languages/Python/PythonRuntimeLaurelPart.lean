@@ -492,27 +492,6 @@ function Any_get! (dictOrList: Any, index: Any): Any
 {
   if Any..isexception(dictOrList) then dictOrList
   else if Any..isexception(index) then index
-  else if !(Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index)) && !(Any..isfrom_ListAny(dictOrList) && (Any..isfrom_int(index) || Any..isfrom_Slice(index))) then
-    exception (TypeError("Invalid subscription type"))
-  else if Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index) && DictStrAny_contains(Any..as_Dict!(dictOrList), Any..as_string!(index)) then
-    DictStrAny_get(Any..as_Dict!(dictOrList), Any..as_string!(index))
-  else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) && Any..as_int!(index) >= 0 && Any..as_int!(index) < List_len(Any..as_ListAny!(dictOrList)) then
-    List_get(Any..as_ListAny!(dictOrList), Any..as_int!(index))
-  else if (Any..isfrom_ListAny(dictOrList) && Any..isfrom_Slice(index) && Any..start!(index) >= 0 && Any..start!(index) < List_len(Any..as_ListAny!(dictOrList))) then
-    if OptionInt..isOptNone(Any..stop!(index)) then
-      from_ListAny(List_drop(Any..as_ListAny!(dictOrList), Any..start!(index)))
-    else if (OptionInt..isOptSome(Any..stop!(index))) &&  OptionInt..unwrap!(Any..stop!(index)) >= 0 &&
-            OptionInt..unwrap!(Any..stop!(index)) <= List_len(Any..as_ListAny!(dictOrList)) && Any..start!(index) <= OptionInt..unwrap!(Any..stop!(index)) then
-      from_ListAny(List_slice(Any..as_ListAny!(dictOrList), Any..start!(index), OptionInt..unwrap!(Any..stop!(index))))
-    else exception (IndexError("Invalid slice index"))
-  else
-    exception (IndexError("Invalid subscription"))
-};
-
-function Any_get_no_slice! (dictOrList: Any, index: Any): Any
-{
-  if Any..isexception(dictOrList) then dictOrList
-  else if Any..isexception(index) then index
   else if !(Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index)) && !(Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index)) then
     exception (TypeError("Invalid subscription type"))
   else if Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index) && DictStrAny_contains(Any..as_Dict!(dictOrList), Any..as_string!(index)) then
@@ -521,6 +500,22 @@ function Any_get_no_slice! (dictOrList: Any, index: Any): Any
       List_get(Any..as_ListAny!(dictOrList), Any..as_int!(index))
   else
     exception (IndexError("Invalid subscription"))
+};
+
+function Any_get_slice! (list: Any, index: Any): Any
+  requires (Any..isfrom_ListAny(list) && Any..isfrom_Slice(index))
+{
+  if Any..isexception(list) then list
+  else if Any..isexception(index) then index
+  else if !(Any..isfrom_ListAny(list) && Any..isfrom_Slice(index)) then
+    exception (TypeError("Invalid subscription type"))
+  else
+    from_ListAny(List_slice(
+      Any..as_ListAny!(list),
+      Any..start!(index),
+      if OptionInt..isOptSome(Any..stop!(index))
+      then OptionInt..unwrap!(Any..stop!(index))
+      else List_len(Any..as_ListAny!(list))))
 };
 
 function Any_set (dictOrList: Any, index: Any, val: Any): Any
@@ -555,7 +550,7 @@ function Any_sets! (indices: ListAny, dictOrList: Any, val: Any): Any
   if ListAny..isListAny_nil(indices) then dictOrList
   else if ListAny..isListAny_nil(ListAny..tail!(indices)) then Any_set!(dictOrList, ListAny..head!(indices), val)
   else Any_set!(dictOrList, ListAny..head!(indices),
-    Any_sets!(ListAny..tail!(indices), Any_get_no_slice!(dictOrList, ListAny..head!(indices)), val))
+    Any_sets!(ListAny..tail!(indices), Any_get!(dictOrList, ListAny..head!(indices)), val))
 };
 
 function PIn (v: Any, dictOrList: Any) : Any
@@ -1105,7 +1100,7 @@ Parse the Laurel DDM prelude into a Laurel Program.
 
 -- Prelude functions that may return an exception value as Any.
 -- We should make sure that all functions in this list propagate the exceptions from their arguments.
-def AnyMaybeExceptionList := ["Any_get!", "Any_set!", "Any_sets!", "PNeg", "PBitNot", "PNot", "PAdd", "PSub", "PMul",
+def AnyMaybeExceptionList := ["Any_get!", "Any_get_slice!", "Any_set!", "Any_sets!", "PNeg", "PBitNot", "PNot", "PAdd", "PSub", "PMul",
    "PFloorDiv", "PLt", "PLe", "PGt", "PGe", "PPow", "PMod", "PLShift", "PRShift", "PAnd", "POr"]
 
 public def pythonRuntimeLaurelPart : Laurel.Program :=

@@ -1,5 +1,5 @@
-test_int_mod.py(4, 13): ✅ pass - assert_assert(64)_calls_PMod_0
-test_int_mod.py(4, 13): ✅ pass - Check PMod exception
+unknown location: ✅ pass - set_LaurelResult_calls_PMod_0
+test_int_mod.py(4, 13): ✅ pass - ite_cond_calls_PMod_0
 test_int_mod.py(4, 4): ✅ pass - set_c_calls_PMod_0
 test_int_mod.py(5, 4): ✅ pass - assert_assert(74)_calls_Any_to_bool_0
 test_int_mod.py(5, 4): ✅ pass - int modulo

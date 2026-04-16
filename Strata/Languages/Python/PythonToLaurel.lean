@@ -625,7 +625,7 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
     match slice with
       | .Slice _ start stop step =>
           let index ← translateSlice ctx start.val stop.val step.val
-          return mkStmtExprMdWithLoc (.StaticCall "Any_get_slice" [dictOrList, index]) md
+          return mkStmtExprMdWithLoc (.StaticCall "Any_get_slice!" [dictOrList, index]) md
       | _ =>
           let index ← translateExpr ctx slice
           return mkStmtExprMdWithLoc (.StaticCall "Any_get!" [dictOrList, index]) md
@@ -1272,9 +1272,13 @@ partial def getMaybeExceptionExprs (ctx : TranslationContext) (e : StmtExprMd) :
       ([cond, thenBranch] ++ elseBranch.toList).flatMap $ getMaybeExceptionExprs ctx
   | _ => []
 
-partial def getExceptionAssertions (maybeExceptExprs: List StmtExprMd) : List StmtExprMd :=
-  maybeExceptExprs.map (λ mbe => mkStmtExprMdWithLoc (.Assert $ mkStmtExprMd
-    (.PrimitiveOp .Not [mkStmtExprMd $ .StaticCall "Any..isexception" [mbe]])) mbe.md)
+partial def getExceptionReturns (maybeExceptExprs: List StmtExprMd) : List StmtExprMd :=
+  maybeExceptExprs.map (λ mbe => mkStmtExprMdWithLoc
+      (.IfThenElse
+        (mkStmtExprMd $ .StaticCall "Any..isexception" [mbe])
+        (mkStmtExprMd $ .Return mbe)
+        none)
+      mbe.md)
 
 def createIfStmt (condBlocks: List (StmtExprMd × StmtExprMd)) (elseBlock: Option StmtExprMd): Option StmtExprMd :=
   match condBlocks with
@@ -1289,7 +1293,7 @@ partial def getExceptionAssign (maybeExceptExprs: List StmtExprMd) : List StmtEx
 
 partial def getExceptionCatch (ctx: TranslationContext) (e : StmtExprMd): List StmtExprMd :=
   let maybeExceptExprs := getMaybeExceptionExprs ctx e
-  if ctx.isInsideTryBlock then getExceptionAssign maybeExceptExprs else getExceptionAssertions maybeExceptExprs
+  if ctx.isInsideTryBlock then getExceptionAssign maybeExceptExprs else getExceptionReturns maybeExceptExprs
 
 def errTyToGuard (errTy: String) : StmtExprMd := match errTy with
   | "TypeError" => mkStmtExprMd (.StaticCall "Error..isTypeError" [maybeExceptVar])
@@ -2357,7 +2361,7 @@ def pythonToLaurel' (info : PreludeInfo)
   let mainProc : Procedure := {
     name := { text := "__main__", md := md },
     inputs := [],
-    outputs := [],
+    outputs := [{name := "LaurelResult", type := AnyTy}],
     preconditions := [],
     decreases := none,
     body := .Transparent bodyBlock

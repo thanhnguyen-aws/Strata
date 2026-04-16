@@ -1,5 +1,5 @@
-test_augfloordiv.py(3, 4): ✅ pass - assert_assert(44)_calls_PFloorDiv_0
-test_augfloordiv.py(3, 4): ✅ pass - Check PFloorDiv exception
+unknown location: ✅ pass - set_LaurelResult_calls_PFloorDiv_0
+test_augfloordiv.py(3, 4): ✅ pass - ite_cond_calls_PFloorDiv_0
 test_augfloordiv.py(3, 4): ✅ pass - set_x_calls_PFloorDiv_0
 test_augfloordiv.py(4, 4): ✅ pass - assert_assert(56)_calls_Any_to_bool_0
 test_augfloordiv.py(4, 4): ✅ pass - augmented floordiv
