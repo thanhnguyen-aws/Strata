@@ -1,10 +1,2 @@
-unknown location: ✅ pass - set_LaurelResult_calls_PAnd_0
-unknown location: ✅ pass - set_LaurelResult_calls_POr_1
-test_bool_complex.py(4, 11): ✅ pass - ite_cond_calls_PAnd_0
-test_bool_complex.py(4, 11): ✅ pass - ite_cond_calls_POr_1
-test_bool_complex.py(4, 4): ✅ pass - assert_assert(61)_calls_PAnd_0
-test_bool_complex.py(4, 4): ✅ pass - assert_assert(61)_calls_POr_1
-test_bool_complex.py(4, 4): ✅ pass - assert_assert(61)_calls_Any_to_bool_2
-test_bool_complex.py(4, 4): ✅ pass - complex bool
-DETAIL: 8 passed, 0 failed, 0 inconclusive
-RESULT: Analysis success
+DETAIL: Laurel to Core translation failed: [(38281-38282) Resolution failed: 'v' is not defined, (38304-38305) Resolution failed: 'v' is not defined, (38326-38327) Resolution failed: 'v' is not defined, (38348-38349) Resolution failed: 'v' is not defined, (38377-38378) Resolution failed: 'v' is not defined, (38403-38404) Resolution failed: 'v' is not defined, (38634-38635) Resolution failed: 'v' is not defined, (38657-38658) Resolution failed: 'v' is not defined, (38679-38680) Resolution failed: 'v' is not defined, (38701-38702) Resolution failed: 'v' is not defined, (38730-38731) Resolution failed: 'v' is not defined, (38756-38757) Resolution failed: 'v' is not defined]
+RESULT: Internal error
