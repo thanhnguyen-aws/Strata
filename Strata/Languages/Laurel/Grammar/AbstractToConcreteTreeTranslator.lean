@@ -43,6 +43,7 @@ partial def highTypeValToArg : HighType → Arg
   | .TFloat64 => laurelOp "float64Type"
   | .TReal => laurelOp "realType"
   | .TString => laurelOp "stringType"
+  | .TBv n => laurelOp "bvType" #[.num sr n]
   | .TMap k v => laurelOp "mapType" #[highTypeToArg k, highTypeToArg v]
   | .UserDefined name => laurelOp "compositeType" #[ident name.text]
   | .TCore s => laurelOp "coreType" #[ident s]
@@ -336,7 +337,7 @@ private def formatOp (o : Strata.Operation) : Format :=
 def formatHighType (t : HighTypeMd) : Format := formatArg (highTypeToArg t)
 def formatHighTypeVal (t : HighType) : Format := formatArg (highTypeValToArg t)
 def formatStmtExpr (s : StmtExprMd) : Format := formatArg (stmtExprToArg s)
-def formatStmtExprVal (s : StmtExpr) : Format := formatArg (stmtExprToArg ⟨s, {}⟩)
+def formatStmtExprVal (s : StmtExpr) : Format := formatArg (stmtExprToArg ⟨s, none, {}⟩)
 def formatParameter (p : Parameter) : Format := formatArg (parameterToArg p)
 def formatField (f : Field) : Format := formatArg (fieldToArg f)
 def formatDatatypeConstructor (c : DatatypeConstructor) : Format := formatArg (datatypeConstructorToArg c)
