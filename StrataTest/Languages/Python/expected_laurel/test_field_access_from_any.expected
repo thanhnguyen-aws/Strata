@@ -1,11 +1,11 @@
-test_field_access_from_any.py(11, 11): ❓ unknown - Check PMul exception
-test_field_access_from_any.py(11, 11): ✅ pass - Check PMul exception
+test_field_access_from_any.py(11, 11): ❓ unknown - assert_assert(195)_calls_Any_read_field_0
+test_field_access_from_any.py(11, 11): ✅ pass - assert_assert(195)_calls_Any_read_field_1
 test_field_access_from_any.py(11, 11): ❓ unknown - Check PMul exception
 test_field_access_from_any.py(11, 4): ❓ unknown - set_LaurelResult_calls_Any_read_field_0
 test_field_access_from_any.py(11, 4): ✅ pass - set_LaurelResult_calls_Any_read_field_1
 test_field_access_from_any.py(10, 29): ❓ unknown - (pure_double ensures) Return type constraint
-test_field_access_from_any.py(14, 4): ❓ unknown - Check PMul exception
-test_field_access_from_any.py(14, 4): ✅ pass - Check PMul exception
+test_field_access_from_any.py(14, 4): ❓ unknown - assert_assert(243)_calls_Any_read_field_0
+test_field_access_from_any.py(14, 4): ✅ pass - assert_assert(243)_calls_Any_read_field_1
 test_field_access_from_any.py(14, 4): ❓ unknown - Check PMul exception
 unknown location: ❓ unknown - set_$heap_calls_Any_read_field_0
 unknown location: ✅ pass - set_$heap_calls_Any_read_field_1
