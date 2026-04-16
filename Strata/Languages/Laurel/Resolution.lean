@@ -199,7 +199,7 @@ def defineNameCheckDup (iden : Identifier) (node : AstNode) (overrideResolutionN
     defineName iden node overrideResolutionName
 
 def inHeapParameterizationConstants (name : Identifier) : Bool :=
-  name.text ∈ ["Composite", "readField", "updateField", "$heap"] || name.text.startsWith "Box.."
+  name.text ∈ ["Composite", "readField", "updateField", "$heap", "Field"] || name.text.startsWith "Box.." || name.text.startsWith "Field.."
 
 /-- Resolve a reference: look up the name in scope and assign the definition's ID.
     Returns the identifier with its ID filled in. -/

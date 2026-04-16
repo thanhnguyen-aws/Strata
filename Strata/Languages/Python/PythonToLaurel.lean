@@ -646,10 +646,14 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
         let objExprCom := mkStmtExprMd (.StaticCall "Any..as_composite!" [objExpr])
         let fieldExpr := mkStmtExprMd (StmtExpr.FieldSelect objExprCom attr.val)
         let ty ← inferExprType ctx obj
-        let field := mkStmtExprMd (.StaticCall s!"{ty}.{attr.val}" [])
-        let readFieldExpr := mkStmtExprMd (.StaticCall "readField" [heapVar, objExprCom, field])
-        let unboxExpr := mkStmtExprMd (.StaticCall "Box..AnyVal!" [readFieldExpr])
-        return unboxExpr
+        if isCompositeType ctx ty then
+          let field := mkStmtExprMd (.StaticCall s!"{ty}.{attr.val}" [])
+          let readFieldExpr := mkStmtExprMd (.StaticCall "readField" [heapVar, objExprCom, field])
+          let unboxExpr := mkStmtExprMd (.StaticCall "Box..AnyVal!" [readFieldExpr])
+          return unboxExpr
+        else
+          let readFieldExpr := mkStmtExprMd (.StaticCall "Any_read_field" [objExpr, mkStmtExprMd $ .LiteralString attr.val])
+          return readFieldExpr
     | _ =>
       -- Complex object expression - translate and access field
       let objExpr ← translateExpr ctx obj
@@ -967,6 +971,7 @@ partial def translateCall (ctx : TranslationContext)
         return mkCall funcName'
     | .Attribute _ val _attr _ =>
         let target_trans ← translateExprAsReceiver ctx val
+        let target_trans := mkStmtExprMd $ .StaticCall "Any..as_composite!" [target_trans]
         if opt_firstarg.isSome then
           if let some (ImportedSymbol.procedure _ _ true) := ctx.importedSymbols[funcName]? then
             return mkCall funcName
@@ -1095,7 +1100,7 @@ partial def translateAssign  (ctx : TranslationContext)
             if let some (ImportedSymbol.compositeType laurelName) := ctx.importedSymbols[fnname.text]? then
               let resolvedId := mkId laurelName
               let newExpr := mkStmtExprMd (StmtExpr.New resolvedId)
-              let newExprWrapped := mkStmtExprMd (.StaticCall "from_Composite" [newExpr])
+              let newExprWrapped := mkStmtExprMd (.StaticCall "from_Composite" [mkStmtExprMd $ .LiteralString resolvedId.text, newExpr])
               let varType := mkHighTypeMd (.UserDefined resolvedId)
               let selfRef := mkStmtExprMd (StmtExpr.Identifier n.val)
               let selfRef := mkStmtExprMd (.StaticCall "Any..as_composite!" [selfRef])
@@ -1171,12 +1176,15 @@ partial def translateAssign  (ctx : TranslationContext)
           return (ctx, [assignStmt])
         else
           let objExpr ← translateExpr ctx obj
-          let objExpr :=  mkStmtExprMd (.StaticCall "Any..as_composite!" [objExpr])
           let ty ← inferExprType ctx obj
-          let field := mkStmtExprMd (.StaticCall s!"{ty}.{attr.val}" [])
-          let rhs_trans :=  mkStmtExprMd (.StaticCall "Box..Any" [rhs_trans])
-          let fieldExpr := mkStmtExprMd (.StaticCall "updateField" [heapVar, objExpr, field, rhs_trans])
-          let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [heapVar] fieldExpr) md
+          let updateFieldExpr := if isCompositeType ctx ty then
+            let field := mkStmtExprMd (.StaticCall s!"{ty}.{attr.val}" [])
+            let objExpr :=  mkStmtExprMd (.StaticCall "Any..as_composite!" [objExpr])
+            let rhs_trans :=  mkStmtExprMd (.StaticCall "Box..Any" [rhs_trans])
+            mkStmtExprMd (.StaticCall "updateField" [heapVar, objExpr, field, rhs_trans])
+          else
+            mkStmtExprMd (.StaticCall "Any_update_field" [objExpr, mkStmtExprMd $ .LiteralString attr.val, rhs_trans])
+          let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [heapVar] updateFieldExpr) md
           return (ctx, [assignStmt])
       | _ => throw (.unsupportedConstruct "Assignment targets not yet supported" (toString (repr lhs)))
     | _ => throw (.unsupportedConstruct "Assignment targets not yet supported" (toString (repr lhs)))
@@ -1244,8 +1252,7 @@ def createVarDeclStmtsAndCtx (ctx : TranslationContext) (newDecls : List (String
   let newDecls := newDecls.foldl (fun acc (n, ty) =>
       if acc.any (fun (an, _) => an == n) || ctx.variableTypes.any (fun (vn, _) => vn == n)
       then acc else acc ++ [(n, ty)]) []
-  let hoistedDecls : List StmtExprMd ←  newDecls.mapM fun (name, tyStr) => do
-      let ty ← translateType ctx tyStr
+  let hoistedDecls : List StmtExprMd ←  newDecls.mapM fun (name, _) => do
       pure $ mkStmtExprMd (StmtExpr.LocalVariable (name : String) AnyTy (some (mkStmtExprMd .Hole)))
   let hoistedCtx := { ctx with variableTypes := ctx.variableTypes ++
       (newDecls.map fun (n, ty) =>
@@ -1468,6 +1475,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
       | .mk_withitem _ ctxExpr optVars =>
         let mgrName := s!"with_mgr_{ctxExpr.toAst.ann.start.byteIdx}"
         let mgrExpr ← translateExpr currentCtx ctxExpr
+        let mgrExpr := mkStmtExprMd $ .StaticCall "Any..as_composite!" [mgrExpr]
         let mgrTy ← inferExprType currentCtx ctxExpr
         let mgrLauTy ← translateType currentCtx mgrTy
         let mgrDecl := mkStmtExprMd (StmtExpr.LocalVariable mgrName mgrLauTy (some mgrExpr))
@@ -2044,6 +2052,86 @@ def translateClass (ctx : TranslationContext) (classStmt : Python.stmt SourceRan
     }, instanceProcedures, classFunDecls)
   | _ => throw (.internalError "Expected ClassDef")
 
+def mkIfEqExpr (var: StmtExprMd) (caseList: List (StmtExprMd × StmtExprMd)) (elseExpr: StmtExprMd) : StmtExprMd :=
+  caseList.foldl (fun e (cond, thenExpr) => mkStmtExprMd $ .IfThenElse
+      (mkStmtExprMd $ .PrimitiveOp .Eq [var, cond]) thenExpr e) elseExpr
+
+def mkGetFieldConstructFunction (classFieldHighType: Std.HashMap String (Std.HashMap String HighType)) : Procedure :=
+  let invalidField := mkStmtExprMd $ .StaticCall "FieldError.invalid" []
+  let unknownField := mkStmtExprMd $ .StaticCall "FieldError.unknown" []
+  let classFields := classFieldHighType.toList.map (λ (className, f) => (className, f.toList.unzip.fst.map
+      fun fieldName => (mkStmtExprMd $ .LiteralString fieldName,
+        mkStmtExprMd $ .StaticCall s!"{className}.{fieldName}" []
+      )))
+  let classFields := classFields.map ((λ (className, f) =>  (mkStmtExprMd $ .LiteralString className , mkIfEqExpr (freeVar "fieldname") f invalidField)))
+  let body := mkIfEqExpr (freeVar "classname") classFields unknownField
+  {
+    name:= "get_field_construct"
+    invokeOn := none
+    body := Body.Transparent body
+    preconditions := []
+    isFunctional := true
+    decreases := none
+    inputs := [{name:= "classname", type:= mkHighTypeMd $ .TString}, {name:= "fieldname", type:= mkHighTypeMd $ .TString}]
+    outputs := [{name:= "Result", type:= mkHighTypeMd $ .TCore "Field"}]
+  }
+
+def anyGetFieldFunction: Procedure :=
+  let objIsComposite := mkStmtExprMd $ .StaticCall "Any..isfrom_Composite" [freeVar "obj"]
+  let field := mkStmtExprMd $ .StaticCall "get_field_construct" [
+    mkStmtExprMd $ .StaticCall "Any..typename" [freeVar "obj"],
+    freeVar "fieldname"
+  ]
+  let fieldIsNotInvalid := mkStmtExprMd $ .PrimitiveOp .Not [mkStmtExprMd $ .StaticCall "Field..isFieldError.invalid" [field]]
+  let readFieldExpr := mkStmtExprMd $ .StaticCall "readField" [heapVar, mkStmtExprMd $ .StaticCall "Any..as_composite!" [freeVar "obj"], field]
+  let body := mkStmtExprMd (.StaticCall "Box..AnyVal!" [readFieldExpr])
+  {
+    name:= "Any_read_field"
+    invokeOn := none
+    body := Body.Transparent body
+    preconditions := [objIsComposite, fieldIsNotInvalid]
+    isFunctional := true
+    decreases := none
+    inputs := [{name:= "obj", type:= AnyTy}, {name:= "fieldname", type:= mkHighTypeMd $ .TString}]
+    outputs := [{name:= "Result", type:= AnyTy}]
+  }
+
+def anyUpdateFieldFunction: Procedure :=
+  let objIsComposite := mkStmtExprMd $ .StaticCall "Any..isfrom_Composite" [freeVar "obj"]
+  let field := mkStmtExprMd $ .StaticCall "get_field_construct" [
+    mkStmtExprMd $ .StaticCall "Any..typename" [freeVar "obj"],
+    freeVar "fieldname"
+  ]
+  let fieldIsNotInvalid := mkStmtExprMd $ .PrimitiveOp .Not [mkStmtExprMd $ .StaticCall "Field..isFieldError.invalid" [field]]
+  let updateVal := mkStmtExprMd (.StaticCall "Box..Any" [freeVar "val"])
+  let updateFieldExpr := mkStmtExprMd $ .StaticCall "updateField" [heapVar, mkStmtExprMd $ .StaticCall "Any..as_composite!" [freeVar "obj"], field, updateVal]
+  let body := mkStmtExprMd $ .Return updateFieldExpr
+  {
+    name:= "Any_update_field"
+    invokeOn := none
+    body := Body.Transparent body
+    preconditions := [objIsComposite, fieldIsNotInvalid]
+    isFunctional := true
+    decreases := none
+    inputs := [ {name:= "obj", type:= AnyTy},
+                {name:= "fieldname", type:= mkHighTypeMd $ .TString}, {name:="val", type:= AnyTy}]
+    outputs := []
+  }
+
+def boxAnyTriggerProc: Procedure :=
+  let fieldAccess := mkStmtExprMd $ .FieldSelect (freeVar "obj") "invalid"
+  let body := mkStmtExprMd $ .Assign [fieldAccess] AnyNone
+  {
+    name:= "box_any_trigger"
+    invokeOn := none
+    body := Body.Transparent body
+    preconditions := []
+    isFunctional := false
+    decreases := none
+    inputs := [{name:= "obj", type:= mkHighTypeMd $ .UserDefined "FieldError"}]
+    outputs := []
+  }
+
 def getFunctions (decls: List Core.Decl) : List String :=
   decls.filterMap (λ decl =>
     match decl.kind with
@@ -2231,6 +2319,14 @@ def pythonToLaurel' (info : PreludeInfo)
     instanceProcedures := []
   }
 
+  let fieldErrorTy : CompositeType := {
+    name := {text := "FieldError", md := default }
+    extending := []  -- No inheritance support for now
+    fields := [{name:= "invalid", isMutable:= false, type:= AnyTy},
+              {name:= "unknown", isMutable:= false, type:= AnyTy}]
+    instanceProcedures := []
+  }
+
   let overloadCompositeType := Std.HashSet.ofList $
       (overloadTable.values.flatMap (·.values)).map fun ident =>
         if ident.pythonModule.isEmpty then
@@ -2241,7 +2337,7 @@ def pythonToLaurel' (info : PreludeInfo)
 
   -- FIRST PASS: Collect all class definitions and field type info
   let mut procedures : Array Procedure := #[]
-  let mut compositeTypes : Array TypeDefinition := #[.Composite pyErrorTy]
+  let mut compositeTypes : Array TypeDefinition := #[.Composite pyErrorTy, .Composite fieldErrorTy]
   compositeTypeNames := compositeTypeNames.insert "PythonError"
   let mut classFieldHighType : Std.HashMap String (Std.HashMap String HighType) := {}
   let mut allClassFuncDecls : List PythonFunctionDecl := []
@@ -2350,8 +2446,11 @@ def pythonToLaurel' (info : PreludeInfo)
         body := .Opaque [] none []
         isFunctional := false }
 
+  let getFieldConstructorFunction := mkGetFieldConstructFunction ctx.classFieldHighType
+  let fieldProcs:= [boxAnyTriggerProc, getFieldConstructorFunction, anyGetFieldFunction] -- anyUpdateFieldFunction]
+
   let program : Laurel.Program := {
-    staticProcedures := (procedures.push mainProc).toList
+    staticProcedures := fieldProcs ++ (procedures.push mainProc).toList
     staticFields := []
     types := compositeTypes.toList
     constants := []

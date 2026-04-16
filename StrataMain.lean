@@ -571,7 +571,7 @@ def pyAnalyzeLaurelCommand : Command where
         exitPyAnalyzeInternalError s!"Laurel to Core translation failed: {laurelTranslateErrors}"
       | some core => pure core
 
-    if true then
+    if verbose then
       IO.println "\n==== Core Program ===="
       IO.print (Core.formatProgram coreProgram)
 
