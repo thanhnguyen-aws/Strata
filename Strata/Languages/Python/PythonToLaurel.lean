@@ -1540,9 +1540,8 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   | .Import _ _ | .ImportFrom _ _ _ _ |.Pass _ => return (ctx, [])
 
   -- Try/except - wrap body with exception checks and handlers
-  | .Try _ body handlers orelse final => do
     if orelse.val.size > 0 then
-      throw (.unsupportedConstruct "Unsupport or_else block in Try statement" (toString (repr s)))
+      throw (.unsupportedConstruct "Unsupported or_else block in Try statement" (toString (repr s)))
     if final.val.size > 0 then
       throw (.unsupportedConstruct "Unsupport finalize block in Try statement" (toString (repr s)))
     let tryLabel := s!"try_end_{s.toAst.ann.start.byteIdx}"
