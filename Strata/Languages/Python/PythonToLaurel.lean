@@ -1361,12 +1361,15 @@ partial def exceptHandlerToBlock
         (ctx: TranslationContext)
         (h : Python.excepthandler SourceRange) : Except TranslationError (StmtExprMd × StmtExprMd) := do
   match h with
-  | .ExceptHandler sr errorTy _ body =>
+  | .ExceptHandler sr errorTy errorVar body =>
     let md := sourceRangeToMetaData ctx.filePath sr
     let errorTy:= match errorTy.val with
       | .some errorTy => pyExprToString errorTy
       | .none => "exception"
     let (_, bodyStmts) ← translateStmtList ctx body.val.toList
+    let errorVarSet := errorVar.val.toList.map (fun e =>
+        mkStmtExprMd $ .Assign [mkStmtExprMd (StmtExpr.FieldSelect (freeVar e.val) "coreError")] maybeExceptVar)
+    let bodyStmts := errorVarSet ++ bodyStmts
     return (errTyToGuard errorTy, mkStmtExprMdWithLoc (StmtExpr.Block bodyStmts none) md)
 
 partial def exceptHandlersToIfStmt
@@ -1540,6 +1543,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   | .Import _ _ | .ImportFrom _ _ _ _ |.Pass _ => return (ctx, [])
 
   -- Try/except - wrap body with exception checks and handlers
+  | .Try _ body handlers orelse final => do
     if orelse.val.size > 0 then
       throw (.unsupportedConstruct "Unsupported or_else block in Try statement" (toString (repr s)))
     if final.val.size > 0 then
@@ -2344,7 +2348,8 @@ def pythonToLaurel' (info : PreludeInfo)
   let pyErrorTy : CompositeType := {
     name := {text := "PythonError", md := default }
     extending := []  -- No inheritance support for now
-    fields := [{name:= "response", isMutable:= false, type:= AnyTy}]
+    fields := [{name:= "response", isMutable:= false, type:= AnyTy},
+              {name:= "coreError", isMutable:= true, type:= mkHighTypeMd $ .TCore "Error"}]
     instanceProcedures := []
   }
 
