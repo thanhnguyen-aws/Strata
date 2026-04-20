@@ -1547,7 +1547,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     if orelse.val.size > 0 then
       throw (.unsupportedConstruct "Unsupported or_else block in Try statement" (toString (repr s)))
     if final.val.size > 0 then
-      throw (.unsupportedConstruct "Unsupport finalize block in Try statement" (toString (repr s)))
+      throw (.unsupportedConstruct "Unsupported finalize block in Try statement" (toString (repr s)))
     let tryLabel := s!"try_end_{s.toAst.ann.start.byteIdx}"
     let catchersLabel := s!"exception_handlers_{s.toAst.ann.start.byteIdx}"
     let (bodyCtx, bodyStmts) ← translateStmtList {ctx with isInsideTryBlock:=true} body.val.toList
