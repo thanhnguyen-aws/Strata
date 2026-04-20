@@ -1,4 +1,6 @@
-test_havoc_callee_after_hole_call.py(3, 0): ✅ pass - assert_assert(38)_calls_Any_to_bool_0
+test_havoc_callee_after_hole_call.py(3, 0): ✅ pass - assert_assert(40)_calls_Any_to_bool_0
 test_havoc_callee_after_hole_call.py(3, 0): ❓ unknown - expected unknown because xs should be havocked
-DETAIL: 1 passed, 0 failed, 1 inconclusive
+test_havoc_callee_after_hole_call.py(8, 0): ✅ pass - assert_assert(155)_calls_Any_to_bool_0
+test_havoc_callee_after_hole_call.py(8, 0): ❓ unknown - expected unknown because xs should be havocked
+DETAIL: 2 passed, 0 failed, 2 inconclusive
 RESULT: Inconclusive
