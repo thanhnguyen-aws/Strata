@@ -542,6 +542,10 @@ function Any_len_to_Any (v: Any) : Any {
   from_int(Any_len(v))
 };
 
+procedure Any_len_pos(v: Any)
+  invokeOn Any_len(v)
+  ensures Any_len(v) >= 0;
+
 function PIn (v: Any, dictOrList: Any) : Any
   requires (Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(v)) || Any..isfrom_ListAny(dictOrList)
 {
