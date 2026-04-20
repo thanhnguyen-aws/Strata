@@ -1863,11 +1863,7 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
     -- Translate parameters
     let mut inputs : List Parameter := []
 
-    inputs := funcDecl.args.map (fun arg =>
-    --    if arg.tys.length == 1 && isCompositeType ctx arg.tys[0]! then
-    --      { name := arg.name, type := mkHighTypeMd (.UserDefined {text:= arg.tys[0]!, md := default}) }
-    --    else
-          { name := arg.name, type := AnyTy})
+    inputs := funcDecl.args.map (fun arg => { name := arg.name, type := AnyTy})
 
     match funcDecl.kwargsName with
     | some kwargs => inputs:= inputs ++ [{ name := kwargs, type := mkCoreType PyLauType.DictStrAny}]
