@@ -1589,9 +1589,13 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     let block := mkStmtExprMdWithLoc (StmtExpr.Block (setupStmts ++ bodyStmts ++ cleanupStmts) none) md
     return (bodyCtx, [block])
 
-  -- For loop: for target in iter: body (target may be any assignment target)
-  -- Abstract: execute body once with havoc'd target, then havoc all modified variables
-  -- This is sound: if there are 0 iterations, we havoc; if >0, we execute once and havoc
+  -- For loop is translated into a while loop:
+  -- for x in iter : \n body
+  -- is translated into
+  -- @for_loop_counter_xxx = 0
+  -- while (@for_loop_counter_xxx < Any_len(iter)):
+  --  body
+  --  @for_loop_counter_xxx += 1
   | .For _ target iter body _orelse _ => do
     -- The iterator expression (we abstract it away)
     let iterExpr ← translateExpr ctx iter
@@ -1621,17 +1625,13 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
             if ¬ (isAnyNone stopExpr && isAnyNone stepExpr) then
               throw (.unsupportedConstruct "Unsupport range function with more than 1 input" (toString (repr iter)))
             let asIntStart := mkStmtExprMd $ .StaticCall "Any..as_int!" [startExpr]
-            let emptyRangeExit := mkStmtExprMdWithLoc (.IfThenElse
-              (mkStmtExprMd $ .PrimitiveOp .Leq [asIntStart, mkStmtExprMd $ .LiteralInt 0])
-              (mkStmtExprMd $ .Exit breakLabel)
-              none) md
             let assumeTypeInt := mkStmtExprMdWithLoc (.Assume $ mkStmtExprMd (.StaticCall "Any..isfrom_int" [targetVar])) md
             let asIntTarget := mkStmtExprMd $ .StaticCall "Any..as_int!" [targetVar]
             let inRangeExpr := mkStmtExprMd $ .PrimitiveOp .And [
                   (mkStmtExprMd $ .PrimitiveOp .Geq [asIntTarget, mkStmtExprMd $ .LiteralInt 0]),
                   (mkStmtExprMd $ .PrimitiveOp .Lt [asIntTarget, asIntStart]) ]
             let assumeInRange := mkStmtExprMdWithLoc (.Assume inRangeExpr) md
-            pure [emptyRangeExit, assumeTypeInt, assumeInRange]
+            pure [assumeTypeInt, assumeInRange]
           | _ =>
             let targetInIter := mkStmtExprMd (.StaticCall "PIn" [targetVar, iterExpr])
             let assumeInStmt := mkStmtExprMdWithLoc (.Assume (Any_to_bool targetInIter)) md
@@ -1644,11 +1644,11 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
       | _ =>
           mkStmtExprMd $ .PrimitiveOp .Lt [counterVar,
                           mkStmtExprMd $ .StaticCall "Any_len" [iterExpr]]
-    let bodyStmts := assumeStmts ++ bodyStmts ++ [counterIncrease]
+    let bodyStmts := targetDecls ++ assumeStmts ++ bodyStmts ++ [counterIncrease]
     let innerBlock := mkStmtExprMd (StmtExpr.Block bodyStmts (some continueLabel))
     let loopStmt := mkStmtExprMdWithLoc (StmtExpr.While counterLtLen [] none innerBlock) md
     let loopBlock := mkStmtExprMdWithLoc (StmtExpr.Block [loopStmt] (some breakLabel)) md
-    return (finalCtx, (getExceptionAssertions ctx iterExpr) ++ [counterDecl] ++ targetDecls ++ [loopBlock])
+    return (finalCtx, (getExceptionAssertions ctx iterExpr) ++ [counterDecl] ++ [loopBlock])
 
   | .Break _ =>
     match ctx.loopBreakLabel with
