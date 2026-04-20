@@ -9,6 +9,7 @@ public import Strata.Languages.Laurel.Laurel
 public import Strata.Languages.Laurel.Grammar.AbstractToConcreteTreeTranslator
 import Strata.Util.Tactics
 import Strata.Languages.Python.PythonLaurelCorePrelude
+import Strata.Languages.Laurel.HeapParameterizationConstants
 
 /-!
 # Name Resolution Pass
@@ -60,6 +61,10 @@ definition each reference resolves to.
 namespace Strata.Laurel
 
 public section
+
+def boxType : String := "Box"
+def fieldType : String := "Field"
+def heapVarName := "$heap"
 
 /-! ## ResolvedNode — the target of a resolved reference -/
 
@@ -199,7 +204,9 @@ def defineNameCheckDup (iden : Identifier) (node : ResolvedNode) (overrideResolu
     defineName iden node overrideResolutionName
 
 def inHeapParameterizationConstants (name : Identifier) : Bool :=
-  name.text ∈ ["Composite", "readField", "updateField", "$heap", "Field"] || name.text.startsWith "Box.." || name.text.startsWith "Field.."
+  let heapDatatype := heapConstants.types.filterMap (λ t => match t with |.Datatype dt => dt.name.text | _ => none)
+  let heapFunction := heapConstants.staticProcedures.map (λ p => p.name.text)
+  name.text ∈ heapDatatype ++ heapFunction ++ [boxType, fieldType, heapVarName] || name.text.startsWith s!"{boxType}.." || name.text.startsWith s!"{fieldType}.."
 
 /-- Resolve a reference: look up the name in scope and assign the definition's ID.
     Returns the identifier with its ID filled in. -/

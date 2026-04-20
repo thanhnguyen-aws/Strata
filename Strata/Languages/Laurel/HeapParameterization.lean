@@ -49,7 +49,6 @@ structure AnalysisResult where
   writesHeapDirectly : Bool := false
   callees : List Identifier := []
 
-
 mutual
 def collectExprMd (expr : StmtExprMd) : StateM AnalysisResult Unit := collectExpr expr.val
   termination_by sizeOf expr
@@ -173,52 +172,52 @@ private def isDatatype (model : SemanticModel) (name : Identifier) : Bool :=
   | _ => false
 
 /-- Get the Box destructor name for a given Laurel HighType.
-    For UserDefined datatypes, uses "Box..<datatypeName>Val!";
-    for Composite types, uses "Box..compositeVal!". -/
+    For UserDefined datatypes, uses s!"{boxType}..<datatypeName>Val!";
+    for Composite types, uses s!"{boxType}..compositeVal!". -/
 def boxDestructorName (model : SemanticModel) (ty : HighType) : Identifier :=
   match ty with
-  | .TInt => "Box..intVal!"
-  | .TBool => "Box..boolVal!"
-  | .TFloat64 => "Box..float64Val!"
-  | .TReal => "Box..realVal!"
-  | .TString => "Box..stringVal!"
+  | .TInt => s!"{boxType}..intVal!"
+  | .TBool => s!"{boxType}..boolVal!"
+  | .TFloat64 => s!"{boxType}..float64Val!"
+  | .TReal => s!"{boxType}..realVal!"
+  | .TString => s!"{boxType}..stringVal!"
   | .UserDefined name =>
-      if isDatatype model name then s!"Box..{name.text}Val!"
-      else "Box..compositeVal!"
-  | .TCore name => s!"Box..{name}Val!"
+      if isDatatype model name then s!"{boxType}..{name.text}Val!"
+      else s!"{boxType}..compositeVal!"
+  | .TCore name => s!"{boxType}..{name}Val!"
   | _ => dbg_trace f!"BUG, boxDestructorName bad type {ty}"; "boxDestructorNameError"
 
 /-- Get the Box constructor name for a given Laurel HighType.
-    For UserDefined datatypes, uses "Box..<datatypeName>";
-    for Composite types, uses "BoxComposite". -/
+    For UserDefined datatypes, uses s!"{boxType}..<datatypeName>";
+    for Composite types, uses s!"{boxType}Composite". -/
 def boxConstructorName (model : SemanticModel) (ty : HighType) : Identifier :=
   match ty with
-  | .TInt => "BoxInt"
-  | .TBool => "BoxBool"
-  | .TFloat64 => "BoxFloat64"
-  | .TReal => "BoxReal"
-  | .TString => "BoxString"
+  | .TInt => s!"{boxType}Int"
+  | .TBool => s!"{boxType}Bool"
+  | .TFloat64 => s!"{boxType}Float64"
+  | .TReal => s!"{boxType}Real"
+  | .TString => s!"{boxType}String"
   | .UserDefined name =>
-      if isDatatype model name then s!"Box..{name.text}"
-      else "BoxComposite"
-  | .TCore name => s!"Box..{name}"
+      if isDatatype model name then s!"{boxType}..{name.text}"
+      else s!"{boxType}Composite"
+  | .TCore name => s!"{boxType}..{name}"
   | ty => dbg_trace s!"BUG, boxConstructorName bad type: {repr ty}"; "boxConstructorNameError"
 
 /-- Build the DatatypeConstructor for a Box variant from a HighType, for datatype generation -/
 private def boxConstructorDef (model : SemanticModel) (ty : HighType) : Option DatatypeConstructor :=
   match ty with
-  | .TInt => some { name := "BoxInt", args := [{ name := "intVal", type := ⟨.TInt, none, #[]⟩ }] }
-  | .TBool => some { name := "BoxBool", args := [{ name := "boolVal", type := ⟨.TBool, none, #[]⟩ }] }
-  | .TReal => some { name := "BoxReal", args := [{ name := "realVal", type := ⟨.TReal, none, #[]⟩ }] }
-  | .TFloat64 => some { name := "BoxFloat64", args := [{ name := "float64Val", type := ⟨.TFloat64, none, #[]⟩ }] }
-  | .TString => some { name := "BoxString", args := [{ name := "stringVal", type := ⟨.TString, none, #[]⟩ }] }
+  | .TInt => some { name := s!"{boxType}Int", args := [{ name := "intVal", type := ⟨.TInt, none, #[]⟩ }] }
+  | .TBool => some { name := s!"{boxType}Bool", args := [{ name := "boolVal", type := ⟨.TBool, none, #[]⟩ }] }
+  | .TReal => some { name := s!"{boxType}Real", args := [{ name := "realVal", type := ⟨.TReal, none, #[]⟩ }] }
+  | .TFloat64 => some { name := s!"{boxType}Float64", args := [{ name := "float64Val", type := ⟨.TFloat64, none, #[]⟩ }] }
+  | .TString => some { name := s!"{boxType}String", args := [{ name := "stringVal", type := ⟨.TString, none, #[]⟩ }] }
   | .UserDefined name =>
       if isDatatype model name then
-        some { name := s!"Box..{name.text}", args := [{ name := s!"{name.text}Val", type := ⟨.UserDefined name, none, #[]⟩ }] }
+        some { name := s!"{boxType}..{name.text}", args := [{ name := s!"{name.text}Val", type := ⟨.UserDefined name, none, #[]⟩ }] }
       else
-        some { name := "BoxComposite", args := [{ name := "compositeVal", type := ⟨.UserDefined "Composite", none, #[]⟩ }] }
+        some { name := s!"{boxType}Composite", args := [{ name := "compositeVal", type := ⟨.UserDefined "Composite", none, #[]⟩ }] }
   | .TCore name =>
-        some { name := s!"Box..{name}", args := [{ name := s!"{name}Val", type := ⟨.TCore name, none, #[]⟩ }] }
+        some { name := s!"{boxType}..{name}", args := [{ name := s!"{name}Val", type := ⟨.TCore name, none, #[]⟩ }] }
   | ty => dbg_trace s!"BUG, boxConstructorDef bad type: {repr ty}"; none
 
 /-- Record a Box constructor use in the transform state -/
@@ -396,14 +395,16 @@ where
     termination_by sizeOf exprMd
 
 def heapTransformProcedure (model: SemanticModel) (proc : Procedure) : TransformM Procedure := do
-  let heapName : Identifier := "$heap"
+  let heapName : Identifier := heapVarName
   let heapInName : Identifier := "$heap_in"
   let readsHeap := (← get).heapReaders.contains proc.name
   let writesHeap := (← get).heapWriters.contains proc.name
 
   if writesHeap then
+    -- If this procedure is not functional:
     -- This procedure writes the heap - add $heap_in as input and $heap as output
     -- At the start, assign $heap_in to $heap, then use $heap throughout
+    -- In case this procedure is functional, we use $heap directly
     let heapInParam : Parameter := { name := if proc.isFunctional then heapName else heapInName, type := ⟨.THeap, none, #[]⟩ }
     let heapOutParam : Parameter := { name := heapName, type := ⟨.THeap, none, #[]⟩ }
 
@@ -494,7 +495,7 @@ def heapParameterization (model: SemanticModel) (program : Program) : Program :=
     | .Composite ct => acc ++ ct.fields.map (fun f => (mkId $ ct.name.text ++ "." ++ f.name.text))
     | _ => acc) ([] : List Identifier)
   let fieldDatatype : TypeDefinition :=
-    .Datatype { name := "Field", typeArgs := [], constructors := fieldNames.map fun n => { name := n, args := [] } }
+    .Datatype { name := fieldType, typeArgs := [], constructors := fieldNames.map fun n => { name := n, args := [] } }
   -- Remove fields from composite types since they are now stored in the heap
   -- Also transform instance procedures, accumulating used Box constructors
   let (types', state2) := program.types.foldl (fun (accTypes, accState) td =>
@@ -506,7 +507,7 @@ def heapParameterization (model: SemanticModel) (program : Program) : Program :=
     ([], state1)
   -- Generate Box datatype from all constructors used during transformation
   let boxDatatype : TypeDefinition :=
-    .Datatype { name := "Box", typeArgs := [], constructors := state2.usedBoxConstructors }
+    .Datatype { name := boxType, typeArgs := [], constructors := state2.usedBoxConstructors }
   { program with
     staticProcedures := heapConstants.staticProcedures ++ procs',
     types := fieldDatatype :: boxDatatype :: heapConstants.types ++ types' }
