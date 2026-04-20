@@ -58,7 +58,7 @@ SKIP_TESTS = BOTH_SKIP | {
     "test_subscription",
     "test_try_except",
     "test_try_except_scoping",
-    "test_tuple_creat",
+    "test_tuple_create",
     "test_tuple_swap",
     "test_tuple_type",
     "test_tuple_unpack",
