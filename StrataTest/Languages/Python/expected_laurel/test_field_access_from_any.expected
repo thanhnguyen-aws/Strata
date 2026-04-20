@@ -1,24 +1,42 @@
-test_field_access_from_any.py(11, 11): ❓ unknown - assert_assert(195)_calls_Any_read_field_0
-test_field_access_from_any.py(11, 11): ✅ pass - assert_assert(195)_calls_Any_read_field_1
-test_field_access_from_any.py(11, 11): ❓ unknown - Check PMul exception
-test_field_access_from_any.py(11, 4): ❓ unknown - set_LaurelResult_calls_Any_read_field_0
-test_field_access_from_any.py(11, 4): ✅ pass - set_LaurelResult_calls_Any_read_field_1
-test_field_access_from_any.py(10, 29): ❓ unknown - (pure_double ensures) Return type constraint
-test_field_access_from_any.py(14, 4): ❓ unknown - assert_assert(243)_calls_Any_read_field_0
-test_field_access_from_any.py(14, 4): ✅ pass - assert_assert(243)_calls_Any_read_field_1
-test_field_access_from_any.py(14, 4): ❓ unknown - Check PMul exception
-unknown location: ❓ unknown - set_$heap_calls_Any_read_field_0
+test_field_access_from_any.py(10, 19): ❓ unknown - (some_cond ensures) Return type constraint
+test_field_access_from_any.py(13, 0): ✅ pass - callElimAssert_requires_13
+test_field_access_from_any.py(14, 0): ✅ pass - callElimAssert_requires_7
+test_field_access_from_any.py(21, 0): ✅ pass - set_a_or_b_calls_Any_to_bool_0
+test_field_access_from_any.py(23, 13): ✅ pass - assert_assert(345)_calls_Any_read_field_0
+test_field_access_from_any.py(23, 13): ✅ pass - assert_assert(345)_calls_Any_read_field_1
+test_field_access_from_any.py(23, 13): ❓ unknown - Check PMul exception
+unknown location: ✅ pass - set_$heap_calls_Any_read_field_0
 unknown location: ✅ pass - set_$heap_calls_Any_read_field_1
-unknown location: ❓ unknown - set_$heap_calls_Any_update_field_2
+unknown location: ✅ pass - set_$heap_calls_Any_update_field_2
 unknown location: ✅ pass - set_$heap_calls_Any_update_field_3
-test_field_access_from_any.py(13, 0): ❓ unknown - postcondition
-test_field_access_from_any.py(16, 0): ✅ pass - callElimAssert_requires_24
-test_field_access_from_any.py(18, 0): ✅ pass - assert_assert(303)_calls_Any_to_bool_0
-test_field_access_from_any.py(18, 0): ❓ unknown - assert(303)
-test_field_access_from_any.py(20, 0): ✅ pass - callElimAssert_requires_14
-test_field_access_from_any.py(22, 0): ✅ pass - assert_assert(365)_calls_Any_to_bool_0
-test_field_access_from_any.py(22, 0): ❓ unknown - assert(365)
-test_field_access_from_any.py(25, 0): ✅ pass - assert_assert(406)_calls_Any_to_bool_0
-test_field_access_from_any.py(25, 0): ❓ unknown - assert(406)
-DETAIL: 10 passed, 0 failed, 12 inconclusive
+test_field_access_from_any.py(25, 7): ✅ pass - assert_assert(368)_calls_Any_read_field_0
+test_field_access_from_any.py(25, 7): ✅ pass - assert_assert(368)_calls_Any_read_field_1
+test_field_access_from_any.py(25, 7): ✅ pass - assert_assert(368)_calls_Any_read_field_2
+test_field_access_from_any.py(25, 7): ✅ pass - assert_assert(368)_calls_Any_read_field_3
+test_field_access_from_any.py(25, 7): ✅ pass - assert_assert(368)_calls_POr_4
+test_field_access_from_any.py(25, 7): ✅ pass - Check POr exception
+test_field_access_from_any.py(25, 0): ✅ pass - assert_assert(361)_calls_Any_read_field_0
+test_field_access_from_any.py(25, 0): ✅ pass - assert_assert(361)_calls_Any_read_field_1
+test_field_access_from_any.py(25, 0): ✅ pass - assert_assert(361)_calls_Any_read_field_2
+test_field_access_from_any.py(25, 0): ✅ pass - assert_assert(361)_calls_Any_read_field_3
+test_field_access_from_any.py(25, 0): ✅ pass - assert_assert(361)_calls_POr_4
+test_field_access_from_any.py(25, 0): ✅ pass - assert_assert(361)_calls_Any_to_bool_5
+test_field_access_from_any.py(25, 0): ✅ pass - assert(361)
+test_field_access_from_any.py(27, 7): ✅ pass - assert_assert(431)_calls_PAnd_0
+test_field_access_from_any.py(27, 7): ✅ pass - assert_assert(431)_calls_POr_1
+test_field_access_from_any.py(27, 7): ✅ pass - Check POr exception
+test_field_access_from_any.py(27, 0): ✅ pass - assert_assert(424)_calls_PAnd_0
+test_field_access_from_any.py(27, 0): ✅ pass - assert_assert(424)_calls_POr_1
+test_field_access_from_any.py(27, 0): ✅ pass - assert_assert(424)_calls_Any_to_bool_2
+test_field_access_from_any.py(27, 0): ✅ pass - assert(424)
+test_field_access_from_any.py(29, 7): ✅ pass - assert_assert(499)_calls_PAnd_0
+test_field_access_from_any.py(29, 7): ✅ pass - assert_assert(499)_calls_POr_1
+test_field_access_from_any.py(29, 7): ✅ pass - Check POr exception
+test_field_access_from_any.py(29, 0): ✅ pass - assert_assert(492)_calls_PAnd_0
+test_field_access_from_any.py(29, 0): ✅ pass - assert_assert(492)_calls_POr_1
+test_field_access_from_any.py(29, 0): ✅ pass - assert_assert(492)_calls_Any_to_bool_2
+test_field_access_from_any.py(29, 0): ✅ pass - assert(492)
+test_field_access_from_any.py(31, 0): ✅ pass - assert_assert(566)_calls_Any_to_bool_0
+test_field_access_from_any.py(31, 0): ❓ unknown - expected unknown
+DETAIL: 37 passed, 0 failed, 3 inconclusive
 RESULT: Inconclusive

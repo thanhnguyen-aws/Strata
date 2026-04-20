@@ -7,20 +7,25 @@ class ClassB:
     def __init__(self, n: int):
         self.val : int = n
 
-def pure_double(buf: Any) -> int :
-    return buf.val * 2
-
-def modified_double(buf: Any):
-    buf.val *= 2
+def some_cond() -> bool :
+    pass
 
 class_a = ClassA(1)
-r1 = pure_double(class_a)
-assert r1 == 2
-
 class_b = ClassB(2)
-r2 = pure_double(class_b)
-assert r2 == 4
 
-modified_double(class_a)
-assert class_a.val == 2
+a_val = class_a.val
+b_val = class_b.val
 
+cond = some_cond()
+
+a_or_b : Any = class_a if cond else class_b
+
+a_or_b.val = a_or_b.val * 2
+
+assert (a_or_b.val == a_val * 2) or (a_or_b.val == b_val * 2)
+
+assert cond or (class_a.val == a_val and class_b.val == b_val * 2)
+
+assert (not cond) or (class_a.val == a_val * 2 and class_b.val == b_val)
+
+assert class_a.val == a_val , "expected unknown"
