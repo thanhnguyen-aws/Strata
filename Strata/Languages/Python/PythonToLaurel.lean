@@ -1492,6 +1492,18 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
       if let .Call _ _ _ _ := value then
         [mkStmtExprMdWithLoc (StmtExpr.Assign [maybeExceptVar] (mkStmtExprMd (.Hole false none))) md]
       else []
+
+    let calleeHavoc :=
+      if let .Call _ (.Attribute _ callee _ _) _ _ := value then
+        let (base, _) := getListAttributes callee
+        if let .Name _ n _ := base then
+          if n.val ∈ ctx.variableTypes.unzip.fst then
+            [mkStmtExprMdWithLoc (StmtExpr.Assign [freeVar n.val] (mkStmtExprMd (.Hole false none))) md]
+          else
+            []
+        else []
+      else []
+
     match expr.val with
     | .StaticCall fnname _ =>
         match ctx.functionSignatures.find? (λ funsig => funsig.name == fnname) with
@@ -1505,7 +1517,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
         | _ => return (ctx, exceptionCheck ++ [expr])
     -- Unmodeled call: skip exception checks (no model to check against),
     -- but havoc maybe_except since the call could throw.
-    | .Hole => return (ctx, [expr] ++ holeExceptHavoc)
+    | .Hole => return (ctx, [expr] ++ holeExceptHavoc ++ calleeHavoc)
     | _ => return (ctx, exceptionCheck ++ [expr])
 
   | .Import _ _ | .ImportFrom _ _ _ _ |.Pass _ => return (ctx, [])
