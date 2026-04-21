@@ -6,7 +6,7 @@
 
 -- This module serves as the root of the `Strata` library.
 -- In each category, imports are sorted by alphabetical order.
-
+module
 /- DDM -/
 import Strata.DDM.Integration.Lean
 import Strata.DDM.Ion
@@ -24,7 +24,7 @@ import Strata.Languages.Core.FactoryWF
 import Strata.Languages.Core.SeqModel
 import Strata.Languages.Core.StatementSemantics
 import Strata.Languages.Core.SarifOutput
-import Strata.Languages.Laurel.LaurelToCoreTranslator
+import Strata.Languages.Laurel.LaurelCompilationPipeline
 
 /- Code Transforms -/
 import Strata.Transform.CallElimCorrect

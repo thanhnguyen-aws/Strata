@@ -3,8 +3,10 @@
 
   SPDX-License-Identifier: Apache-2.0 OR MIT
 -/
+module
 
-import Strata.Languages.Core.DDMTransform.Grammar
+public import Strata.Languages.Core.DDMTransform.Grammar
+meta import Strata.DDM.Integration.Lean
 
 ---------------------------------------------------------------------
 
@@ -29,8 +31,11 @@ dialect Boole;
 
 import Core;
 
-// Unicode quantifier aliases use the same `::` separator as the ASCII forms.
-// The legacy dotted separator is normalized earlier in `Strata.DDM.Elab`.
+fn ext_equal (tp : Type, a : tp, b : tp) : bool => @[prec(15)] a " =~= " b;
+
+// Unicode dotted quantifiers are normalized earlier in `Strata.DDM.Elab`.
+// This keeps modern surface syntax such as `∀ x . P` working while the DDM
+// grammar continues to elaborate through the legacy `::` separator.
 fn forall_unicode (d : DeclList, @[scope(d)] b : bool) : bool =>
   "∀ " d " :: " b:3;
 fn exists_unicode (d : DeclList, @[scope(d)] b : bool) : bool =>

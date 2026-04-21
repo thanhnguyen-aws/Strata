@@ -78,7 +78,7 @@ private partial def collectHighTypeNames (ty : HighTypeMd) : CollectM Unit := do
   | .Pure base => collectHighTypeNames base
   | .Intersection types => types.forM collectHighTypeNames
   | .TVoid | .TBool | .TInt | .TFloat64 | .TReal | .TString | .THeap
-  | .Unknown => pure ()
+  | .TBv _ | .Unknown => pure ()
 
 /-- Collect all referenced names (procedure calls, type references) from a StmtExpr tree. -/
 private partial def collectExprNames (expr : StmtExprMd) : CollectM Unit := do
@@ -143,9 +143,6 @@ private def collectProcDeps (proc : Procedure) : CollectM Unit := do
   proc.preconditions.forM collectExprNames
   proc.decreases.forM collectExprNames
   proc.invokeOn.forM collectExprNames
-  match proc.determinism with
-  | .deterministic mreads => mreads.mapM collectExprNames
-  | .nondeterministic => pure ()
   collectBodyNames proc.body
 
 /-- Collect all names referenced by a type definition. -/
@@ -162,6 +159,8 @@ private def collectTypeDefDeps (td : TypeDefinition) : CollectM Unit := do
   | .Datatype dt =>
     for c in dt.constructors do
       c.args.forM fun arg => collectHighTypeNames arg.type
+  | .Alias ta =>
+    collectHighTypeNames ta.target
 
 /-- Run a CollectM action and return the collected state. -/
 private def runCollect (action : CollectM Unit) : CollectState :=

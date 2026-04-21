@@ -11,14 +11,6 @@ public section
 
 namespace List
 
-theorem List.subset_append_cons_right {α : Type} [DecidableEq α] {a b c : List α} {x : α}
-  (h : a ⊆ (b ++ c)) : a ⊆ b ++ (x :: c) := by
-  simp_all [List.instHasSubset, List.Subset]
-  intro e he
-  have := @h e he
-  cases this <;> simp_all
-  done
-
 /--
 Remove duplicates in a list.
 -/
@@ -348,8 +340,7 @@ theorem length_dedup_append_all_in_right {α : Type} [DecidableEq α] (l₁ l₂
 theorem length_dedup_append_subset_right {α : Type} [DecidableEq α] (l₁ l₂ : List α)
   (h : l₁ ⊆ l₂) :
   (l₁ ++ l₂).dedup.length = l₂.dedup.length := by
-  simp_all [List.instHasSubset, List.Subset]
-  exact @length_dedup_append_all_in_right _ _ l₁ l₂ (by simp_all)
+  exact @length_dedup_append_all_in_right _ _ l₁ l₂ (by grind)
 
 theorem length_dedup_append_all_in_left {α : Type} [DecidableEq α] (l₁ l₂ : List α)
   (h : l₂.all (fun e => e ∈ l₁)) :
@@ -380,7 +371,7 @@ theorem length_dedup_subset_eq {α : Type} [DecidableEq α] (l₁ l₂ : List α
   (h1 : l₁ ⊆ l₂) (h2 : l₂ ⊆ l₁) :
   l₁.dedup.length = l₂.dedup.length := by
   have := @length_dedup_all_in_eq _ _ l₁ l₂
-  simp_all [List.instHasSubset, List.Subset]
+  grind
 
 theorem length_dedup_append_le_right {α : Type} [DecidableEq α] (l₁ l₂ : List α) :
   l₂.dedup.length ≤ (l₁ ++ l₂).dedup.length := by
@@ -429,7 +420,7 @@ theorem length_dedup_of_subset_not_mem_lt {α : Type} [DecidableEq α] (l₁ l�
   (h1 : l₁ ⊆ l₂) (h2 : a ∉ l₁) (h3 : a ∈ l₂) :
   l₁.dedup.length < l₂.dedup.length := by
   have := @length_dedup_of_all_in_not_mem_lt _ _ l₁ l₂ a
-  simp_all [List.instHasSubset, List.Subset]
+  grind
 
 theorem length_dedup_of_subset_le {α : Type} [DecidableEq α] (l₁ l₂ : List α)
   (h : l₁ ⊆ l₂) : l₁.dedup.length ≤ l₂.dedup.length := by
@@ -548,6 +539,70 @@ theorem removeAll_not_mem [BEq α] [LawfulBEq α] {x : α} {xs : List α}
   simp only [List.elem_cons, List.elem_nil]
   split <;> simp_all
 
+/-- `foldl` over a zipped subtype list equals `foldl` over the zipped projected list. -/
+theorem foldl_subtype_zip_val
+    {α β γ : Type _} (P : α → Prop)
+    (f : γ → α → β → γ)
+    (init : γ)
+    (l₁ : List { x : α // P x }) (l₂ : List β) :
+    List.foldl (fun acc (p : { x // P x } × β) => f acc p.1.val p.snd) init (l₁.zip l₂) =
+    List.foldl (fun acc (p : α × β) => f acc p.1 p.2) init ((l₁.map Subtype.val).zip l₂) := by
+  induction l₁ generalizing l₂ init with
+  | nil => simp
+  | cons a rest ih =>
+    cases l₂ with
+    | nil => simp
+    | cons b rest₂ =>
+      simp only [List.zip_cons_cons, List.foldl_cons, List.map_cons]
+      exact ih (f init a.val b) rest₂
+
+/-- `foldl` over zipped lists is congruent when the function produces equal
+results on corresponding elements. -/
+theorem foldl_zip_congr
+    {α β γ : Type _}
+    (f : γ → α → β → γ)
+    (l₁ l₁' : List α) (l₂ l₂' : List β)
+    (h_len₁ : l₁.length = l₁'.length)
+    (h_len₂ : l₂.length = l₂'.length)
+    (h_f : ∀ (i : Nat) (hi₁ : i < l₁.length) (hi₂ : i < l₂.length) (acc : γ),
+        f acc (l₁[i]) (l₂[i]) = f acc (l₁'[i]'(h_len₁ ▸ hi₁)) (l₂'[i]'(h_len₂ ▸ hi₂)))
+    (init : γ) :
+    List.foldl (fun acc (p : α × β) => f acc p.1 p.2) init (l₁.zip l₂) =
+    List.foldl (fun acc (p : α × β) => f acc p.1 p.2) init (l₁'.zip l₂') := by
+  induction l₁ generalizing l₁' l₂ l₂' init with
+  | nil =>
+    have : l₁' = [] := by
+      cases l₁' with
+      | nil => rfl
+      | cons _ _ => simp [List.length] at h_len₁
+    subst this; simp
+  | cons a₁ rest₁ ih_list =>
+    cases l₁' with
+    | nil => simp [List.length] at h_len₁
+    | cons a₁' rest₁' =>
+      cases l₂ with
+      | nil =>
+        cases l₂' with
+        | nil => rfl
+        | cons _ _ => simp [List.length] at h_len₂
+      | cons a₂ rest₂ =>
+        cases l₂' with
+        | nil => simp [List.length] at h_len₂
+        | cons a₂' rest₂' =>
+          simp only [List.zip_cons_cons, List.foldl_cons, List.length_cons] at *
+          have h_len₁_rest : rest₁.length = rest₁'.length := Nat.succ.inj h_len₁
+          have h_len₂_rest : rest₂.length = rest₂'.length := Nat.succ.inj h_len₂
+          have h_head : f init a₁ a₂ = f init a₁' a₂' := by
+            have := h_f 0 (Nat.zero_lt_succ _) (Nat.zero_lt_succ _) init
+            simp [List.getElem_cons_zero] at this
+            exact this
+          rw [h_head]
+          refine ih_list rest₁' rest₂ rest₂' h_len₁_rest h_len₂_rest ?_ (f init a₁' a₂')
+          intro i hi₁ hi₂ acc
+          have := h_f (i + 1) (Nat.succ_lt_succ hi₁) (Nat.succ_lt_succ hi₂) acc
+          simp [List.getElem_cons_succ] at this
+          exact this
+
 theorem nodup_map_injOn {α β : Type} [DecidableEq β] {f : α → β} {l : List α}
     (hnd : (l.map f).Nodup) {a b : α} (ha : a ∈ l) (hb : b ∈ l) (hab : f a = f b) : a = b := by
   induction l with
@@ -563,4 +618,60 @@ theorem nodup_map_injOn {α β : Type} [DecidableEq β] {f : α → β} {l : Lis
       | tail _ hb => exact ih hnd.2 ha hb
 
 end List
+
+/-! ### List.Forall₂ -/
+
+/-- Pointwise relation between two lists. -/
+inductive List.Forall₂ (R : α → β → Prop) : List α → List β → Prop where
+  | nil : Forall₂ R [] []
+  | cons : R a b → Forall₂ R as bs → Forall₂ R (a :: as) (b :: bs)
+
+theorem List.Forall₂.head {R : α → β → Prop} (h : Forall₂ R (a :: as) (b :: bs)) : R a b := by
+  cases h; assumption
+
+theorem List.Forall₂.tail {R : α → β → Prop} (h : Forall₂ R (a :: as) (b :: bs)) : Forall₂ R as bs := by
+  cases h; assumption
+
+theorem List.Forall₂.length_eq {R : α → β → Prop} {as : List α} {bs : List β}
+    (h : Forall₂ R as bs) : as.length = bs.length := by
+  induction h with
+  | nil => rfl
+  | cons _ _ ih => simp [ih]
+
+theorem List.Forall₂.get? {R : α → β → Prop} {as : List α} {bs : List β}
+    (h : Forall₂ R as bs) (i : Nat) (ha : as[i]? = some a) (hb : bs[i]? = some b)
+    : R a b := by
+  induction h generalizing i with
+  | nil => simp at ha
+  | cons h_head _ ih =>
+    cases i with
+    | zero => simp at ha hb; cases ha; cases hb; exact h_head
+    | succ n => simp at ha hb; exact ih n ha hb
+
+/-- If `Forall₂ R l1 l2` and `l1[i]? = some a`, then there exists `b` with
+`l2[i]? = some b` and `R a b`. -/
+theorem List.Forall₂.getElem?_some {R : α → β → Prop}
+    {l1 : List α} {l2 : List β}
+    (h : List.Forall₂ R l1 l2) {i : Nat} {a : α}
+    (ha : l1[i]? = some a)
+    : ∃ b, l2[i]? = some b ∧ R a b := by
+  induction h generalizing i with
+  | nil => simp at ha
+  | cons hr _ ih =>
+    cases i with
+    | zero => simp at ha; subst ha; exact ⟨_, rfl, hr⟩
+    | succ n => simp only [List.getElem?_cons_succ] at ha ⊢; exact ih ha
+
+/-! ### Zip / map lemmas -/
+
+theorem zip_map_fst_eq {α β: Type} (l1: List α) (l2: List β) :
+  List.length l1 = List.length l2 →
+  (l1.zip l2).map Prod.fst = l1 := by
+  induction l1 generalizing l2 <;> cases l2 <;> simp_all
+
+theorem zip_map_snd_eq {α β: Type} (l1: List α) (l2: List β) :
+  List.length l1 = List.length l2 →
+  (l1.zip l2).map Prod.snd = l2 := by
+  induction l1 generalizing l2 <;> cases l2 <;> simp_all
+
 end

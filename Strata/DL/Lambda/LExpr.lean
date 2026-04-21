@@ -266,6 +266,7 @@ def LExpr.sizeOf: LExpr T → Nat
 /--
 Get type of a constant `c`
 -/
+@[expose]
 def LConst.ty (c: LConst) : LMonoTy :=
   match c with
   | .intConst _ => .int
@@ -505,6 +506,7 @@ def size (T : LExprParamsT) (e : LExpr T) : Nat :=
 Erase all type annotations from `e` except the bound variables of abstractions
 and quantified expressions.
 -/
+@[expose]
 def eraseTypes {T : LExprParamsT} (e : LExpr T) : LExpr T :=
   match e with
   | .const m c => .const m c
@@ -1167,6 +1169,28 @@ elab "es[" e:lexpr "]" : term => elabLExpr (T:=⟨Unit, Unit⟩) e
 -- Syntax tests moved to StrataTest/DL/Lambda/LExprSyntaxTests.lean
 
 end Syntax
+
+---------------------------------------------------------------------
+
+/-- `mkApp` distributes over list append. -/
+theorem mkApp_append {T : LExprParamsT}
+    (m : T.base.Metadata) (fn : LExpr T)
+    (xs ys : List (LExpr T)) :
+    LExpr.mkApp m fn (xs ++ ys) = LExpr.mkApp m (LExpr.mkApp m fn xs) ys := by
+  induction xs generalizing fn with
+  | nil => simp [LExpr.mkApp]
+  | cons x rest ih => simp [LExpr.mkApp, ih]
+
+/-- `eraseMetadata` commutes with `mkApp`. -/
+theorem eraseMetadata_mkApp {T : LExprParamsT}
+    (m : T.base.Metadata) (op : LExpr T) (args : List (LExpr T)) :
+    (LExpr.mkApp m op args).eraseMetadata =
+      LExpr.mkApp () op.eraseMetadata (args.map LExpr.eraseMetadata) := by
+  induction args generalizing op with
+  | nil => simp [LExpr.mkApp]
+  | cons a rest ih =>
+    simp only [LExpr.mkApp, List.map]
+    exact ih (.app m op a)
 
 ---------------------------------------------------------------------
 
