@@ -1882,6 +1882,7 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
     let typeConstraintPreconditions := funcDecl.args.filterMap
       (fun arg => getUnionTypeConstraint (paramInputPrefix ++ arg.name) arg.md arg.tys funcDecl.name arg.name)
     let typeConstraintPostcondition :=
+      if funcDecl.name.endsWith "@__init__" then [] else
       match funcDecl.ret.map fun (tys, md) => getReturnTypeEnsure md tys funcDecl.name with
         | some (some constraint) => [constraint]
         | _ => []
@@ -1907,7 +1908,10 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
       outputs := outputs
       preconditions := typeConstraintPreconditions
       decreases := none
-      body := Body.Opaque typeConstraintPostcondition bodyBlock []
+      body := if typeConstraintPostcondition.isEmpty then
+                Body.Transparent bodyBlock
+              else
+                Body.Opaque typeConstraintPostcondition bodyBlock []
       isFunctional := false
     }
 
