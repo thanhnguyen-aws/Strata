@@ -699,11 +699,9 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
         | none => return fieldExpr
 
   -- List literal: [1, 2, 3]
-  -- Abstract: return havoc'd list (sound abstraction)
   | .List _ elems _ => translateList ctx elems.val.toList
 
   -- Dict literal: {'a': 1}
-  -- Abstract: return havoc'd dict (sound abstraction)
   | .Dict _ keys vals => translateDictStrAny ctx keys.val.toList vals.val.toList
 
   -- Set literal: {1, 2, 3}
@@ -711,7 +709,6 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
   | .Set .. => return mkStmtExprMd .Hole
 
   -- Tuple literal: (1, 2)
-  -- Abstract: return havoc'd tuple (sound abstraction)
   | .Tuple _ elems _ => translateList ctx elems.val.toList
 
   -- List comprehension: [x for x in items]
@@ -1596,7 +1593,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   -- while (@for_loop_counter_xxx < Any_len(iter)):
   --  body
   --  @for_loop_counter_xxx += 1
-  -- Incompleteness: The functions Any_len, Any_iter_index are now opaque. 
+  -- Incompleteness: The functions Any_len, Any_iter_index are now opaque.
   | .For _ target iter body _orelse _ => do
     -- The iterator expression (we abstract it away)
     let iterExpr ← translateExpr ctx iter
