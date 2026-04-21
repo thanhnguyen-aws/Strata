@@ -1593,6 +1593,9 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   -- while (@for_loop_counter_xxx < Any_len(iter)):
   --  body
   --  @for_loop_counter_xxx += 1
+  -- Invariant: for `for x in iter: body`, the emitted while loop visits
+  -- each index 0 ≤ i < len(iter) exactly once with x = iter[i], and all
+  -- variables modified in body are properly havocked by while semantics.
   -- Incompleteness: The functions Any_len, Any_iter_index are now opaque.
   | .For _ target iter body _orelse _ => do
     -- The iterator expression (we abstract it away)
@@ -1608,6 +1611,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     let counterIncrease := mkStmtExprMd $ .Assign [counterVar] (mkStmtExprMd $ .PrimitiveOp .Add [counterVar, mkStmtExprMd $ .LiteralInt 1])
     let indexRhs := expr.Call sr (.Name sr {val:= "Any_iter_index", ann:= sr} default)
                         {val:= #[iter, .Name sr {val:= counterName, ann:= sr} default], ann:= sr} {val:= #[], ann:= sr}
+    -- Any_iter_index is defined in PythonRuntimeLaurelPart, so indexRhs would be translated into .StaticCall "Any_iter_index" ..., hot .Hole
     let (bodyCtxNoLabels, targetDecls, _) ← translateAssign ctx target none indexRhs md
     let bodyCtx := { bodyCtxNoLabels with
       loopBreakLabel := some breakLabel
@@ -1637,9 +1641,9 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
             pure [assumeInStmt]
       | _ => pure []
     let counterLtLen := match iterExpr.val with
-      | .StaticCall "range" (startExpr::_) =>
+      | .StaticCall "range" (boundExpr::_) =>
           mkStmtExprMd $ .PrimitiveOp .Lt [counterVar,
-                          mkStmtExprMd $ .StaticCall "Any..as_int!" [startExpr]]
+                          mkStmtExprMd $ .StaticCall "Any..as_int!" [boundExpr]]
       | _ =>
           mkStmtExprMd $ .PrimitiveOp .Lt [counterVar,
                           mkStmtExprMd $ .StaticCall "Any_len" [iterExpr]]
