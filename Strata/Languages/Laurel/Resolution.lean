@@ -88,6 +88,8 @@ inductive ResolvedNode where
   | datatypeDefinition (ty : DatatypeDefinition)
   /-- A datatype constructor. -/
   | datatypeConstructor (typeName : Identifier) (ctor : DatatypeConstructor)
+  /-- A type alias. -/
+  | typeAlias (ty : TypeAlias)
   /-- A constant. -/
   | constant (c : Constant)
   /-- A quantifier-bound variable. -/
@@ -544,6 +546,10 @@ def resolveTypeDefinition (td : TypeDefinition) : ResolveM TypeDefinition := do
         return ⟨ destructorId, ty' ⟩
       return { name := ctorName', args := args' : DatatypeConstructor }
     return .Datatype { name := dtName', typeArgs := dt.typeArgs, constructors := ctors' }
+  | .Alias ta =>
+    let target' ← resolveHighType ta.target
+    let taName' ← defineName ta.name (.typeAlias { ta with target := target' })
+    return .Alias { name := taName', target := target' }
 
 /-- Resolve a constant definition. -/
 def resolveConstant (c : Constant) : ResolveM Constant := do
@@ -697,6 +703,9 @@ private def collectTypeDefinition (map : Std.HashMap Nat ResolvedNode) (td : Typ
         collectHighType map p.type
       ) map
     ) map
+  | .Alias ta =>
+    let map := register map ta.name (.typeAlias ta)
+    collectHighType map ta.target
 
 private def collectConstant (map : Std.HashMap Nat ResolvedNode) (c : Constant)
     : Std.HashMap Nat ResolvedNode :=
@@ -744,6 +753,8 @@ private def preRegisterTopLevel (program : Program) : ResolveM Unit := do
         let _ ← defineName ctor.name (.datatypeConstructor dt.name ctor)
         for p in ctor.args do
           let _ ← defineName p.name placeholderNode (some (dt.destructorName p))
+    | .Alias ta =>
+      let _ ← defineNameCheckDup ta.name (.typeAlias ta)
   -- Pre-register constants
   for c in program.constants do
     let _ ← defineNameCheckDup c.name (.constant c)
