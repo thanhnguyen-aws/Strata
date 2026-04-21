@@ -1101,29 +1101,33 @@ def freeVar (name: String) := mkStmtExprMd (.Identifier name)
 def maybeExceptVar := freeVar "maybe_except"
 def nullcall_var := freeVar "nullcall_ret"
 
+-- Invariant: if `callExpr` is not `.Call`, returns `[]`.
+-- Otherwise the returned block always havocs `maybe_except`;
+-- additionally havocs callee (if non-composite instance call)
+-- and `$heap` (if any argument — or the implicit receiver — is composite).
 private def mkHavocStmtsForUnmodeledCall (ctx : TranslationContext)
     (callExpr : Python.expr SourceRange)
     (md : Imperative.MetaData Core.Expression) : List StmtExprMd :=
   if let .Call _ funccall args kwords := callExpr then
     let holeExceptHavoc := [mkStmtExprMdWithLoc (StmtExpr.Assign [maybeExceptVar] (mkStmtExprMd (.Hole false none))) md]
-    let calleeHavoc :=
+    let (calleeHavoc, calleeIsComposite) :=
       if let (.Attribute _ callee _ _) := funccall then
         let (base, _) := getListAttributes callee
         if let .Name _ n _ := base then
-          match ctx.variableTypes.find? (fun (v, _) => v == n.val) with
+          match ctx.variableTypes.find? (λ v => Prod.fst v == n.val) with
           | some (varName, ty) =>
-            if isCompositeType ctx ty then []
+            if isCompositeType ctx ty then ([], true)
             else
-              [mkStmtExprMdWithLoc (StmtExpr.Assign [freeVar varName] (mkStmtExprMd (.Hole false none))) md]
-          | _ => []
-        else []
-      else []
+              ([mkStmtExprMdWithLoc (StmtExpr.Assign [freeVar varName] (mkStmtExprMd (.Hole false none))) md], false)
+          | _ => ([], false)
+        else ([], false)
+      else ([], false)
     let inputExprs:= args.val.toList ++ kwords.val.toList.map (λ kw => match kw with
-            | .mk_keyword _ _ expr => expr)
-    let involveHeap := inputExprs.any fun inputExpr =>
+            | keyword.mk_keyword _ _ expr => expr)
+    let involveHeap := calleeIsComposite || (inputExprs.any fun inputExpr =>
         match inferExprType ctx inputExpr with
         | .ok ty => isCompositeType ctx ty
-        | _ => false
+        | _ => false)
     let heapHavoc := if !involveHeap then [] else
         [mkStmtExprMdWithLoc (StmtExpr.Assign [freeVar "$heap"] (mkStmtExprMd (.Hole false none))) md]
     [mkStmtExprMd $ .Block (holeExceptHavoc ++ calleeHavoc ++ heapHavoc) none]
