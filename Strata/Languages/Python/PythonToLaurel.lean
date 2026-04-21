@@ -2175,9 +2175,12 @@ def translateClass (ctx : TranslationContext) (classStmt : Python.stmt SourceRan
   | _ => throw (.internalError "Expected ClassDef")
 
 def mkIfEqExpr (var: StmtExprMd) (caseList: List (StmtExprMd × StmtExprMd)) (elseExpr: StmtExprMd) : StmtExprMd :=
-  caseList.foldl (fun e (cond, thenExpr) => mkStmtExprMd $ .IfThenElse
+  caseList.foldr (fun (cond, thenExpr) e => mkStmtExprMd $ .IfThenElse
       (mkStmtExprMd $ .PrimitiveOp .Eq [var, cond]) thenExpr e) elseExpr
 
+--TODO: prove that when (className, fieldName) pair where fieldName is a declared field of className in classFieldHighType,
+-- get_field_construct(className, fieldName) should return exactly className.fieldName
+-- (not FieldError.invalid or FieldError.unknown).
 def mkGetFieldConstructFunction (classFieldHighType: Std.HashMap String (Std.HashMap String HighType)) : Procedure :=
   let invalidField := mkStmtExprMd $ .StaticCall "FieldError.invalid" []
   let unknownField := mkStmtExprMd $ .StaticCall "FieldError.unknown" []
