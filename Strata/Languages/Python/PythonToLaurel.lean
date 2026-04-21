@@ -1596,6 +1596,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   -- while (@for_loop_counter_xxx < Any_len(iter)):
   --  body
   --  @for_loop_counter_xxx += 1
+  -- Incompleteness: The functions Any_len, Any_iter_index are now opaque. 
   | .For _ target iter body _orelse _ => do
     -- The iterator expression (we abstract it away)
     let iterExpr ← translateExpr ctx iter
@@ -1604,12 +1605,13 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     let continueLabel := s!"for_continue_{iter.toAst.ann.start.byteIdx}"
     -- Havoc the target(s) (Ellipsis always translates to Hole)
     let sr := target.ann
-    let holeRhs := expr.Constant sr (constant.ConEllipsis sr) ⟨sr, none⟩
-    let (bodyCtxNoLabels, targetDecls, _) ← translateAssign ctx target none holeRhs md
     let counterName := s!"@for_loop_counter_{s.toAst.ann.start.byteIdx}"
     let counterVar := freeVar counterName
     let counterDecl := mkStmtExprMd $ .LocalVariable counterName (mkHighTypeMd $ .TInt) (mkStmtExprMd $ .LiteralInt 0)
     let counterIncrease := mkStmtExprMd $ .Assign [counterVar] (mkStmtExprMd $ .PrimitiveOp .Add [counterVar, mkStmtExprMd $ .LiteralInt 1])
+    let indexRhs := expr.Call sr (.Name sr {val:= "Any_iter_index", ann:= sr} default)
+                        {val:= #[iter, .Name sr {val:= counterName, ann:= sr} default], ann:= sr} {val:= #[], ann:= sr}
+    let (bodyCtxNoLabels, targetDecls, _) ← translateAssign ctx target none indexRhs md
     let bodyCtx := { bodyCtxNoLabels with
       loopBreakLabel := some breakLabel
       loopContinueLabel := some continueLabel
