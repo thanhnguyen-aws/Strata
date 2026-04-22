@@ -1881,7 +1881,8 @@ def translateFunctionBody (ctx : TranslationContext) (kwargsName : Option String
     return (mkStmtExprMd (StmtExpr.Block bodyStmts none), newctx)
 
 /-- Translate Python function to Laurel Procedure -/
-def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (funcDecl : PythonFunctionDecl) (body: List (Python.stmt SourceRange))
+def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (funcDecl : PythonFunctionDecl)
+    (body: Option (List (Python.stmt SourceRange)))
     : Except TranslationError (Laurel.Procedure × TranslationContext) := do
 
     -- Translate parameters
@@ -1923,7 +1924,14 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
     let inputTypes := funcDecl.args.map (λ arg =>
       match arg.tys with | [ty] => (arg.name, ty) | _ => (arg.name, PyLauType.Any))
     let ctx := {ctx with variableTypes:= ("nullcall_ret", PyLauType.Any)::inputTypes}
-    let (bodyBlock, newCtx) ←  translateFunctionBody ctx funcDecl.kwargsName inputs body
+    let (bodyTrans, newCtx) ← match body with
+    | some body =>
+        let (bodyBlock, newCtx) ←  translateFunctionBody ctx funcDecl.kwargsName inputs body
+        if typeConstraintPostcondition.isEmpty then
+            pure $ (Body.Transparent bodyBlock, newCtx)
+        else
+            pure $ (Body.Opaque typeConstraintPostcondition bodyBlock [], newCtx)
+    | _ =>  pure $ (Body.Opaque [] none [], ctx)
 
     let renamedInputs := inputs.map fun p =>
       if p.name.text == "self" then p
@@ -1936,10 +1944,7 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
       outputs := outputs
       preconditions := typeConstraintPreconditions
       decreases := none
-      body := if typeConstraintPostcondition.isEmpty then
-                Body.Transparent bodyBlock
-              else
-                Body.Opaque typeConstraintPostcondition bodyBlock []
+      body := bodyTrans
       isFunctional := false
     }
 
@@ -2113,11 +2118,8 @@ def translateClass (ctx : TranslationContext) (classStmt : Python.stmt SourceRan
     let mut instanceProcedures : Array Procedure := #[]
 
     for (funcDecl, sr,  funcBody) in classFunDeclsAndBody do
-      let (proc, _) ← translateFunction ctx sr funcDecl funcBody
-      if inHierarchy then
-          instanceProcedures := instanceProcedures.push { proc with body := .Opaque [] .none [] }
-      else
-          instanceProcedures := instanceProcedures.push proc
+      let (proc, _) ← translateFunction ctx sr funcDecl $ if inHierarchy then none else funcBody
+      instanceProcedures := instanceProcedures.push proc
     -- Add synthesized default __init__ if needed
     if let some initProc := defaultInitProc then
       instanceProcedures := instanceProcedures.push initProc
