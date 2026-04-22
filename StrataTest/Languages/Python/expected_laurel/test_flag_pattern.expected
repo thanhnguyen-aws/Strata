@@ -1,5 +1,5 @@
 test_flag_pattern.py(3, 4): ✅ pass - assert(54)
 test_flag_pattern.py(4, 4): ✅ pass - assume_assume(81)_calls_PIn_0
-test_flag_pattern.py(7, 4): ✅ pass - no even numbers
-DETAIL: 3 passed, 0 failed, 0 inconclusive
-RESULT: Analysis success
+test_flag_pattern.py(7, 4): ❓ unknown (pass on 1 path, unknown on 1 path) - no even numbers
+DETAIL: 2 passed, 0 failed, 1 inconclusive
+RESULT: Inconclusive
