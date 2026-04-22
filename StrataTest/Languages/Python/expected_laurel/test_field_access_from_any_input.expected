@@ -3,13 +3,11 @@ test_field_access_from_any_input.py(11, 11): ✔️ always true if reached - ass
 test_field_access_from_any_input.py(11, 11): ✔️ always true if reached - Check PMul exception
 test_field_access_from_any_input.py(11, 4): ✔️ always true if reached - set_pure_double_LaurelResult_38_calls_Any_read_field_0
 test_field_access_from_any_input.py(11, 4): ✔️ always true if reached - set_pure_double_LaurelResult_38_calls_Any_read_field_1
-test_field_access_from_any_input.py(18, 0): ✔️ always true if reached - assert_assert(360)_calls_Any_to_bool_0
 test_field_access_from_any_input.py(18, 0): ✔️ always true if reached - assert(360)
 test_field_access_from_any_input.py(11, 11): ✔️ always true if reached - assert_pure_double_assert(252)_19_calls_Any_read_field_0
 test_field_access_from_any_input.py(11, 11): ✔️ always true if reached - assert_pure_double_assert(252)_19_calls_Any_read_field_1
 test_field_access_from_any_input.py(11, 4): ✔️ always true if reached - set_pure_double_LaurelResult_17_calls_Any_read_field_0
 test_field_access_from_any_input.py(11, 4): ✔️ always true if reached - set_pure_double_LaurelResult_17_calls_Any_read_field_1
-test_field_access_from_any_input.py(22, 0): ✔️ always true if reached - assert_assert(422)_calls_Any_to_bool_0
 test_field_access_from_any_input.py(22, 0): ✔️ always true if reached - assert(422)
 test_field_access_from_any_input.py(14, 4): ✔️ always true if reached - assert_modified_double_assert(300)_9_calls_Any_read_field_0
 test_field_access_from_any_input.py(14, 4): ✔️ always true if reached - assert_modified_double_assert(300)_9_calls_Any_read_field_1
@@ -18,7 +16,6 @@ unknown location: ✔️ always true if reached - set_modified_double_$heap_6_ca
 unknown location: ✔️ always true if reached - set_modified_double_$heap_6_calls_Any_read_field_1
 unknown location: ✔️ always true if reached - set_modified_double_$heap_6_calls_Any_update_field_2
 unknown location: ✔️ always true if reached - set_modified_double_$heap_6_calls_Any_update_field_3
-test_field_access_from_any_input.py(25, 0): ✔️ always true if reached - assert_assert(463)_calls_Any_to_bool_0
 test_field_access_from_any_input.py(25, 0): ✔️ always true if reached - assert(463)
-DETAIL: 22 passed, 0 failed, 0 inconclusive
+DETAIL: 19 passed, 0 failed, 0 inconclusive
 RESULT: Analysis success
