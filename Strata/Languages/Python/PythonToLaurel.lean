@@ -1624,9 +1624,14 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
   -- each index 0 ≤ i < len(iter) exactly once with x = iter[i], and all
   -- variables modified in body are properly havocked by while semantics.
   -- Incompleteness: The functions Any_len, Any_iter_index are now opaque.
+  -- Note that Any_iter_index(iter, index) should not return an exception when 0 <= index < Any_len(iter)
+  -- and Any_iter_index is only called inside the loop body where that condition is satisfied,
+  -- so it is sound to not put it inside AnyMaybeExceptionList
   | .For _ target iter body _orelse _ => do
     -- The iterator expression (we abstract it away)
     let iterExpr ← translateExpr ctx iter
+    if let .Call _ (.Name _ {val:= "range",..} _) _ _  := iter then
+      assert! let .StaticCall "range" _ := iterExpr
     -- Create context with target(s) and loop labels
     let breakLabel := s!"for_break_{iter.toAst.ann.start.byteIdx}"
     let continueLabel := s!"for_continue_{iter.toAst.ann.start.byteIdx}"
