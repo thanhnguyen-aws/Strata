@@ -2233,12 +2233,12 @@ def mkGetFieldConstructFunction (classFieldHighType: Std.HashMap String (Std.Has
   }
 
 def anyGetFieldFunction: Procedure :=
-  let objIsComposite := {condition:= mkStmtExprMd $ .StaticCall "Any..isfrom_Composite" [freeVar "obj"]}
+  let objIsComposite := {condition:= mkStmtExprMd $ .StaticCall "Any..isfrom_Composite" [freeVar "obj"], summary:= "Object must be a class"}
   let field := mkStmtExprMd $ .StaticCall "get_field_construct" [
     mkStmtExprMd $ .StaticCall "Any..typename" [freeVar "obj"],
     freeVar "fieldname"
   ]
-  let fieldIsNotInvalid := {condition:= mkStmtExprMd $ .PrimitiveOp .Not [mkStmtExprMd $ .StaticCall "Field..isFieldError.invalid" [field]]}
+  let fieldIsNotInvalid := {condition:= mkStmtExprMd $ .PrimitiveOp .Not [mkStmtExprMd $ .StaticCall "Field..isFieldError.invalid" [field]], summary:= "Check invalid field"}
   let readFieldExpr := mkStmtExprMd $ .StaticCall "readField" [heapVar, mkStmtExprMd $ .StaticCall "Any..as_composite!" [freeVar "obj"], field]
   let body := mkStmtExprMd (.StaticCall "Box..AnyVal!" [readFieldExpr])
   {
@@ -2253,12 +2253,12 @@ def anyGetFieldFunction: Procedure :=
   }
 
 def anyUpdateFieldFunction: Procedure :=
-  let objIsComposite := {condition:= mkStmtExprMd $ .StaticCall "Any..isfrom_Composite" [freeVar "obj"]}
+  let objIsComposite := {condition:= mkStmtExprMd $ .StaticCall "Any..isfrom_Composite" [freeVar "obj"], summary:= "Object must be a class"}
   let field := mkStmtExprMd $ .StaticCall "get_field_construct" [
     mkStmtExprMd $ .StaticCall "Any..typename" [freeVar "obj"],
     freeVar "fieldname"
   ]
-  let fieldIsNotInvalid := {condition:= mkStmtExprMd $ .PrimitiveOp .Not [mkStmtExprMd $ .StaticCall "Field..isFieldError.invalid" [field]]}
+  let fieldIsNotInvalid := {condition:= mkStmtExprMd $ .PrimitiveOp .Not [mkStmtExprMd $ .StaticCall "Field..isFieldError.invalid" [field]], summary:= "Check invalid field"}
   let updateVal := mkStmtExprMd (.StaticCall "Box..Any" [freeVar "val"])
   let updateFieldExpr := mkStmtExprMd $ .StaticCall "updateField" [heapVar, mkStmtExprMd $ .StaticCall "Any..as_composite!" [freeVar "obj"], field, updateVal]
   let body := mkStmtExprMd $ .Return updateFieldExpr

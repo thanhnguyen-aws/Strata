@@ -44,6 +44,7 @@ SKIP_TESTS = BOTH_SKIP | {
     "test_for_loop",
     "test_func_input_type_constraints",
     "test_field_access_from_any",
+    "test_field_access_from_any_input",
     "test_if_elif",
     "test_ifexpr",
     "test_list",
