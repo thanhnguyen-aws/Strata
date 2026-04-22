@@ -1631,7 +1631,10 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     -- The iterator expression (we abstract it away)
     let iterExpr ← translateExpr ctx iter
     if let .Call _ (.Name _ {val:= "range",..} _) _ _  := iter then
-      assert! let .StaticCall "range" _ := iterExpr
+      if let .StaticCall "range" _ := iterExpr.val then
+        pure ()
+      else
+        throw (.internalError "Translation of Python range function changed")
     -- Create context with target(s) and loop labels
     let breakLabel := s!"for_break_{iter.toAst.ann.start.byteIdx}"
     let continueLabel := s!"for_continue_{iter.toAst.ann.start.byteIdx}"
