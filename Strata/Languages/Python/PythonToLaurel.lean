@@ -1867,7 +1867,7 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
 
     inputs := match ctx.currentClassName with
     | some className =>
-    -- First parameter is self (typed as Composite to match call-site convention)
+      -- First parameter is self (typed as Composite to match call-site convention)
       let selfParam : Parameter := {
         name := "self"
         type := mkHighTypeMd (.UserDefined (mkId className))
