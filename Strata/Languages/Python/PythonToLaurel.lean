@@ -1862,9 +1862,6 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
     inputs := funcDecl.args.map (fun arg =>
         if arg.tys.length == 1 && isCompositeType ctx arg.tys[0]! then
           { name := arg.name, type := mkHighTypeMd (.UserDefined {text:= arg.tys[0]!, md := default}) }
-        else
-          { name := arg.name, type := AnyTy})
-
     inputs := match ctx.currentClassName with
     | some className =>
       -- First parameter is self (typed as Composite to match call-site convention)
