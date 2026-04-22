@@ -1387,10 +1387,10 @@ def withExceptionChecks (ctx : TranslationContext)
     (result : TranslationContext × List StmtExprMd)
     : TranslationContext × List StmtExprMd :=
   let (newctx, stmts) := result
-  let rhs_exprs := stmts.flatMap fun s =>
-    match s.val with | .Assign _ value => [value] | _ => []
-  let exceptionCheck := rhs_exprs.flatMap $ getExceptionCatch ctx
-  (newctx, exceptionCheck ++ stmts)
+  let stmtsWithExceptionCatch := stmts.flatMap fun s => match s.val with
+    | .Assign _ value => (getExceptionCatch ctx value) ++ [s]
+    | _ => [s]
+  (newctx, stmtsWithExceptionCatch)
 
 mutual
 

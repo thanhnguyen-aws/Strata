@@ -1,2 +1,4 @@
-DETAIL: Laurel to Core translation failed: [Resolution failed: 'tuple_46' is not defined, Resolution failed: 'tuple_46' is not defined, Resolution failed: 'tuple_46' is not defined, Resolution failed: 'tuple_46' is not defined]
-RESULT: Internal error
+test_tuple_unpack.py(4, 4): ✅ pass - unpack first
+test_tuple_unpack.py(5, 4): ✅ pass - unpack second
+DETAIL: 2 passed, 0 failed, 0 inconclusive
+RESULT: Analysis success
