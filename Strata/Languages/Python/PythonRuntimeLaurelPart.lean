@@ -112,7 +112,7 @@ datatype DictStrAny {
 // or from_ClassInstance wrapping a re_Match).  If the pipeline ever
 // moves to concrete types, these should return re_Match | None directly.
 //
-// pos and endpos are sound as 0 / str.len
+// pos and endpos are sound as 0 / Str.Len
 // for the module-level re.match/re.search/re.fullmatch API which does
 // not accept pos/endpos arguments.  If compiled-pattern method calls
 // with explicit pos/endpos are supported later, those values must be
@@ -143,7 +143,7 @@ datatype DictStrAny {
 // error).
 //
 // On match, we return a from_ClassInstance wrapping a concrete re_Match
-// with pos=0 and endpos=str.len(s), which is sound for the module-level
+// with pos=0 and endpos=Str.Len(s), which is sound for the module-level
 // API (no pos/endpos parameters).
 //
 // Mode-specific factory functions are declared via ReFactory (with concreteEval
@@ -345,15 +345,13 @@ function List_extend (l1 : ListAny, l2: ListAny) : ListAny
 };
 
 function List_get_non_neg (l : ListAny, i : int) : Any
-  requires i >= 0 && i < List_len(l)
 {
-  if ListAny..isListAny_nil(l) then from_None()
+  if (i < 0 || ListAny..isListAny_nil(l)) then exception(IndexError("Index out of bound"))
   else if  i == 0 then ListAny..head!(l)
   else List_get(ListAny..tail!(l), i - 1)
 };
 
 function List_get (l : ListAny, i : int) : Any
-  requires i >= - List_len(l) && i < List_len(l)
 {
   if i >= 0 then List_get_non_neg(l, i)
   else List_get_non_neg(l, List_len(l) + i)
@@ -441,9 +439,8 @@ function DictStrAny_contains (d : DictStrAny, key: string) : bool
 };
 
 function DictStrAny_get (d : DictStrAny, key: string) : Any
-  requires DictStrAny_contains(d, key)
 {
-  if  DictStrAny..isDictStrAny_empty(d) then from_None()
+  if  DictStrAny..isDictStrAny_empty(d) then exception(IndexError("Dict does not contain key"))
   else if DictStrAny..key!(d) == key then DictStrAny..val!(d)
   else DictStrAny_get(DictStrAny..tail!(d), key)
 };
@@ -467,6 +464,32 @@ function DictStrAny_insert (d : DictStrAny, key: string, val: Any) : DictStrAny
   else DictStrAny_cons(DictStrAny..key!(d), DictStrAny..val!(d), DictStrAny_insert(DictStrAny..tail!(d), key, val))
 };
 
+function Str.Substr(s: string, start: int, stop: int): string external;
+
+function str_get(s : string, i : int) : Any
+{
+  if i >= 0 && i < Str.Length(s) then
+   from_str(Str.Substr(s, i, i))
+  else if i < 0 && i >= - Str.Length(s) then
+    from_str(Str.Substr(s, Str.Length(s) + i, Str.Length(s) + i))
+  else
+    exception (IndexError("Index out of bound"))
+};
+
+function str_slice_non_neg (s : string, start : int, stop: int) : string
+{
+  if (start >= Str.Length(s)) || (start >= stop) then ""
+  else Str.Substr (s, start, int_min(stop, Str.Length(s)))
+};
+
+function str_slice (s : string, start : int, stop: int) : Any
+{
+  from_str(str_slice_non_neg(s,
+    if start >= 0 then start else int_max (Str.Length(s) + start, 0),
+    if stop >= 0 then stop else int_max (Str.Length(s) + stop, 0)
+  ))
+};
+
 function Any_get (dictOrList: Any, index: Any): Any
   requires  (Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index) && DictStrAny_contains(Any..as_Dict!(dictOrList), Any..as_string!(index))) ||
             (Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) && Any..as_int!(index) >= - List_len(Any..as_ListAny!(dictOrList)) && Any..as_int!(index) < List_len(Any..as_ListAny!(dictOrList)))
@@ -488,33 +511,54 @@ function Any_get_slice (list: Any, index: Any): Any
     else List_len(Any..as_ListAny!(list))))
 };
 
-function Any_get! (dictOrList: Any, index: Any): Any
+function Any_get_no_string! (dictOrList: Any, index: Any): Any
 {
   if Any..isexception(dictOrList) then dictOrList
   else if Any..isexception(index) then index
-  else if !(Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index)) && !(Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index)) then
-    exception (TypeError("Invalid subscription type"))
-  else if Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index) && DictStrAny_contains(Any..as_Dict!(dictOrList), Any..as_string!(index)) then
+  else if Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index) then
     DictStrAny_get(Any..as_Dict!(dictOrList), Any..as_string!(index))
-  else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) && Any..as_int!(index) >= - List_len(Any..as_ListAny!(dictOrList)) && Any..as_int!(index) < List_len(Any..as_ListAny!(dictOrList)) then
-      List_get(Any..as_ListAny!(dictOrList), Any..as_int!(index))
+  else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) then
+    List_get(Any..as_ListAny!(dictOrList), Any..as_int!(index))
   else
-    exception (IndexError("Invalid subscription"))
+    exception (TypeError("Invalid subscription type"))
 };
 
-function Any_get_slice! (list: Any, index: Any): Any
+function Any_get! (dictOrListOrStr: Any, index: Any): Any
 {
-  if Any..isexception(list) then list
+  if Any..isexception(dictOrListOrStr) then dictOrListOrStr
   else if Any..isexception(index) then index
-  else if !(Any..isfrom_ListAny(list) && Any..isfrom_Slice(index)) then
-    exception (TypeError("Invalid subscription type"))
+  else if Any..isfrom_DictStrAny(dictOrListOrStr) && Any..isfrom_str(index) then
+    DictStrAny_get(Any..as_Dict!(dictOrListOrStr), Any..as_string!(index))
+  else if Any..isfrom_ListAny(dictOrListOrStr) && Any..isfrom_int(index) then
+    List_get(Any..as_ListAny!(dictOrListOrStr), Any..as_int!(index))
+  else if Any..isfrom_str(dictOrListOrStr) && Any..isfrom_int(index) then
+    str_get(Any..as_string!(dictOrListOrStr), Any..as_int!(index))
   else
+    exception (TypeError("Invalid subscription type"))
+};
+
+
+function Any_get_slice! (listOrStr: Any, index: Any): Any
+{
+  if Any..isexception(listOrStr) then listOrStr
+  else if Any..isexception(index) then index
+  else if Any..isfrom_ListAny(listOrStr) && Any..isfrom_Slice(index) then
     from_ListAny(List_slice(
-      Any..as_ListAny!(list),
+      Any..as_ListAny!(listOrStr),
       Any..start!(index),
       if OptionInt..isOptSome(Any..stop!(index))
       then OptionInt..unwrap!(Any..stop!(index))
-      else List_len(Any..as_ListAny!(list))))
+      else List_len(Any..as_ListAny!(listOrStr))))
+  else if Any..isfrom_str(listOrStr) && Any..isfrom_Slice(index) then
+    str_slice(
+      Any..as_string!(listOrStr),
+      Any..start!(index),
+      if OptionInt..isOptSome(Any..stop!(index))
+      then OptionInt..unwrap!(Any..stop!(index))
+      else Str.Length(Any..as_string!(listOrStr))
+    )
+  else
+    exception (TypeError("Invalid subscription type"))
 };
 
 function Any_set (dictOrList: Any, index: Any, val: Any): Any
@@ -549,7 +593,7 @@ function Any_sets! (indices: ListAny, dictOrList: Any, val: Any): Any
   if ListAny..isListAny_nil(indices) then dictOrList
   else if ListAny..isListAny_nil(ListAny..tail!(indices)) then Any_set!(dictOrList, ListAny..head!(indices), val)
   else Any_set!(dictOrList, ListAny..head!(indices),
-    Any_sets!(ListAny..tail!(indices), Any_get!(dictOrList, ListAny..head!(indices)), val))
+    Any_sets!(ListAny..tail!(indices), Any_get_no_string!(dictOrList, ListAny..head!(indices)), val))
 };
 
 function PIn (v: Any, dictOrList: Any) : Any
@@ -1113,7 +1157,7 @@ Parse the Laurel DDM prelude into a Laurel Program.
 
 -- Prelude functions that may return an exception value as Any.
 -- We should make sure that all functions in this list propagate the exceptions from their arguments.
-def AnyMaybeExceptionList := ["Any_get!", "Any_get_slice!", "Any_set!", "Any_sets!", "PNeg", "PBitNot", "PNot", "PAdd", "PSub", "PMul",
+def AnyMaybeExceptionList := ["Any_get!", "Any_get_no_string!", "Any_get_slice!", "Any_set!", "Any_sets!", "PNeg", "PBitNot", "PNot", "PAdd", "PSub", "PMul",
    "PFloorDiv", "PLt", "PLe", "PGt", "PGe", "PPow", "PMod", "PLShift", "PRShift", "PAnd", "POr"]
 
 public def pythonRuntimeLaurelPart : Laurel.Program :=
