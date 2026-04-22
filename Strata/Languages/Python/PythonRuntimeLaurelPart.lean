@@ -309,16 +309,15 @@ function isError (e: Error) : bool {
 // /////////////////////////////////////////////////////////////////////////////////////
 
 function Any_to_bool (v: Any) : bool
-  requires (Any..isfrom_bool(v) || Any..isfrom_None(v) || Any..isfrom_str(v) || Any..isfrom_int(v) || Any..isfrom_DictStrAny(v) || Any..isfrom_ListAny(v))
 {
   if (Any..isfrom_bool(v)) then Any..as_bool!(v) else
   if (Any..isfrom_None(v)) then false else
   if (Any..isfrom_str(v)) then !(Any..as_string!(v) == "") else
   if (Any..isfrom_int(v)) then !(Any..as_int!(v) == 0) else
+  if (Any..isfrom_float(v)) then !(Any..as_float!(v) == 0.0) else
   if (Any..isfrom_DictStrAny(v)) then !(Any..as_Dict!(v) == DictStrAny_empty()) else
   if (Any..isfrom_ListAny(v)) then !(Any..as_ListAny!(v) == ListAny_nil()) else
-  false
-  //WILL BE ADDED
+  <?>
 };
 
 // /////////////////////////////////////////////////////////////////////////////////////
@@ -642,14 +641,18 @@ function PNot (v: Any) : Any
   if Any..isexception(v) then v
   else if Any..isfrom_bool(v) then
     from_bool(!(Any..as_bool!(v)))
+  else if Any..isfrom_None(v) then
+    from_bool(true)
   else if Any..isfrom_int(v) then
-    from_bool(!(Any..as_int!(v) == 0))
+    from_bool(Any..as_int!(v) == 0)
   else if Any..isfrom_float(v) then
-    from_bool(!(Any..as_float!(v) == 0.0))
+    from_bool(Any..as_float!(v) == 0.0)
   else if Any..isfrom_str(v) then
-    from_bool(!(Any..as_string!(v) == ""))
+    from_bool(Any..as_string!(v) == "")
   else if Any..isfrom_ListAny(v) then
-    from_bool(!(List_len(Any..as_ListAny!(v)) == 0))
+    from_bool(Any..as_ListAny!(v) == ListAny_nil())
+  else if (Any..isfrom_DictStrAny(v)) then
+    from_bool(Any..as_Dict!(v) == DictStrAny_empty())
   else
     exception(TypeError ("Operand Type is not defined"))
 };
