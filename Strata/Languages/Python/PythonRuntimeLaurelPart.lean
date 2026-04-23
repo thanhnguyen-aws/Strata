@@ -469,9 +469,9 @@ function Str.Substr(s: string, start: int, stop: int): string external;
 function str_get(s : string, i : int) : Any
 {
   if i >= 0 && i < Str.Length(s) then
-   from_str(Str.Substr(s, i, i + 1))
+   from_str(Str.Substr(s, i, 1))
   else if i < 0 && i >= - Str.Length(s) then
-    from_str(Str.Substr(s, Str.Length(s) + i, Str.Length(s) + i + 1))
+    from_str(Str.Substr(s, Str.Length(s) + i, 1))
   else
     exception (IndexError("Index out of bound"))
 };
@@ -479,7 +479,7 @@ function str_get(s : string, i : int) : Any
 function str_slice_non_neg (s : string, start : int, stop: int) : string
 {
   if (start >= Str.Length(s)) || (start >= stop) then ""
-  else Str.Substr (s, start, int_min(stop, Str.Length(s)))
+  else Str.Substr (s, start, int_min(stop, Str.Length(s)) - start)
 };
 
 function str_slice (s : string, start : int, stop: int) : Any
