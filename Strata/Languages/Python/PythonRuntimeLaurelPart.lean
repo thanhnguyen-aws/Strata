@@ -1169,8 +1169,10 @@ Parse the Laurel DDM prelude into a Laurel Program.
 
 -- Prelude functions that may return an exception value as Any.
 -- We should make sure that all functions in this list propagate the exceptions from their arguments.
-def AnyMaybeExceptionList := ["Any_get!", "Any_get_no_string!", "Any_get_slice!", "Any_set!", "Any_sets!", "PNeg", "PBitNot", "PNot", "PAdd", "PSub", "PMul",
-   "PFloorDiv", "PLt", "PLe", "PGt", "PGe", "PPow", "PMod", "PLShift", "PRShift", "PAnd", "POr"]
+def AnyMaybeExceptionList := [
+  "List_get_non_neg", "List_get", "DictStrAny_get", "str_get", "str_slice_non_neg", "str_slice",
+  "Any_get!", "Any_get_no_string!", "Any_get_slice!", "Any_set!", "Any_sets!",
+  "PNeg", "PBitNot", "PNot", "PAdd", "PSub", "PMul", "PFloorDiv", "PLt", "PLe", "PGt", "PGe", "PPow", "PMod", "PLShift", "PRShift", "PAnd", "POr"]
 
 public def pythonRuntimeLaurelPart : Laurel.Program :=
   match Laurel.TransM.run (some $ .file "") (Laurel.parseProgram pythonRuntimeLaurelPartDDM) with
