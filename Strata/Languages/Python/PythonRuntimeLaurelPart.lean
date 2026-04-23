@@ -469,9 +469,9 @@ function Str.Substr(s: string, start: int, stop: int): string external;
 function str_get(s : string, i : int) : Any
 {
   if i >= 0 && i < Str.Length(s) then
-   from_str(Str.Substr(s, i, i))
+   from_str(Str.Substr(s, i, i + 1))
   else if i < 0 && i >= - Str.Length(s) then
-    from_str(Str.Substr(s, Str.Length(s) + i, Str.Length(s) + i))
+    from_str(Str.Substr(s, Str.Length(s) + i, Str.Length(s) + i + 1))
   else
     exception (IndexError("Index out of bound"))
 };
