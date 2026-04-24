@@ -348,9 +348,10 @@ function List_append (l : ListAny, e: Any) : ListAny
   else ListAny_cons(ListAny..head!(l), List_append(ListAny..tail!(l), e))
 };
 
-function List_append_wrap (l : Any, e: Any) : Any
+function Any_List_append (l : Any, e: Any) : Any
+  requires Any..isfrom_ListAny(l)
 {
-  from_ListAny(List_append(Any..as_ListAny(l), e))
+  from_ListAny(List_append(Any..as_ListAny!(l), e))
 };
 
 function List_get_non_neg (l : ListAny, i : int) : Any

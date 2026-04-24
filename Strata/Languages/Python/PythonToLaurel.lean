@@ -753,7 +753,7 @@ partial def reMapFunctionName (_ctx: TranslationContext) (fname: String) : Strin
   | "int" => "to_int_any"
   | "len" => "Any_len_to_Any"
   | "timedelta" => "timedelta_func" -- We handle timedelta as an int, not a class
-  | "ListAny@append" => "List_append_wrap"
+  | "ListAny@append" => "Any_List_append"
   | _ => fname
 
 partial def isPackage (ctx : TranslationContext) (expr: Python.expr SourceRange) : Bool :=
@@ -857,6 +857,11 @@ partial def refineFunctionCallExpr (ctx : TranslationContext) (func: Python.expr
             match ctx.importedSymbols[callerTy]? with
             | some (ImportedSymbol.compositeType laurelName) => laurelName
             | _ => callerTy
+          if resolvedTy == PyLauType.ListAny then
+            if let .Name _ _ _ := v then
+              pure ()
+            else
+              throw (.unsupportedConstruct "List procedure calleer not a variable is unsupported" (toString (repr v)))
           let fnName := reMapFunctionName ctx $ manglePythonMethod resolvedTy callname
           return (fnName, some v, false)
     | _ => throw (.internalError s!"{repr func} is not a function")
@@ -1153,7 +1158,7 @@ partial def translateAssign  (ctx : TranslationContext)
       curCtx := newCtx
       stmts := stmts ++ eltStmts
     return (curCtx, stmts, false)
-  let rhs_trans ←  translateExpr ctx rhs
+  let mut rhs_trans ←  translateExpr ctx rhs
   -- When an unmodeled call produces a Hole, also havoc maybe_except since
   -- the call is a black box that could throw any exception.
   let rhsIsCall := match rhs with | .Call _ _ _ _ => true | _ => false
@@ -1211,6 +1216,12 @@ partial def translateAssign  (ctx : TranslationContext)
               let varType := mkHighTypeMd (.UserDefined className)
               let newStmt := mkStmtExprMdWithLoc (StmtExpr.LocalVariable n.val varType (some rhs_trans)) md
               [newStmt]
+        | .Assign _ _ =>
+            -- Only occurs when the right hand side is a Python built-in List or Dict procedure
+            if rhsIsCall then
+              [rhs_trans, mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr] AnyNone) md]
+            else
+              [mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr] rhs_trans) md]
         | _ => [mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr] rhs_trans) md]
         newctx := match rhs_trans.val with
         | .StaticCall fnname _ =>
