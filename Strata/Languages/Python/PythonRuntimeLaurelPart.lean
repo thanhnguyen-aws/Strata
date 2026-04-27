@@ -398,13 +398,18 @@ function List_slice_non_neg (l : ListAny, start : int, stop: int) : ListAny
   else List_take (List_drop (l, start), int_min(stop, List_len(l))  - start)
 };
 
-
 function List_slice (l : ListAny, start : int, stop: int) : ListAny
 {
   List_slice_non_neg (l,
     if start >= 0 then start else int_max (List_len(l) + start, 0),
     if stop >= 0 then stop else int_max (List_len(l) + stop, 0)
   )
+};
+
+function List_remove(l: ListAny, i: int) : ListAny
+  requires i >= 0 && i <= List_len(l)
+{
+  List_extend(List_take(l, i),List_drop(l, i + 1))
 };
 
 function List_set_non_neg (l : ListAny, i : int, v: Any) : ListAny
@@ -463,6 +468,13 @@ function DictStrAny_insert (d : DictStrAny, key: string, val: Any) : DictStrAny
   if DictStrAny..isDictStrAny_empty(d) then DictStrAny_cons(key, val, DictStrAny_empty())
   else if DictStrAny..key!(d) == key then DictStrAny_cons(key, val, DictStrAny..tail!(d))
   else DictStrAny_cons(DictStrAny..key!(d), DictStrAny..val!(d), DictStrAny_insert(DictStrAny..tail!(d), key, val))
+};
+
+function DictStrAny_remove (d : DictStrAny, key: string) : DictStrAny
+{
+  if DictStrAny..isDictStrAny_empty(d) then DictStrAny_empty()
+  else if DictStrAny..key!(d) == key then DictStrAny..tail!(d)
+  else DictStrAny_cons(DictStrAny..key!(d), DictStrAny..val!(d), DictStrAny_remove(DictStrAny..tail!(d), key))
 };
 
 function Any_get (dictOrList: Any, index: Any): Any
@@ -533,6 +545,20 @@ function Any_sets! (indices: ListAny, dictOrList: Any, val: Any): Any
   else if ListAny..isListAny_nil(ListAny..tail!(indices)) then Any_set!(dictOrList, ListAny..head!(indices), val)
   else Any_set!(dictOrList, ListAny..head!(indices),
     Any_sets!(ListAny..tail!(indices), Any_get!(dictOrList, ListAny..head!(indices)), val))
+};
+
+function Any_remove (dictOrList: Any, index: Any): Any
+{
+  if Any..isexception(dictOrList) then dictOrList
+  else if Any..isexception(index) then index
+  else if !(Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index)) && !(Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index)) then
+    exception (TypeError("Invalid subscription type"))
+  else if Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index) && DictStrAny_contains(Any..as_Dict!(dictOrList), Any..as_string!(index)) then
+    from_DictStrAny(DictStrAny_remove(Any..as_Dict!(dictOrList), Any..as_string!(index)))
+  else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) && Any..as_int!(index) >= - List_len(Any..as_ListAny!(dictOrList)) && Any..as_int!(index) < List_len(Any..as_ListAny!(dictOrList)) then
+    from_ListAny(List_remove(Any..as_ListAny!(dictOrList), Any..as_int!(index)))
+  else
+    exception (IndexError("Invalid subscription"))
 };
 
 function Any_len (v: Any) : int;

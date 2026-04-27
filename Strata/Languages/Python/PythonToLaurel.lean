@@ -1359,6 +1359,14 @@ def withExceptionChecks (ctx : TranslationContext)
   let exceptionCheck := rhs_exprs.flatMap $ getExceptionAssertions ctx
   (newctx, exceptionCheck ++ stmts)
 
+def translateDel (ctx : TranslationContext) (md: MetaData) (e:  Python.expr SourceRange) : Except TranslationError StmtExprMd := do
+  match e with
+  | .Subscript _ (.Name _ n _) slice _ =>
+    let slice ← translateExpr ctx slice
+    let rhs := mkStmtExprMd $ .StaticCall "Any_remove" [freeVar n.val, slice]
+    return mkStmtExprMdWithLoc (.Assign [freeVar n.val] rhs) md
+  | _ => throw (.unsupportedConstruct "Only support del statement for list[index] and dict[key] where list and dict are variables, unsupported: " (toString (repr e)))
+
 mutual
 
 partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRange)
@@ -1709,6 +1717,10 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
           .Assign sr {val:= #[target], ann:= target.ann} rhs {val:= none, ann:= sr}
     let (ctx, assignStmt) ← translateStmt ctx pyNormalAssign
     return (ctx, tempVarDecls ++ assignStmt)
+
+  | .Delete _ targets =>
+      let delStmts ←  targets.val.toList.mapM $ translateDel ctx md
+      return (ctx, delStmts)
 
   | _ => throw (.unsupportedConstruct "Statement type not yet supported" (toString (repr s)))
 
