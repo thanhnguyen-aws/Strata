@@ -406,10 +406,24 @@ function List_slice (l : ListAny, start : int, stop: int) : ListAny
   )
 };
 
-function List_remove(l: ListAny, i: int) : ListAny
-  requires i >= 0 && i <= List_len(l)
+function List_remove_non_neg(l: ListAny, i: int) : ListAny
+  requires i >= 0 && i < List_len(l)
 {
   List_extend(List_take(l, i),List_drop(l, i + 1))
+};
+
+function List_remove(l: ListAny, i: int) : ListAny
+  requires i >= - List_len(l) && i < List_len(l)
+{
+  if i >= 0 then List_remove_non_neg(l, i)
+  else List_remove_non_neg(l, List_len(l) + i)
+};
+
+function List_remove_slice(l: ListAny, start: int, stop: int) : ListAny
+{
+  List_extend(
+    List_take(l, if start >= 0 then int_min(start, List_len(l)) else int_max(List_len(l) + start, 0)),
+    List_drop(l, if stop >= 0 then int_min(stop, List_len(l)) else int_max(List_len(l) + stop, 0)))
 };
 
 function List_set_non_neg (l : ListAny, i : int, v: Any) : ListAny
@@ -559,6 +573,21 @@ function Any_remove (dictOrList: Any, index: Any): Any
     from_ListAny(List_remove(Any..as_ListAny!(dictOrList), Any..as_int!(index)))
   else
     exception (IndexError("Invalid subscription"))
+};
+
+function Any_remove_slice (list: Any, index: Any): Any
+{
+  if Any..isexception(list) then list
+  else if Any..isexception(index) then index
+  else if !(Any..isfrom_ListAny(list) && Any..isfrom_Slice(index)) then
+    exception (TypeError("Invalid subscription type"))
+  else
+    from_ListAny(List_remove_slice(
+      Any..as_ListAny!(list),
+      Any..start!(index),
+      if OptionInt..isOptSome(Any..stop!(index))
+      then OptionInt..unwrap!(Any..stop!(index))
+      else List_len(Any..as_ListAny!(list))))
 };
 
 function Any_len (v: Any) : int;

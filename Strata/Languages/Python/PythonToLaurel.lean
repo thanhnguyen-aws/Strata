@@ -1420,9 +1420,15 @@ def withExceptionChecks (ctx : TranslationContext)
 def translateDel (ctx : TranslationContext) (md: MetaData) (e:  Python.expr SourceRange) : Except TranslationError StmtExprMd := do
   match e with
   | .Subscript _ (.Name _ n _) slice _ =>
-    let slice ← translateExpr ctx slice
-    let rhs := mkStmtExprMd $ .StaticCall "Any_remove" [freeVar n.val, slice]
-    return mkStmtExprMdWithLoc (.Assign [freeVar n.val] rhs) md
+    match slice with
+    | .Slice _ start stop step =>
+      let index ← translateSlice ctx start.val stop.val step.val
+      let rhs := mkStmtExprMd $ .StaticCall "Any_remove_slice" [freeVar n.val, index]
+      return mkStmtExprMdWithLoc (.Assign [freeVar n.val] rhs) md
+    | _ =>
+      let slice ← translateExpr ctx slice
+      let rhs := mkStmtExprMd $ .StaticCall "Any_remove" [freeVar n.val, slice]
+      return mkStmtExprMdWithLoc (.Assign [freeVar n.val] rhs) md
   | _ => throw (.unsupportedConstruct "Only support del statement for list[index] and dict[key] where list and dict are variables, unsupported: " (toString (repr e)))
 
 mutual
