@@ -78,7 +78,7 @@ private partial def collectHighTypeNames (ty : HighTypeMd) : CollectM Unit := do
   | .Pure base => collectHighTypeNames base
   | .Intersection types => types.forM collectHighTypeNames
   | .TVoid | .TBool | .TInt | .TFloat64 | .TReal | .TString | .THeap
-  | .TBv _ | .Unknown => pure ()
+  | .TBv _ | .Unknown | .TComposite => pure ()
 
 /-- Collect all referenced names (procedure calls, type references) from a StmtExpr tree. -/
 private partial def collectExprNames (expr : StmtExprMd) : CollectM Unit := do
@@ -101,7 +101,7 @@ private partial def collectExprNames (expr : StmtExprMd) : CollectM Unit := do
     collectExprNames body
   | .Assign targets value =>
     collectExprNames value; targets.forM collectExprNames
-  | .FieldSelect target _ => collectExprNames target
+  | .FieldSelect target _ _ _ => collectExprNames target
   | .PureFieldUpdate target _ newVal =>
     collectExprNames target; collectExprNames newVal
   | .PrimitiveOp _ args => args.forM collectExprNames

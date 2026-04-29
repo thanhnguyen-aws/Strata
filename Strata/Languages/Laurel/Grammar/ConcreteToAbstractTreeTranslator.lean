@@ -102,6 +102,7 @@ partial def translateHighType (arg : Arg) : TransM HighTypeMd := do
     | q`Laurel.float64Type, _ => return mkHighTypeMd .TFloat64 src
     | q`Laurel.realType, _ => return mkHighTypeMd .TReal src
     | q`Laurel.stringType, _ => return mkHighTypeMd .TString src
+    | q`Laurel.unknownCompositeType, _ => return mkHighTypeMd .TComposite src
     | q`Laurel.bvType, #[widthArg] =>
       let width ← translateNat widthArg
       return mkHighTypeMd (.TBv width) src
@@ -285,7 +286,7 @@ partial def translateStmtExpr (arg : Arg) : TransM StmtExprMd := do
       let obj ← translateStmtExpr objArg
       let field ← translateIdent fieldArg
       let fieldSrc ← getArgFileRange fieldArg
-      return mkStmtExprMd (.FieldSelect obj field) fieldSrc
+      return mkStmtExprMd (.FieldSelect obj field none none) fieldSrc
     | q`Laurel.while, #[condArg, invSeqArg, bodyArg] =>
       let cond ← translateStmtExpr condArg
       let invariants ← match invSeqArg with

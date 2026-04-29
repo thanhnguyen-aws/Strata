@@ -90,6 +90,7 @@ def translateType (ty : HighTypeMd) : TranslateM LMonoTy := do
   | .TBv n => return LMonoTy.bitvec n
   | .TVoid => return LMonoTy.bool -- Using bool as placeholder for void
   | .THeap => return .tcons "Heap" []
+  | .TComposite => return .tcons "Composite" []
   | .TTypedField _ => return .tcons "Field" []
   | .TSet elementType => return Core.mapTy (← translateType elementType) LMonoTy.bool
   | .TMap keyType valueType => return Core.mapTy (← translateType keyType) (← translateType valueType)
@@ -285,7 +286,7 @@ def translateExpr (expr : StmtExprMd)
   | .IsType _ _ =>
       throwExprDiagnostic $ md.toDiagnostic "IsType should have been lowered" DiagnosticType.StrataBug
   | .New _ => throwExprDiagnostic $ md.toDiagnostic s!"New should have been eliminated by typeHierarchyTransform" DiagnosticType.StrataBug
-  | .FieldSelect target fieldId =>
+  | .FieldSelect target fieldId _ _ =>
       -- Field selects should have been eliminated by heap parameterization
       -- If we see one here, it's an error in the pipeline
       throwExprDiagnostic $ md.toDiagnostic s!"FieldSelect should have been eliminated by heap parameterization: {Std.ToFormat.format target}#{fieldId.text}" DiagnosticType.StrataBug

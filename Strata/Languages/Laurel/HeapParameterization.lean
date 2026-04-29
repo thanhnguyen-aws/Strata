@@ -70,7 +70,7 @@ def collectExpr (expr : StmtExpr) : StateM AnalysisResult Unit := do
       -- Check if any target is a field assignment (heap write)
       for ⟨assignTarget, _⟩ in assignTargets.attach do
         match assignTarget.val with
-        | .FieldSelect _ _ =>
+        | .FieldSelect _ _ _ =>
             modify fun s => { s with writesHeapDirectly := true }
         | _ => pure ()
         collectExprMd assignTarget
@@ -260,15 +260,23 @@ where
   recurse (exprMd : StmtExprMd) (valueUsed : Bool := true) : TransformM StmtExprMd := do
     let ⟨expr, source, md⟩ := exprMd
     match _h : expr with
-    | .FieldSelect selectTarget fieldName => do
-        let some qualifiedName := resolveQualifiedFieldName model fieldName
-          | return ⟨ .Hole, source, md ⟩
-
-        let valTy := (model.get fieldName).getType
-        let readExpr := ⟨ .StaticCall "readField" [mkMd (.Identifier heapVar), selectTarget, mkMd (.StaticCall qualifiedName [])], source, md ⟩
+    | .FieldSelect selectTarget fieldName fieldTy => do
+        if let some qualifiedName := resolveQualifiedFieldName model fieldName then
+          let valTy := (model.get fieldName).getType
+          let readExpr := ⟨ .StaticCall "readField" [mkMd (.Identifier heapVar), selectTarget, mkMd (.StaticCall qualifiedName [])], source, md ⟩
         -- Unwrap Box: apply the appropriate destructor
-        recordBoxConstructor model valTy.val
-        return mkMd <| .StaticCall (boxDestructorName model valTy.val) [readExpr]
+          recordBoxConstructor model valTy.val
+          return mkMd <| .StaticCall (boxDestructorName model valTy.val) [readExpr]
+        else
+          let qualifiedName := mkMd <| .StaticCall "LaurelFieldConstruct"
+              [selectTarget,
+              mkMd <| .LiteralString fieldName.text]
+          let readExpr := ⟨ .StaticCall "readField" [mkMd (.Identifier heapVar), selectTarget, qualifiedName], source, md ⟩
+          if let some ty := fieldTy then
+            recordBoxConstructor model ty.val
+            return mkMd <| .StaticCall (boxDestructorName model ty.val) [readExpr]
+          else
+            return mkMd <| .Hole
     | .StaticCall callee args =>
         let args' ← args.mapM (recurse ·)
         let calleeReadsHeap ← readsHeap callee
@@ -318,9 +326,8 @@ where
         return ⟨ .Return v', source, md ⟩
     | .Assign targets v =>
         match targets with
-        | [⟨.FieldSelect target fieldName, _, _fieldSelectMd⟩] =>
-            let some qualifiedName := resolveQualifiedFieldName model fieldName
-              | return ⟨ .Hole, source, md ⟩
+        | [⟨.FieldSelect target fieldName _, _, _fieldSelectMd⟩] =>
+          if let some qualifiedName := resolveQualifiedFieldName model fieldName then
             let valTy := (model.get fieldName).getType
             let target' ← recurse target
             let v' ← recurse v
@@ -329,6 +336,21 @@ where
             let boxedVal := mkMd <| .StaticCall (boxConstructorName model valTy.val) [v']
             let heapAssign := ⟨ .Assign [mkMd (.Identifier heapVar)]
               (mkMd (.StaticCall "updateField" [mkMd (.Identifier heapVar), target', mkMd (.StaticCall qualifiedName []), boxedVal])), source, md ⟩
+            if valueUsed then
+              return ⟨ .Block [heapAssign, v'] none, source, md ⟩
+            else
+              return heapAssign
+          else
+            let qualifiedName := mkMd <| .StaticCall "LaurelFieldConstruct"
+              [target,
+              mkMd <| .LiteralString fieldName.text]
+            let target' ← recurse target
+            let v' ← recurse v
+            -- Wrap value in Box constructor
+            let ty := (computeExprType model v).val
+            let boxedVal := mkMd <| .StaticCall (boxConstructorName model ty) [v']
+            let heapAssign := ⟨ .Assign [mkMd (.Identifier heapVar)]
+              (mkMd (.StaticCall "updateField" [mkMd (.Identifier heapVar), target', qualifiedName, boxedVal])), source, md ⟩
             if valueUsed then
               return ⟨ .Block [heapAssign, v'] none, source, md ⟩
             else
@@ -463,6 +485,39 @@ def heapTransformProcedure (model: SemanticModel) (proc : Procedure) : Transform
     -- This procedure doesn't read or write the heap - no changes needed
     return proc
 
+def mkIfEqExpr (var: StmtExprMd) (caseList: List (StmtExprMd × StmtExprMd)) (elseExpr: StmtExprMd) : StmtExprMd :=
+  caseList.foldr (fun (cond, thenExpr) e => mkMd $ .IfThenElse
+      (mkMd $ .PrimitiveOp .Eq [var, cond]) thenExpr e) elseExpr
+
+def getCompositeFieldTypes (p: Program) : List (String × List (String × HighType)) :=
+  p.types.flatMap fun ty => match ty with
+  | .Composite tydef =>
+    let fieldTypes := tydef.fields.map fun f => (f.name.text, f.type.val)
+    [(tydef.name.text, fieldTypes)]
+  | _ => []
+
+def laurelFieldConstructFunction (p: Program)  : Procedure :=
+  let compositeFieldTypes := getCompositeFieldTypes p
+  let invalidField := mkMd $ .StaticCall "FieldError.invalid" []
+  let unknownField := mkMd $ .StaticCall "FieldError.unknown" []
+  let classFields := compositeFieldTypes.map (λ (className, f) => (className, f.unzip.fst.map
+      fun fieldName => (mkMd $ .LiteralString fieldName,
+        mkMd $ .StaticCall s!"{className}.{fieldName}" []
+      )))
+  let classFields := classFields.map ((λ (className, f) =>  (mkMd $ .StaticCall s!"{className}_TypeTag" [], mkIfEqExpr (mkMd $ .Identifier "fieldname") f invalidField)))
+  let classTypeTag := mkMd $ .StaticCall "Composite..typeTag" [mkMd $ .Identifier "classname"]
+  let body := mkIfEqExpr classTypeTag classFields unknownField
+  {
+    name:= "LaurelFieldConstruct"
+    invokeOn := none
+    body := Body.Transparent body
+    preconditions := []
+    isFunctional := true
+    decreases := none
+    inputs := [{name:= "classname", type:= mkHighTypeMd .TComposite none}, {name:= "fieldname", type:= mkHighTypeMd .TString none}]
+    outputs := [{name:= "Result", type:= mkHighTypeMd (.TCore "Field") none}]
+  }
+
 def heapParameterization (model: SemanticModel) (program : Program) : Program :=
   let program := { program with
     types := program.types
@@ -481,8 +536,10 @@ def heapParameterization (model: SemanticModel) (program : Program) : Program :=
     match td with
     | .Composite ct => acc ++ ct.fields.map (fun f => (mkId $ ct.name.text ++ "." ++ f.name.text))
     | _ => acc) ([] : List Identifier)
+
+  let fieldErrorConstructors: List DatatypeConstructor := [{ name := "FieldError.invalid", args := [] }, { name := "FieldError.unknown", args := [] }]
   let fieldDatatype : TypeDefinition :=
-    .Datatype { name := "Field", typeArgs := [], constructors := fieldNames.map fun n => { name := n, args := [] } }
+    .Datatype { name := "Field", typeArgs := [], constructors := fieldErrorConstructors ++ (fieldNames.map fun n => { name := n, args := [] }) }
   -- Remove fields from composite types since they are now stored in the heap
   -- Also transform instance procedures, accumulating used Box constructors
   let (types', state2) := program.types.foldl (fun (accTypes, accState) td =>
@@ -495,8 +552,9 @@ def heapParameterization (model: SemanticModel) (program : Program) : Program :=
   -- Generate Box datatype from all constructors used during transformation
   let boxDatatype : TypeDefinition :=
     .Datatype { name := "Box", typeArgs := [], constructors := state2.usedBoxConstructors }
+  let fieldConstructFunc := laurelFieldConstructFunction program
   { program with
-    staticProcedures := heapConstants.staticProcedures ++ procs',
+    staticProcedures := heapConstants.staticProcedures ++ [fieldConstructFunc] ++ procs',
     types := fieldDatatype :: boxDatatype :: heapConstants.types ++ types' }
 
 end Strata.Laurel

@@ -38,6 +38,7 @@ def collectTypeRefs : HighTypeMd → List String
   | ⟨.Pure base, _, _⟩ => collectTypeRefs base
   | ⟨.Intersection ts, _, _⟩ => ts.flatMap collectTypeRefs
   | ⟨.TCore name, _, _⟩ => [name]
+  | ⟨.TComposite, _, _⟩ => ["Composite"]
   | _ => []
 
 /-- Get all datatype names that a `DatatypeDefinition` references in its constructor args. -/
@@ -85,7 +86,7 @@ def collectStaticCallNames (expr : StmtExprMd) : List String :=
       | some t => collectStaticCallNames t
       | none => []) ++
       collectStaticCallNames body
-  | .FieldSelect t _ => collectStaticCallNames t
+  | .FieldSelect t _ _ _  => collectStaticCallNames t
   | .PureFieldUpdate t _ v => collectStaticCallNames t ++ collectStaticCallNames v
   | .InstanceCall t _ args =>
       collectStaticCallNames t ++ args.flatMap (fun a => collectStaticCallNames a)

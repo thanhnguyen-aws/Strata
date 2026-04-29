@@ -14,6 +14,7 @@ op bvType (width: Num): LaurelType => "bv" width;
 op coreType (name: Ident): LaurelType => "Core " name;
 op mapType (keyType: LaurelType, valueType: LaurelType): LaurelType => "Map " keyType " " valueType;
 op compositeType (name: Ident): LaurelType => name;
+op unknownCompositeType : LaurelType => "UnknownComposite";
 
 category StmtExpr;
 op literalBool (b: Bool): StmtExpr => b;

@@ -143,6 +143,8 @@ inductive HighType : Type where
   | TString
   /-- Internal type representing the heap. Introduced by the heap parameterization pass; not accessible via grammar. -/
   | THeap
+  /-- Generic Composite type. -/
+  | TComposite
   /-- Internal type for a field constant with a known value type. Introduced by the heap parameterization pass; not accessible via grammar. -/
   | TTypedField (valueType : AstNode HighType)
   /-- Set type, e.g. `Set int`. -/
@@ -277,7 +279,7 @@ inductive StmtExpr : Type where
   /-- Assignment to one or more targets. Multiple targets are only allowed when the value is a `StaticCall` to a procedure with multiple outputs. -/
   | Assign (targets : List (AstNode StmtExpr)) (value : AstNode StmtExpr)
   /-- Read a field from a target expression. Combined with `Assign` for field writes. -/
-  | FieldSelect (target : AstNode StmtExpr) (fieldName : Identifier)
+  | FieldSelect (target : AstNode StmtExpr) (fieldName : Identifier) (targetType : Option (AstNode HighType)) (fieldType : Option (AstNode HighType))
   /-- Update a field on a pure (value) type, producing a new value. -/
   | PureFieldUpdate (target : AstNode StmtExpr) (fieldName : Identifier) (newValue : AstNode StmtExpr)
   /-- Call a static procedure by name with the given arguments. -/
