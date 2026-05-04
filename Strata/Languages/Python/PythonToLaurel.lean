@@ -840,11 +840,11 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
     | _ =>
       -- Complex object expression - translate and access field
       let objExpr ← translateExpr ctx obj
-      let fieldExpr := mkStmtExprMd (StmtExpr.FieldSelect objExpr attr.val AnyTy)
-      let objType ← inferExprType ctx obj
-      match tryLookupFieldHighType ctx objType attr.val with
-        | some ty => wrapFieldInAny ty fieldExpr
-        | none => return fieldExpr
+      if let .Hole := objExpr.val then
+        return objExpr
+      let objExprUnwrapped := mkStmtExprMd (.StaticCall "Any..as_composite!" [objExpr])
+      let readFieldExpr := mkStmtExprMd $ .FieldSelect objExprUnwrapped attr.val AnyTy
+      return readFieldExpr
 
   -- List literal: [1, 2, 3]
   | .List _ elems _ => translateList ctx elems.val.toList
@@ -1317,6 +1317,8 @@ def withException (ctx : TranslationContext) (funcname: String) : Bool :=
 def freeVar (name: String) := mkStmtExprMd (.Identifier name)
 def maybeExceptVar := freeVar "maybe_except"
 def nullcall_var := freeVar "nullcall_ret"
+def wrapInComposite (className : Identifier) (expr : StmtExprMd) : StmtExprMd :=
+  {expr with val := .StaticCall "from_Composite" [mkStmtExprMd $ .LiteralString className.text, expr]}
 
 partial def translateAssign  (ctx : TranslationContext)
                              (lhs: Python.expr SourceRange)
@@ -1391,7 +1393,7 @@ partial def translateAssign  (ctx : TranslationContext)
             if let some (ImportedSymbol.compositeType laurelName) := ctx.importedSymbols[fnname.text]? then
               let resolvedId := mkId laurelName
               let newExpr := mkStmtExprMd (StmtExpr.New resolvedId)
-              let newExprWrapped := mkStmtExprMd (.StaticCall "from_Composite" [mkStmtExprMd $ .LiteralString resolvedId.text, newExpr])
+              let newExprWrapped := wrapInComposite resolvedId newExpr
               let varType := mkHighTypeMd (.UserDefined resolvedId)
               let selfRef := mkStmtExprMd (StmtExpr.Identifier n.val)
               let initStmt := mkInstanceMethodCall laurelName "__init__" selfRef args source
@@ -1406,7 +1408,7 @@ partial def translateAssign  (ctx : TranslationContext)
             else
                 [mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr] rhs_trans) source]
         | .New className =>
-            let rhs_trans := {rhs_trans with val := .StaticCall "from_Composite" [mkStmtExprMd $ .LiteralString className.text, rhs_trans]}
+            let rhs_trans := wrapInComposite className rhs_trans
             if n.val ∈ ctx.variableTypes.unzip.1 then
               [mkStmtExprMdWithLoc (StmtExpr.Assign [targetExpr] rhs_trans) source]
             else
@@ -1438,8 +1440,7 @@ partial def translateAssign  (ctx : TranslationContext)
           return (newctx, initStmt :: assignStmts, true)
     | .Subscript _ _ _ _ =>
         let rhs_trans := match rhs_trans.val with
-          | .New className =>
-            {rhs_trans with val := .StaticCall "from_Composite" [mkStmtExprMd $ .LiteralString className.text, rhs_trans]}
+          | .New className => wrapInComposite className rhs_trans
           | _ => rhs_trans
         match getSubscriptList lhs with
         | target :: slices =>
@@ -1452,8 +1453,7 @@ partial def translateAssign  (ctx : TranslationContext)
         | _ =>  throw (.internalError "Invalid Subscript Expr")
     | .Attribute _ obj attr _ =>
       let rhs_trans := match rhs_trans.val with
-        | .New className =>
-          {rhs_trans with val := .StaticCall "from_Composite" [mkStmtExprMd $ .LiteralString className.text, rhs_trans]}
+        | .New className => wrapInComposite className rhs_trans
         | _ => rhs_trans
       match obj with
       | .Name _ name _ =>
@@ -1468,7 +1468,7 @@ partial def translateAssign  (ctx : TranslationContext)
             | some ann =>
               let annStr := pyExprToString ann
               if let some (.compositeType laurelName) := ctx.importedSymbols[annStr]? then
-                pure $ mkStmtExprMd (.StaticCall "from_Composite" [mkStmtExprMd $ .LiteralString laurelName, mkStmtExprMd (StmtExpr.New (mkId laurelName))])
+                pure $ wrapInComposite laurelName (mkStmtExprMd (StmtExpr.New (mkId laurelName)))
               else pure rhs_trans
             | none => pure rhs_trans
           let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [fieldAccess] rhs') source
@@ -1841,7 +1841,6 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
         let mgrName := s!"with_mgr_{ctxExpr.toAst.ann.start.byteIdx}"
         let mgrExpr ← translateExpr currentCtx ctxExpr
         let mgrTy ← inferExprType currentCtx ctxExpr
-        let mgrLauTy ← translateType currentCtx mgrTy
         let mgrDecl := mkStmtExprMd (StmtExpr.LocalVariable mgrName AnyTy (some mgrExpr))
         let mgrRef := mkStmtExprMd (StmtExpr.Identifier mgrName)
         currentCtx := {currentCtx with variableTypes := currentCtx.variableTypes ++ [(mgrName, mgrTy)]}
