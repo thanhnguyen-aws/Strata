@@ -138,12 +138,12 @@ function "fstring_and_regex"{
   return: ident("_types.NoneType")
   overload: false
   preconditions: [
-    ensure(len(params[Name]) >=_int 1, "Expected len(params[\"Name\"]) >= 1, got "{len(params[Name])})
-    ensure(len(params[Name]) <=_int 100, "Expected len(params[\"Name\"]) <= 100, got "{len(params[Name])})
+    ensure(stringLen(params[Name]) >=_int 1, "Expected len(params[\"Name\"]) >= 1, got "{stringLen(params[Name])})
+    ensure(stringLen(params[Name]) <=_int 100, "Expected len(params[\"Name\"]) <= 100, got "{stringLen(params[Name])})
     ensure(regex(params[Name], "^[a-zA-Z]+$"), "params[\"Name\"] did not match pattern")
-    ensure(Items in params => forall(params[Items], item, len(item) >=_int 1), "Expected len(item) >= 1, got "{len(item)})
-    ensure(Items in params => forall(params[Items], item, len(item) <=_int 50), "Expected len(item) <= 50, got "{len(item)})
-    ensure(Tags in params => forallDict(params[Tags], tag_key, tag_val, len(tag_key) >=_int 1), "Expected len(tag_key) >= 1, got "{len(tag_key)})
+    ensure(Items in params => forall(params[Items], item, stringLen(item) >=_int 1), "Expected len(item) >= 1, got "{stringLen(item)})
+    ensure(Items in params => forall(params[Items], item, stringLen(item) <=_int 50), "Expected len(item) <= 50, got "{stringLen(item)})
+    ensure(Tags in params => forallDict(params[Tags], tag_key, tag_val, stringLen(tag_key) >=_int 1), "Expected len(tag_key) >= 1, got "{stringLen(tag_key)})
   ]
   postconditions: [
   ]
@@ -275,7 +275,7 @@ meta def warningTestCase : IO Unit := withPython fun pythonCmd => do
           throw <| IO.userError "Expected warnings from warnings.py but got none"
         -- Check for specific expected warning substrings
         let expectedWarnings := #[
-          "unrecognized assert pattern",       -- assert kw["x"] == 1
+          "unsupported comparison",               -- assert kw["x"] == 1
           "unsupported __init__ assignment",   -- self.name = "hello"
           "skipped Assign in function body",   -- x = kw["a"]
           "For: else clause not supported",    -- for/else loop
