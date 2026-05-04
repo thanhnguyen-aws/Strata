@@ -2219,10 +2219,7 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
     let (bodyTrans, newCtx) ← match body with
     | some body =>
         let (bodyBlock, newCtx) ←  translateFunctionBody ctx funcDecl.kwargsName inputs body
-        if typeConstraintPostcondition.isEmpty then
-            pure $ (Body.Transparent bodyBlock, newCtx)
-        else
-            pure $ (Body.Opaque typeConstraintPostcondition bodyBlock [], newCtx)
+        pure $ (Body.Opaque typeConstraintPostcondition bodyBlock [], newCtx)
     | _ =>  pure $ (Body.Opaque [] none [], ctx)
 
     let renamedInputs := inputs.map fun p =>

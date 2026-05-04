@@ -3,7 +3,5 @@ test_class_no_init_with_method.py(8, 4): ✅ pass - callElimAssert_requires_2
 test_class_no_init_with_method.py(9, 4): ✅ pass - class with method but no __init__
 unknown location: ✅ pass - Heap reference counter monotone
 test_class_no_init_with_method.py(7, 0): ✅ pass - postcondition_1
-unknown location: ✅ pass - Heap reference counter monotone
-unknown location: ✅ pass - postcondition_1
-DETAIL: 6 passed, 0 failed, 1 inconclusive
+DETAIL: 4 passed, 0 failed, 1 inconclusive
 RESULT: Inconclusive

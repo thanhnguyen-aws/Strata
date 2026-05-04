@@ -414,7 +414,7 @@ def heapTransformProcedure (model: SemanticModel) (proc : Procedure) : Transform
           -- First assign $heap_in to $heap, then transform body using $heap
           let assignHeap := mkMd (.Assign [mkMd (.Identifier heapName)] (mkMd (.Identifier heapInName)))
           let bodyExpr' ← heapTransformExpr heapName model bodyExpr bodyValueIsUsed
-          pure (.Opaque [monoCond] (mkMd (.Block [assignHeap, bodyExpr'] none)) [])
+          pure (.Transparent (mkMd (.Block [assignHeap, bodyExpr'] none)))
       | .Opaque postconds impl modif =>
           -- Postconditions use $heap (the output state)
           let postconds' ← postconds.mapM (·.mapM (heapTransformExpr heapName model))
