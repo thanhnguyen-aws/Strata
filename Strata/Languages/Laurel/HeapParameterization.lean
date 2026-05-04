@@ -404,7 +404,7 @@ def heapTransformProcedure (model: SemanticModel) (proc : Procedure) : Transform
 
     let inHeapRef := mkMd $ .StaticCall "Heap..nextReference!" [mkMd $ .Identifier heapInName]
     let outHeapRef := mkMd $ .StaticCall "Heap..nextReference!" [mkMd $ .Identifier heapName]
-    let monoCond : Condition := {condition:= mkMd $ .PrimitiveOp .Geq [outHeapRef, inHeapRef], summary := "Heap reference counter monotone"}
+    let monoCond : Condition := {condition:= mkMd $ .PrimitiveOp .Geq [outHeapRef, inHeapRef], summary := s!"Heap reference counter monotone ({proc.name.text})"}
 
     let bodyValueIsUsed := !proc.outputs.isEmpty
     let body' ← match proc.body with
