@@ -1,5 +1,5 @@
 unknown location: ✅ pass - Heap reference counter monotone
-test_class_field_any.py(2, 4): ❓ unknown - postcondition_1
 test_class_field_any.py(6, 0): ❓ unknown - assert(113)
-DETAIL: 1 passed, 0 failed, 2 inconclusive
+unknown location: ✅ pass - Heap reference counter monotone
+DETAIL: 2 passed, 0 failed, 1 inconclusive
 RESULT: Inconclusive
