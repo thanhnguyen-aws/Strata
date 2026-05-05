@@ -1626,18 +1626,18 @@ def withExceptionChecks (ctx : TranslationContext)
   let exceptionCheck := rhs_exprs.flatMap $ getExceptionAssertions ctx
   (newctx, exceptionCheck ++ stmts)
 
-def translateDel (ctx : TranslationContext) (md: MetaData) (e:  Python.expr SourceRange) : Except TranslationError StmtExprMd := do
+def translateDel (ctx : TranslationContext) (source: Option FileRange) (e:  Python.expr SourceRange) : Except TranslationError StmtExprMd := do
   match e with
   | .Subscript _ (.Name _ n _) slice _ =>
     match slice with
     | .Slice _ start stop step =>
       let index ← translateSlice ctx start.val stop.val step.val
-      let rhs := mkStmtExprMd $ .StaticCall "Any_remove_slice" [freeVar n.val, index]
-      return mkStmtExprMdWithLoc (.Assign [freeVar n.val] rhs) md
+      let rhs := mkStmtExprMd $ .StaticCall "Any_remove_slice" [freeVarExpr n.val, index]
+      return mkStmtExprMdWithLoc (.Assign [freeVarMd n.val] rhs) source
     | _ =>
       let slice ← translateExpr ctx slice
-      let rhs := mkStmtExprMd $ .StaticCall "Any_remove" [freeVar n.val, slice]
-      return mkStmtExprMdWithLoc (.Assign [freeVar n.val] rhs) md
+      let rhs := mkStmtExprMd $ .StaticCall "Any_remove" [freeVarExpr n.val, slice]
+      return mkStmtExprMdWithLoc (.Assign [freeVarMd n.val] rhs) source
   | _ => throw (.unsupportedConstruct "Only support del statement for list[index] and dict[key] where list and dict are variables, unsupported: " (toString (repr e)))
 
 mutual
