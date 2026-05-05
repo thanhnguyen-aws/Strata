@@ -751,7 +751,7 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
         let dict ← fields.foldlM (fun acc (fname, fty) =>
           return mkStmtExprMd (.StaticCall "DictStrAny_cons"
             [mkStmtExprMd (.LiteralString fname),
-             ← wrapFieldInAny fty (mkStmtExprMd (.Var (.Field inner fname))), acc]))
+             ← wrapFieldInAny fty (mkStmtExprMd (.Var (.Field inner fname AnyTy))), acc]))
           (mkStmtExprMd (.StaticCall "DictStrAny_empty" []))
         pure <| mkStmtExprMd (.StaticCall "from_ClassInstance"
           [mkStmtExprMd (.LiteralString ty), dict])

@@ -398,9 +398,9 @@ def resolveStmtExpr (exprMd : StmtExprMd) : ResolveM StmtExprMd := do
         let target' ← resolveStmtExpr target
         if fieldTy.isNone then
           let fieldName' ← resolveFieldRef target' fieldName source
-          pure (⟨.Field target' fieldName', vs⟩ : VariableMd)
+          pure (⟨.Field target' fieldName' fieldTy, vs⟩ : VariableMd)
         else
-          pure (⟨.Field target' fieldName, vs⟩ : VariableMd)
+          pure (⟨.Field target' fieldName fieldTy, vs⟩ : VariableMd)
       | .Declare param =>
         let ty' ← resolveHighType param.type
         let name' ← defineNameCheckDup param.name (.var param.name ty')
