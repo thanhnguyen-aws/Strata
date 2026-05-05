@@ -426,6 +426,8 @@ def heapTransformProcedure (model: SemanticModel) (proc : Procedure) : Transform
           pure (.Opaque (monoCond::postconds') impl' modif')
       | .Abstract postconds =>
           let postconds' ← postconds.mapM (·.mapM (heapTransformExpr heapName model))
+          -- monoCond is safe to assume because heapTransformExpr only uses
+          -- updateField (preserves nextReference) and increment (increases it by 1)
           pure (.Abstract (monoCond::postconds'))
       | .External => pure .External
 

@@ -157,6 +157,25 @@ procedure datatypeField()
 //   assert d#intValue == 1;
 //   assert x == 4;
 // }
+
+procedure someWriteHeapProcedure(c: Container) returns ()
+  opaque
+  modifies c
+{
+  c#intValue := 5
+}
+;
+
+procedure callerUsesAllocateTwo()
+  opaque
+{
+  var c: Container;
+  var d: Container;
+  c := new Container;
+  someWriteHeapProcedure(c);
+  d := new Container;
+  assert c != d
+};
 "#
 
 #guard_msgs(drop info, error) in
