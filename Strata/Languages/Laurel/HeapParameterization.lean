@@ -233,7 +233,7 @@ private def recordBoxConstructor (model : SemanticModel) (ty : HighType) : Trans
 private def recordDynamicField (fieldName : String) : TransformM Unit := do
   modify fun s =>
     if fieldName ∈  s.usedDynamicField then s
-        else { s with usedDynamicField := s.usedDynamicField ++ [fieldName] }
+    else { s with usedDynamicField := s.usedDynamicField ++ [fieldName] }
 
 
 def readsHeap (name : Identifier) : TransformM Bool := do
@@ -261,6 +261,9 @@ def resolveQualifiedFieldName (model: SemanticModel) (fieldName : Identifier) : 
     | .unresolved _ => none
     | _ => dbg_trace s!"BUG: resolveQualifiedFieldName {fieldName} did resolved to something other than a field"; none
 
+/-- Resolve a field name to its qualified name and value type.
+    When `dynamicFieldTy` is `none`, resolves statically via the semantic model.
+    When `some`, uses a dynamic `@DynamicField.{name}` constructor with the provided type. -/
 def getQualifiedFieldNameAndTypes (model: SemanticModel) (fieldName : Identifier)
       (dynamicFieldTy: Option (AstNode HighType)) : TransformM (Option (String × (AstNode HighType))) := do match dynamicFieldTy with
   | none =>

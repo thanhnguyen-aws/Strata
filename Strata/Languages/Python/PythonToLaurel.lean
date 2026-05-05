@@ -1339,6 +1339,11 @@ def nullcall_var := freeVarMd "nullcall_ret"
 def wrapInComposite (className : Identifier) (expr : StmtExprMd) : StmtExprMd :=
   {expr with val := .StaticCall "from_Composite" [mkStmtExprMd $ .LiteralString className.text, expr]}
 
+def wrapNewInComposite (expr : StmtExprMd) : StmtExprMd :=
+  match expr.val with
+  | .New className => wrapInComposite className expr
+  | _ => expr
+
 partial def translateAssign  (ctx : TranslationContext)
                              (lhs: Python.expr SourceRange)
                              (annotation: Option (Python.expr SourceRange) )
@@ -1458,9 +1463,7 @@ partial def translateAssign  (ctx : TranslationContext)
           newctx := {ctx with variableTypes:=(n.val, type)::ctx.variableTypes}
           return (newctx, initStmt :: assignStmts, true)
     | .Subscript _ _ _ _ =>
-        let rhs_trans := match rhs_trans.val with
-          | .New className => wrapInComposite className rhs_trans
-          | _ => rhs_trans
+        let rhs_trans := wrapNewInComposite rhs_trans
         match getSubscriptList lhs with
         | target :: slices =>
             let target ← translateExpr ctx target
@@ -1471,9 +1474,7 @@ partial def translateAssign  (ctx : TranslationContext)
             return (ctx,assignStmts, false)
         | _ =>  throw (.internalError "Invalid Subscript Expr")
     | .Attribute _ obj attr _ =>
-      let rhs_trans := match rhs_trans.val with
-        | .New className => wrapInComposite className rhs_trans
-        | _ => rhs_trans
+      let rhs_trans := wrapNewInComposite rhs_trans
       match obj with
       | .Name _ name _ =>
         if name.val == "self" && ctx.currentClassName.isSome then
