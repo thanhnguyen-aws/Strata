@@ -2227,6 +2227,9 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
     -- Translate parameters
     let mut inputs : List Parameter := []
 
+    -- All inputs (including those of Composite types) are wrapped in Any
+    -- The type information of Composite-typed inputs can be retrieved via the destructor Any..typename
+    -- TODO: Add type constraints for Composite-typed inputs
     inputs := funcDecl.args.map fun arg =>
       { name := arg.name, type := AnyTy }
 
