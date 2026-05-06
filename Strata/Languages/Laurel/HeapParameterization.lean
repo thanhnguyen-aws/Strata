@@ -471,8 +471,8 @@ def heapTransformProcedure (model: SemanticModel) (proc : Procedure) : Transform
     -- Preconditions use $heap_in (the input state)
     let preconditions' ← proc.preconditions.mapM (·.mapM (heapTransformExpr heapInName model))
 
-    let inHeapRef := mkMd $ .StaticCall "Heap..nextReference!" [mkMd $ .Identifier heapInName]
-    let outHeapRef := mkMd $ .StaticCall "Heap..nextReference!" [mkMd $ .Identifier heapName]
+    let inHeapRef := mkMd $ .StaticCall "Heap..nextReference!" [mkMd $ .Var (.Local heapInName)]
+    let outHeapRef := mkMd $ .StaticCall "Heap..nextReference!" [mkMd $ .Var (.Local heapName)]
     let monoCond : Condition := {condition:= mkMd $ .PrimitiveOp .Geq [outHeapRef, inHeapRef], summary := s!"Heap reference counter monotone ({proc.name.text})"}
 
     let bodyValueIsUsed := !proc.outputs.isEmpty
