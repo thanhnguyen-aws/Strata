@@ -492,6 +492,9 @@ def heapTransformProcedure (model: SemanticModel) (proc : Procedure) : Transform
                 pure (some (mkMd (.Block [assignHeap, implExpr'] none)))
             | none => pure none
           let modif' ← modif.mapM (heapTransformExpr heapName model ·)
+          -- When impl' = none, monoCond is axiomatic; it's safe to assume
+          -- because heapTransformExpr only uses updateField (preserves
+          -- nextReference) and increment (increases it by 1).
           pure (.Opaque (monoCond::postconds') impl' modif')
       | .Abstract postconds =>
           let postconds' ← postconds.mapM (·.mapM (heapTransformExpr heapName model))
