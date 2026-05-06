@@ -321,7 +321,7 @@ function Any_to_bool (v: Any) : bool
 
 function to_bool_any(v: Any) : Any
 {
-  from_bool(Any_to_bool(v))
+  if (Any..isfrom_Composite(v)) then <?> else from_bool(Any_to_bool(v))
 };
 
 // /////////////////////////////////////////////////////////////////////////////////////
@@ -1097,7 +1097,7 @@ Parse the Laurel DDM prelude into a Laurel Program.
 -- Prelude functions that may return an exception value as Any.
 -- We should make sure that all functions in this list propagate the exceptions from their arguments.
 public def AnyMaybeExceptionList := ["Any_get!", "Any_set!", "Any_sets!", "PNeg", "PBitNot", "PNot", "PAdd", "PSub", "PMul",
-   "PFloorDiv", "PLt", "PLe", "PGt", "PGe", "PPow", "PMod", "PLShift", "PRShift", "PAnd", "POr"]
+   "PFloorDiv", "PLt", "PLe", "PGt", "PGe", "PPow", "PMod", "PLShift", "PRShift", "PAnd", "POr", "to_bool_any"]
 
 public def pythonRuntimeLaurelPart : Laurel.Program :=
   match Laurel.TransM.run (some $ .file "") (Laurel.parseProgram pythonRuntimeLaurelPartDDM) with
