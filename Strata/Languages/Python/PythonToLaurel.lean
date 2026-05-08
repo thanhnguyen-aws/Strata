@@ -1051,7 +1051,7 @@ partial def refineFunctionCallExpr (ctx : TranslationContext) (func: Python.expr
             if let .Name _ _ _ := v then
               pure ()
             else
-              throw (.unsupportedConstruct "List procedure calleer not a variable is unsupported" (toString (repr v)))
+              throw (.unsupportedConstruct "Method call on a non-variable list receiver is not supported; only `name.method(...)` where `name` is a plain variable" (toString (repr v)))
           let fnName := reMapFunctionName ctx $ manglePythonMethod resolvedTy callname
           return (fnName, some v, false)
     | _ => throw (.internalError s!"{repr func} is not a function")
