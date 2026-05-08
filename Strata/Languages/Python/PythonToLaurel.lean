@@ -273,6 +273,9 @@ def AnyConstructor.None := "from_None"
 def isOfAnyType (ty: String): Bool := ty ∈ [PyLauType.None, PyLauType.Bool, PyLauType.Int, PyLauType.Float,
                            PyLauType.Str, PyLauType.Datetime, PyLauType.Bytes, PyLauType.ListAny, PyLauType.DictStrAny, PyLauType.Any]
 
+def isImmutableType (ty: String): Bool := ty ∈ [PyLauType.None, PyLauType.Bool, PyLauType.Int, PyLauType.Float,
+                           PyLauType.Str, PyLauType.Datetime, PyLauType.Bytes]
+
 def pyLauTypeTesters (tys : List String) : Array String :=
   tys.foldl (init := #[]) fun acc ty =>
     if isOfAnyType ty && ty ≠ "Any" then acc.push ("Any..isfrom_" ++ ty) else acc
@@ -1165,6 +1168,9 @@ partial def translateExprAsReceiver (ctx : TranslationContext)
 /-- Translate a Python call expression to Laurel.
     Tries factory dispatch, then method dispatch on typed variables,
     then falls back to a static call by flattened name. -/
+-- NOTE: for `xs.append(e)` shape we return an `.Assign` statement wrapped in
+-- StmtExprMd as a signal to `translateAssign` to emit the mutation + None-assign
+-- sequence. See `translateAssign` arm at line 1454.
 partial def translateCall (ctx : TranslationContext)
                           (f : Python.expr SourceRange)
                           (args : List (Python.expr SourceRange))
@@ -1210,7 +1216,7 @@ partial def translateCall (ctx : TranslationContext)
       if let .Name _ n _ := arg then
         match ctx.variableTypes.find? (λ v => Prod.fst v == n.val) with
         | some (varName, ty) =>
-          if ty == PyLauType.Any ∨ ty == PyLauType.ListAny ∨ ty == PyLauType.DictStrAny then
+          if ¬ (isImmutableType ty) && ¬ (isCompositeType ctx ty) then
             [mkStmtExprMd (StmtExpr.Assign
               [mkVariableMd (.Local varName)]
               (mkStmtExprMd (.Hole false none)))]
