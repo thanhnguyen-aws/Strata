@@ -575,13 +575,16 @@ function Any_remove (dictOrList: Any, index: Any): Any
   if Any..isexception(dictOrList) then dictOrList
   else if Any..isexception(index) then index
   else if !(Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index)) && !(Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index)) then
-    exception (TypeError("Invalid subscription type"))
-  else if Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index) && DictStrAny_contains(Any..as_Dict!(dictOrList), Any..as_string!(index)) then
-    from_DictStrAny(DictStrAny_remove(Any..as_Dict!(dictOrList), Any..as_string!(index)))
-  else if Any..isfrom_ListAny(dictOrList) && Any..isfrom_int(index) && Any..as_int!(index) >= - List_len(Any..as_ListAny!(dictOrList)) && Any..as_int!(index) < List_len(Any..as_ListAny!(dictOrList)) then
+    exception (TypeError("Invalid subscript type"))
+  else if Any..isfrom_DictStrAny(dictOrList) && Any..isfrom_str(index) then
+    if DictStrAny_contains(Any..as_Dict!(dictOrList), Any..as_string!(index)) then
+      from_DictStrAny(DictStrAny_remove(Any..as_Dict!(dictOrList), Any..as_string!(index)))
+    else
+      exception (KeyError(Any..as_string!(index)))
+  else if Any..as_int!(index) >= - List_len(Any..as_ListAny!(dictOrList)) && Any..as_int!(index) < List_len(Any..as_ListAny!(dictOrList)) then
     from_ListAny(List_remove(Any..as_ListAny!(dictOrList), Any..as_int!(index)))
   else
-    exception (IndexError("Invalid subscription"))
+    exception (IndexError("list assignment index out of range"))
 };
 
 function Any_remove_slice (list: Any, index: Any): Any
