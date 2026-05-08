@@ -429,9 +429,10 @@ function List_remove(l: ListAny, i: int) : ListAny
 
 function List_remove_slice(l: ListAny, start: int, stop: int) : ListAny
 {
-  List_extend(
-    List_take(l, if start >= 0 then int_min(start, List_len(l)) else int_max(List_len(l) + start, 0)),
-    List_drop(l, if stop >= 0 then int_min(stop, List_len(l)) else int_max(List_len(l) + stop, 0)))
+  let start_c: int := if start >= 0 then int_min(start, List_len(l)) else int_max(List_len(l) + start, 0);
+  let stop_c: int := if stop >= 0 then int_min(stop, List_len(l)) else int_max(List_len(l) + stop, 0);
+  if start_c >= stop_c then l
+  else List_extend(List_take(l, start_c), List_drop(l, stop_c))
 };
 
 function List_set_non_neg (l : ListAny, i : int, v: Any) : ListAny
