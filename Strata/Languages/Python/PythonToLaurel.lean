@@ -1210,7 +1210,7 @@ partial def translateCall (ctx : TranslationContext)
       if let .Name _ n _ := arg then
         match ctx.variableTypes.find? (λ v => Prod.fst v == n.val) with
         | some (varName, ty) =>
-          if ¬ isCompositeType ctx ty then
+          if ty == PyLauType.Any ∨ ty == PyLauType.ListAny ∨ ty == PyLauType.DictStrAny then
             [mkStmtExprMd (StmtExpr.Assign
               [mkVariableMd (.Local varName)]
               (mkStmtExprMd (.Hole false none)))]
