@@ -1758,7 +1758,19 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     let stmts ← match value.val with
       | some expr => do
         let e ← translateExpr ctx expr
+  -- Return statement: assign to the LaurelResult output parameter, then exit $body.
+  | .Return _ value => do
+    let stmts ← match value.val with
+      | some expr => do
+        let e ← translateExpr ctx expr
         let exceptionCheck := getExceptionCatch ctx e
+        let (preamble, eRef) := getExceptionCheckPreamble ctx e s!"$ret_exc_{expr.toAst.ann.start.byteIdx}"
+        -- Coerce Composite return values to Any for LaurelResult : Any
+        let eRef ← coerceToAny ctx expr eRef
+        let assign := mkStmtExprMdWithLoc (StmtExpr.Assign [mkVariableMd (.Local PyLauFuncReturnVar)] eRef) md
+        .ok $ exceptionCheck ++ preamble ++ [assign, mkStmtExprMdWithLoc (StmtExpr.Exit "$body") md]
+      | none => .ok [mkStmtExprMdWithLoc (StmtExpr.Exit "$body") md]
+    return (ctx, stmts)
         let (preamble, eRef) := getExceptionCheckPreamble ctx e s!"$ret_exc_{expr.toAst.ann.start.byteIdx}"
         -- Coerce Composite return values to Any for LaurelResult : Any
         let eRef ← coerceToAny ctx expr eRef
