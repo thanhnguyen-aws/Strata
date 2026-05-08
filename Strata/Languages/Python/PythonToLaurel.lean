@@ -1586,7 +1586,12 @@ def errTyToGuard (errTy: String) : StmtExprMd := match errTy with
   | "AssertionError" => mkStmtExprMd (.StaticCall "Error..isAssertionError" [maybeExceptVarExpr])
   | "AttributeError" => mkStmtExprMd (.StaticCall "Error..isAttributeError" [maybeExceptVarExpr])
   | "Exception" => mkStmtExprMd (.StaticCall "isError" [maybeExceptVarExpr])
-  | _ => mkStmtExprMd (.StaticCall "Error..isUnknownError" [maybeExceptVarExpr])
+  | _ =>
+    -- Python exception name we do not yet map — dbg_trace to surface to users
+    -- so they know the handler will not fire. Alternatively, `throw` via the
+    -- caller (needs making `errTyToGuard` Except-valued).
+    dbg_trace s!"unsupported except type '{errTy}'; handler will not fire"
+    mkStmtExprMd (.StaticCall "Error..isUnknownError" [maybeExceptVarExpr])
   -- TODO: extend Error datatype with more Python exception types
 /-- Build a single exception-check assert: `assert !Any..isexception(e)`. -/
 def mkExceptionCheckAssert (e : StmtExprMd) (summary : String) : StmtExprMd :=
