@@ -2033,7 +2033,7 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
 
   | .Delete _ targets =>
       let delStmts ←  targets.val.toList.mapM $ translateDel ctx md
-      return (ctx, delStmts)
+      return withExceptionChecks ctx (ctx, delStmts)
 
   | _ => throw (.unsupportedConstruct "Statement type not yet supported" (toString (repr s)))
 
