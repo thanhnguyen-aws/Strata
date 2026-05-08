@@ -1660,7 +1660,7 @@ partial def exceptHandlersToIfStmt
         (ctx: TranslationContext)
         (h : List (Python.excepthandler SourceRange)) : Except TranslationError (Option StmtExprMd) := do
   let exceptionHandler ←  h.mapM $ exceptHandlerToBlock ctx
-  let assertUnCaughtMdCond := {condition:= mkStmtExprMd (.StaticCall "Error..isNoError" [maybeExceptVarExpr]), summary:= "Assert No UnCaught Exception"}
+    let assertUnCaughtMdCond := {condition:= mkStmtExprMd (.StaticCall "Error..isNoError" [maybeExceptVarExpr]), summary:= "assert no uncaught exception"}
   let assertUnCaught := mkStmtExprMdWithLoc (.Assert assertUnCaughtMdCond) md
   return createIfStmt exceptionHandler assertUnCaught
 
