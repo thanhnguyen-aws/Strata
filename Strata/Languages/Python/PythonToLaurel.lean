@@ -1318,6 +1318,13 @@ partial def translateCall (ctx : TranslationContext)
     else
       return mkStmtExprMd (.Block (typeAsserts.toList ++ [call]) none)
   else
+  -- For the primary case `xs.append(e)` where `xs` is a simple variable,
+  -- model Python's in-place mutation as a functional update `xs = Any_List_append(xs, e)`.
+  --
+  -- KNOWN LIMITATION (Python aliasing): if `xs` is aliased (e.g. `ys = xs; ys.append(e)`),
+  -- only the binding on the LHS (`ys` here) is updated; other bindings (`xs`) still
+  -- reference the original list, which diverges from CPython's in-place-mutation semantics.
+  -- Tracking: <issue-link-goes-here>
   match opt_firstarg with
   | some (.Name _ n _) => match ctx.variableTypes.find? (λ v => v.fst == n.val) with
       | some (_, "ListAny") =>
