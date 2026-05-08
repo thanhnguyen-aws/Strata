@@ -447,7 +447,12 @@ function DictStrAny_contains (d : DictStrAny, key: string) : bool
 };
 
 function DictStrAny_get (d : DictStrAny, key: string) : Any
+function DictStrAny_get (d : DictStrAny, key: string) : Any
 {
+  if  DictStrAny..isDictStrAny_empty(d) then exception(KeyError(key))
+  else if DictStrAny..key!(d) == key then DictStrAny..val!(d)
+  else DictStrAny_get(DictStrAny..tail!(d), key)
+};
   if  DictStrAny..isDictStrAny_empty(d) then exception(IndexError("Dict does not contain key"))
   else if DictStrAny..key!(d) == key then DictStrAny..val!(d)
   else DictStrAny_get(DictStrAny..tail!(d), key)
