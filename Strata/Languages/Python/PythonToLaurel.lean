@@ -852,7 +852,9 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
       else
         -- Regular object.field access
         let objExpr ← translateExpr ctx obj
-        let objExprUnwrapped := mkStmtExprMd (.StaticCall "Any..as_composite!" [objExpr])
+        let ty ←  inferExprType ctx obj
+        let compositeDestructor := if isCompositeType ctx ty then "Any..as_composite!" else "Any..as_composite"
+        let objExprUnwrapped := mkStmtExprMd (.StaticCall compositeDestructor [objExpr])
         let readFieldExpr := mkStmtExprMd $ .Var (.Field objExprUnwrapped attr.val AnyTy)
         return readFieldExpr
     | _ =>
@@ -860,7 +862,9 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
       let objExpr ← translateExpr ctx obj
       if let .Hole := objExpr.val then
         return objExpr
-      let objExprUnwrapped := mkStmtExprMd (.StaticCall "Any..as_composite!" [objExpr])
+      let ty ←  inferExprType ctx obj
+      let compositeDestructor := if isCompositeType ctx ty then "Any..as_composite!" else "Any..as_composite"
+      let objExprUnwrapped := mkStmtExprMd (.StaticCall compositeDestructor [objExpr])
       let readFieldExpr := mkStmtExprMd $ .Var (.Field objExprUnwrapped attr.val AnyTy)
       return readFieldExpr
 
