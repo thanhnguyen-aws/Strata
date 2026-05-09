@@ -2236,6 +2236,13 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
     -- The type information of Composite-typed inputs can be retrieved via the destructor Any..typename
     -- TODO: Add type constraints for Composite-typed inputs
     inputs := funcDecl.args.map fun arg =>
+    -- All inputs (including those of Composite types) are wrapped in Any.
+    -- For Composite-typed inputs, the runtime tag is recoverable via
+    -- `Any..typename!` (string class-name) and the wrapped instance via
+    -- `Any..as_composite!`. See `from_Composite` in PythonRuntimeLaurelPart.lean:82.
+    -- TODO: Add type constraints for Composite-typed inputs so the verifier
+    -- can assume `Any..isfrom_Composite` on entry.
+    inputs := funcDecl.args.map fun arg =>
       { name := arg.name, type := AnyTy }
 
     inputs := match ctx.currentClassName with

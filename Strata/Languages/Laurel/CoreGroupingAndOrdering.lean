@@ -33,7 +33,8 @@ def collectTypeRefs (model: SemanticModel): HighTypeMd → List String
   | ⟨.UserDefined name, _⟩ => match name.uniqueId.bind model.refToDef.get? with
     | some (.datatypeDefinition _)
     | some (.datatypeConstructor _ _) => [name.text]
-    | _ => [name.text, "Composite"]
+    | some (.compositeType _) => [name.text, "Composite"]
+    | _ => [name.text]    -- unresolved / alias / future variant: don't synthesize a dep
   | ⟨.TSet elem, _⟩ => collectTypeRefs model elem
   | ⟨.TMap k v, _⟩ => collectTypeRefs model k ++ collectTypeRefs model v
   | ⟨.TTypedField vt, _⟩ => collectTypeRefs model vt
