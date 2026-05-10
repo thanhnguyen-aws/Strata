@@ -23,5 +23,3 @@ assert r2 == 4
 
 modified_double(class_a)
 assert class_a.val == 2
-
-r3 = pure_double(5)

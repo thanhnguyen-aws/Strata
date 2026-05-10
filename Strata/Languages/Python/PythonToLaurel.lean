@@ -852,9 +852,10 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
       else
         -- Regular object.field access
         let objExpr ← translateExpr ctx obj
-        let ty ←  inferExprType ctx obj
-        let compositeDestructor := if isCompositeType ctx ty then "Any..as_composite!" else "Any..as_composite"
-        let objExprUnwrapped := mkStmtExprMd (.StaticCall compositeDestructor [objExpr])
+        -- Unwrap to composite only when v is actually a from_Composite; otherwise
+        -- raise AttributeError matching CPython's behaviour for attribute access
+        -- on non-class-instance values.
+        let objExprUnwrapped := mkStmtExprMd (.StaticCall "Any..as_composite!" [objExpr])
         let readFieldExpr := mkStmtExprMd $ .Var (.Field objExprUnwrapped attr.val AnyTy)
         return readFieldExpr
     | _ =>
@@ -862,9 +863,7 @@ partial def translateExpr (ctx : TranslationContext) (e : Python.expr SourceRang
       let objExpr ← translateExpr ctx obj
       if let .Hole := objExpr.val then
         return objExpr
-      let ty ←  inferExprType ctx obj
-      let compositeDestructor := if isCompositeType ctx ty then "Any..as_composite!" else "Any..as_composite"
-      let objExprUnwrapped := mkStmtExprMd (.StaticCall compositeDestructor [objExpr])
+      let objExprUnwrapped := mkStmtExprMd (.StaticCall "Any..as_composite!" [objExpr])
       let readFieldExpr := mkStmtExprMd $ .Var (.Field objExprUnwrapped attr.val AnyTy)
       return readFieldExpr
 
@@ -1498,9 +1497,13 @@ partial def translateAssign  (ctx : TranslationContext)
           let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [fieldAccess] rhs') source
           return (ctx, [assignStmt], true)
         else
-          let targetExpr ← translateExpr ctx lhs  -- This will handle self.field via translateExpr
+          let objExpr ← translateExpr ctx obj
+          let objExprUnwrapped := mkStmtExprMd (.StaticCall "Any..as_composite!" [objExpr])
+          let targetExpr := mkStmtExprMd $ .Var (.Field objExprUnwrapped attr.val AnyTy)
+          let condExpr := mkStmtExprMd (.StaticCall "Any..isfrom_Composite" [objExpr])
+          let guardExpr := mkStmtExprMdWithLoc (.Assert { condition := condExpr, summary := "Check field-access object must be Class" }) source
           let assignStmt := mkStmtExprMdWithLoc (StmtExpr.Assign [← stmtExprToVar targetExpr] rhs_trans) source
-          return (ctx, [assignStmt], true)
+          return (ctx, [guardExpr, assignStmt], true)
       | _ => throw (.unsupportedConstruct "Assignment targets not yet supported" (toString (repr lhs)))
     | _ => throw (.unsupportedConstruct "Assignment targets not yet supported" (toString (repr lhs)))
 
@@ -1579,6 +1582,15 @@ def isMaybeExceptAnyFunc (ctx : TranslationContext) (funcName: String) : Bool :=
 
 partial def getMaybeExceptionExprs (ctx : TranslationContext) (e : StmtExprMd) : List StmtExprMd :=
   match e.val with
+  | .Var (.Field objExprUnwrapped _ _) => getMaybeExceptionExprs ctx objExprUnwrapped
+  | .StaticCall "Any..as_composite!" [objExpr] =>
+    [mkStmtExprMd $ .IfThenElse
+      (mkStmtExprMd (.StaticCall "Any..isfrom_Composite" [objExpr]))
+      (mkStmtExprMd (.StaticCall "from_None" []))
+      (some (mkStmtExprMd (.StaticCall "exception"
+        [mkStmtExprMd (.StaticCall "AttributeError"
+          [mkStmtExprMd (.LiteralString "Any has no attribute")])])))
+    ]
   | .StaticCall funcname args =>
     /-When the prelude function returns a value of Any type, which may be an exception, it should
     propagates the exceptions from its arguments (see the body of PAdd, PMul,..),
@@ -1598,8 +1610,12 @@ def mkExceptionCheckAssert (e : StmtExprMd) (summary : String) : StmtExprMd :=
 
 partial def getExceptionAssertions (ctx : TranslationContext) (e : StmtExprMd) : List StmtExprMd :=
   (getMaybeExceptionExprs ctx e).map fun mbe =>
-    let funcName := match mbe.val with | .StaticCall f _ => f.text | _ => "expression"
-    mkExceptionCheckAssert mbe s!"Check {funcName} exception"
+    let summary := match mbe.val with
+    | .StaticCall f _ => s!"Check {f.text} exception"
+    | .IfThenElse
+      { val:= .StaticCall "Any..isfrom_Composite" _, ..} _ _ => "Check field-access object must be Class"
+    | _ => "Check expression exception"
+    mkExceptionCheckAssert mbe summary
 
 /-- Check whether an expression tree contains a `StaticCall` to a user-defined
     function (procedure).  Such calls are disallowed in pure contexts (e.g.
@@ -2232,10 +2248,6 @@ def translateFunction (ctx : TranslationContext) (sourceRange: SourceRange) (fun
     -- Translate parameters
     let mut inputs : List Parameter := []
 
-    -- All inputs (including those of Composite types) are wrapped in Any
-    -- The type information of Composite-typed inputs can be retrieved via the destructor Any..typename
-    -- TODO: Add type constraints for Composite-typed inputs
-    inputs := funcDecl.args.map fun arg =>
     -- All inputs (including those of Composite types) are wrapped in Any.
     -- For Composite-typed inputs, the runtime tag is recoverable via
     -- `Any..typename!` (string class-name) and the wrapped instance via
