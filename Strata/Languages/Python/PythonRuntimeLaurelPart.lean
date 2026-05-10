@@ -1013,11 +1013,14 @@ function PRShift (v1: Any, v2: Any) : Any
 
 function to_string(a: Any) : string;
 
-function to_string_any(a: Any) : Any {
-  from_str(to_string(a))
-};
+function to_string_any(a: Any) : Any ;
 
 function datetime_strptime(dtstring: Any, format: Any) : Any;
+
+procedure to_string_any_non_composite(a: Any)
+  invokeOn to_string_any(a)
+  opaque
+  ensures if !(Any..isfrom_Composite(a)) then to_string_any(a) == from_str(to_string(a)) else true;
 
 procedure datetime_tostring_cancel(dt: Any)
   invokeOn datetime_strptime(to_string_any(dt), from_str ("%Y-%m-%d"))
@@ -1097,7 +1100,7 @@ Parse the Laurel DDM prelude into a Laurel Program.
 -- Prelude functions that may return an exception value as Any.
 -- We should make sure that all functions in this list propagate the exceptions from their arguments.
 public def AnyMaybeExceptionList := ["Any_get!", "Any_set!", "Any_sets!", "PNeg", "PBitNot", "PNot", "PAdd", "PSub", "PMul",
-   "PFloorDiv", "PLt", "PLe", "PGt", "PGe", "PPow", "PMod", "PLShift", "PRShift", "PAnd", "POr", "to_bool_any"]
+   "PFloorDiv", "PLt", "PLe", "PGt", "PGe", "PPow", "PMod", "PLShift", "PRShift", "PAnd", "POr", "to_bool_any", "to_string_any"]
 
 public def pythonRuntimeLaurelPart : Laurel.Program :=
   match Laurel.TransM.run (some $ .file "") (Laurel.parseProgram pythonRuntimeLaurelPartDDM) with
