@@ -37,15 +37,30 @@ program Laurel;
 
 datatype Error {
   NoError (),
-  TypeError (Type_msg : string),
-  AttributeError (Attribute_msg : string),
-  AssertionError (Assertion_msg : string),
-  ZeroDivisionError (),
-  UnimplementedError (Unimplement_msg : string),
+  UnknownError (),
   UndefinedError (Undefined_msg : string),
-  IndexError (IndexError_msg : string),
   RePatternError (Re_msg : string),
-  UnknownError ()
+  ZeroDivisionError (),
+  OverflowError (),
+  FloatingPointError (),
+  IndexError (IndexError_msg : string),
+  KeyError (Key_msg : string),
+  AttributeError (Attribute_msg : string),
+  TypeError (Type_msg : string),
+  ValueError (Value_msg : string),
+  UnicodeError (Unicode_msg : string),
+  NameError (Name_msg : string),
+  UnboundLocalError (UnboundLocal_msg : string),
+  ImportError (Import_msg : string),
+  ModuleNotFoundError (ModuleNotFound_msg : string),
+  OSError (OS_msg : string),
+  FileNotFoundError (FileNotFound_msg : string),
+  PermissionError (Permission_msg : string),
+  TimeoutError (Timeout_msg : string),
+  RuntimeError (Runtime_msg : string),
+  RecursionError (Recursion_msg : string),
+  AssertionError (Assertion_msg : string),
+  NotImplementedError (NotImplemented_msg : string)
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////
@@ -290,10 +305,6 @@ function isAssertionError (e: Error) : Any {
   from_bool (Error..isAssertionError(e))
 };
 
-function isUnimplementedError (e: Error) : Any {
-  from_bool (Error..isUnimplementedError(e))
-};
-
 function isUndefinedError (e: Error) : Any {
   from_bool (Error..isUndefinedError(e))
 };
@@ -447,13 +458,8 @@ function DictStrAny_contains (d : DictStrAny, key: string) : bool
 };
 
 function DictStrAny_get (d : DictStrAny, key: string) : Any
-function DictStrAny_get (d : DictStrAny, key: string) : Any
 {
   if  DictStrAny..isDictStrAny_empty(d) then exception(KeyError(key))
-  else if DictStrAny..key!(d) == key then DictStrAny..val!(d)
-  else DictStrAny_get(DictStrAny..tail!(d), key)
-};
-  if  DictStrAny..isDictStrAny_empty(d) then exception(IndexError("Dict does not contain key"))
   else if DictStrAny..key!(d) == key then DictStrAny..val!(d)
   else DictStrAny_get(DictStrAny..tail!(d), key)
 };
@@ -1043,7 +1049,7 @@ function PPow (v1: Any, v2: Any) : Any
   else if (Any..isfrom_int(v1) && Any..isfrom_bool(v2)) then
     from_int(int_pow(Any..as_int!(v1), bool_to_int(Any..as_bool!(v2))))
   else
-    exception(UnimplementedError("Pow is not defined on these input types"))
+    exception(TypeError("Pow is not defined on these input types"))
 };
 
 function PMod (v1: Any, v2: Any) : Any

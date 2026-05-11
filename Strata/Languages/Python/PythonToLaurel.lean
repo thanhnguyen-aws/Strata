@@ -1579,20 +1579,46 @@ partial def getExceptionCatch (ctx: TranslationContext) (e : StmtExprMd): List S
   let maybeExceptExprs := getMaybeExceptionExprs ctx e
   if ctx.isInsideTryBlock then getExceptionAssign maybeExceptExprs else getExceptionReturns maybeExceptExprs
 
-def errTyToGuard (errTy: String) : StmtExprMd := match errTy with
-  | "TypeError" => mkStmtExprMd (.StaticCall "Error..isTypeError" [maybeExceptVarExpr])
-  | "ZeroDivisionError" => mkStmtExprMd (.StaticCall "Error..isZeroDivisionError" [maybeExceptVarExpr])
-  | "IndexError" => mkStmtExprMd (.StaticCall "Error..isIndexError" [maybeExceptVarExpr])
-  | "AssertionError" => mkStmtExprMd (.StaticCall "Error..isAssertionError" [maybeExceptVarExpr])
-  | "AttributeError" => mkStmtExprMd (.StaticCall "Error..isAttributeError" [maybeExceptVarExpr])
-  | "Exception" => mkStmtExprMd (.StaticCall "isError" [maybeExceptVarExpr])
-  | _ =>
-    -- Python exception name we do not yet map — dbg_trace to surface to users
-    -- so they know the handler will not fire. Alternatively, `throw` via the
-    -- caller (needs making `errTyToGuard` Except-valued).
-    dbg_trace s!"unsupported except type '{errTy}'; handler will not fire"
-    mkStmtExprMd (.StaticCall "Error..isUnknownError" [maybeExceptVarExpr])
-  -- TODO: extend Error datatype with more Python exception types
+/-- Python exception name → list of runtime `Error..isX` predicates that
+    should route to this handler. Encodes CPython's class hierarchy. -/
+
+def pythonErrorToPredicates (ty : String) : List Identifier :=
+  match ty with
+  | "TypeError"            => ["Error..isTypeError"]
+  | "ValueError"           => ["Error..isValueError", "Error..isUnicodeError"]
+  | "UnicodeError"         => ["Error..isUnicodeError"]
+  | "ZeroDivisionError"    => ["Error..isZeroDivisionError"]
+  | "OverflowError"        => ["Error..isOverflowError"]
+  | "FloatingPointError"   => ["Error..isFloatingPointError"]
+  | "ArithmeticError"      => ["Error..isZeroDivisionError", "Error..isOverflowError", "Error..isFloatingPointError"]
+  | "IndexError"           => ["Error..isIndexError"]
+  | "KeyError"             => ["Error..isKeyError"]
+  | "LookupError"          => ["Error..isIndexError", "Error..isKeyError"]
+  | "AttributeError"       => ["Error..isAttributeError"]
+  | "AssertionError"       => ["Error..isAssertionError"]
+  | "ImportError"          => ["Error..isImportError", "Error..isModuleNotFoundError"]
+  | "ModuleNotFoundError"  => ["Error..isModuleNotFoundError"]
+  | "OSError"              => ["Error..isOSError", "Error..isFileNotFoundError", "Error..isPermissionError", "Error..isTimeoutError"]
+  | "FileNotFoundError"    => ["Error..isFileNotFoundError"]
+  | "PermissionError"      => ["Error..isPermissionError"]
+  | "TimeoutError"         => ["Error..isTimeoutError"]
+  | "RuntimeError"         => ["Error..isRuntimeError", "Error..isRecursionError"]
+  | "RecursionError"       => ["Error..isRecursionError"]
+  | "NotImplementedError"  => ["Error..isNotImplementedError"]
+  | "StopIteration"        => ["Error..isStopIteration"]
+  | "Exception"            => ["isError"]
+  | "BaseException"        => ["isError"]
+  | _                      => ["Error..isUnknownError"]  -- unknown/unsupported: empty means never fires
+
+def errTyToGuard (errTy : String) : StmtExprMd :=
+  let preds := pythonErrorToPredicates errTy
+  match preds with
+  | []       => mkStmtExprMd (.LiteralBool false)  -- or emit a diagnostic at translation time
+  | [p]      => mkStmtExprMd (.StaticCall p [maybeExceptVarExpr])
+  | p :: ps  => ps.foldl (init := mkStmtExprMd (.StaticCall p [maybeExceptVarExpr]))
+                  fun acc q => mkStmtExprMd (.PrimitiveOp .Or
+                    [acc, mkStmtExprMd (.StaticCall q [maybeExceptVarExpr])])
+
 /-- Build a single exception-check assert: `assert !Any..isexception(e)`. -/
 def mkExceptionCheckAssert (e : StmtExprMd) (summary : String) : StmtExprMd :=
   let condExpr := mkStmtExprMd (.PrimitiveOp .Not [mkStmtExprMd $ .StaticCall "Any..isexception" [e]])
@@ -1763,19 +1789,6 @@ partial def translateStmt (ctx : TranslationContext) (s : Python.stmt SourceRang
     let stmts ← match value.val with
       | some expr => do
         let e ← translateExpr ctx expr
-  -- Return statement: assign to the LaurelResult output parameter, then exit $body.
-  | .Return _ value => do
-    let stmts ← match value.val with
-      | some expr => do
-        let e ← translateExpr ctx expr
-        let exceptionCheck := getExceptionCatch ctx e
-        let (preamble, eRef) := getExceptionCheckPreamble ctx e s!"$ret_exc_{expr.toAst.ann.start.byteIdx}"
-        -- Coerce Composite return values to Any for LaurelResult : Any
-        let eRef ← coerceToAny ctx expr eRef
-        let assign := mkStmtExprMdWithLoc (StmtExpr.Assign [mkVariableMd (.Local PyLauFuncReturnVar)] eRef) md
-        .ok $ exceptionCheck ++ preamble ++ [assign, mkStmtExprMdWithLoc (StmtExpr.Exit "$body") md]
-      | none => .ok [mkStmtExprMdWithLoc (StmtExpr.Exit "$body") md]
-    return (ctx, stmts)
         let (preamble, eRef) := getExceptionCheckPreamble ctx e s!"$ret_exc_{expr.toAst.ann.start.byteIdx}"
         -- Coerce Composite return values to Any for LaurelResult : Any
         let eRef ← coerceToAny ctx expr eRef
@@ -2222,8 +2235,10 @@ def getTypeConstraint (var : String) (source : Option FileRange) (testers : Arra
            summary := some $ "(" ++ funcname ++ " requires) Type constraint of " ++ displayName }
 
 def getReturnTypeEnsure (source : Option FileRange) (testers : Array String) (funcname : String) : Option Condition :=
-  getTypeConstraint PyLauFuncReturnVar source testers funcname
-  |>.map fun c => { c with summary := some $ "(" ++ funcname ++ " ensures) Return type constraint" }
+  let constraint:= getTypeConstraint PyLauFuncReturnVar source testers funcname
+  --let constraint := constraint.map fun c => mkStmtExprMdWithLoc (.PrimitiveOp .Or
+  --  [c.condition, mkStmtExprMd (.StaticCall (mkId "Any..isexception") [freeVarExpr PyLauFuncReturnVar])]) source
+  constraint.map fun c => { condition:= c.condition, summary := some $ "(" ++ funcname ++ " ensures) Return type constraint" }
 
 
 /-- Rename input parameters with `paramInputPrefix` and produce local-copy
