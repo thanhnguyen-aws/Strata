@@ -2235,10 +2235,8 @@ def getTypeConstraint (var : String) (source : Option FileRange) (testers : Arra
            summary := some $ "(" ++ funcname ++ " requires) Type constraint of " ++ displayName }
 
 def getReturnTypeEnsure (source : Option FileRange) (testers : Array String) (funcname : String) : Option Condition :=
-  let constraint:= getTypeConstraint PyLauFuncReturnVar source testers funcname
-  --let constraint := constraint.map fun c => mkStmtExprMdWithLoc (.PrimitiveOp .Or
-  --  [c.condition, mkStmtExprMd (.StaticCall (mkId "Any..isexception") [freeVarExpr PyLauFuncReturnVar])]) source
-  constraint.map fun c => { condition:= c.condition, summary := some $ "(" ++ funcname ++ " ensures) Return type constraint" }
+  getTypeConstraint PyLauFuncReturnVar source testers funcname
+  |>.map fun c => { c with summary := some $ "(" ++ funcname ++ " ensures) Return type constraint" }
 
 
 /-- Rename input parameters with `paramInputPrefix` and produce local-copy
