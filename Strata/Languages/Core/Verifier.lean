@@ -51,7 +51,7 @@ when needed for the validity check (line 64 for check-sat-assuming, line 77 for 
 def encodeCore (ctx : Core.SMT.Context) (prelude : SolverM Unit)
     (assumptionTerms : List Term) (obligationTerm : Term)
     (md : Imperative.MetaData Core.Expression)
-    (useArrayTheory : Bool)
+    (useArrayTheory : Bool := false)
     (satisfiabilityCheck validityCheck : Bool)
     (label : String)
     (varDefinitions : List Core.VarDefinition := [])
