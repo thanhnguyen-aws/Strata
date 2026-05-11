@@ -530,6 +530,7 @@ function Any_get_slice (list: Any, index: Any): Any
     else List_len(Any..as_ListAny!(list))))
 };
 
+// Unly used in Any_sets! to keep it from dispatching strings (strings are immutable in Python, so there's nothing to set).
 function Any_get_no_string! (dictOrList: Any, index: Any): Any
 {
   if Any..isexception(dictOrList) then dictOrList
