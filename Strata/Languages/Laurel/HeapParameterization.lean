@@ -473,7 +473,7 @@ def heapTransformProcedure (model: SemanticModel) (proc : Procedure) : Transform
 
     let inHeapRef := mkMd $ .StaticCall "Heap..nextReference!" [mkMd $ .Var (.Local heapInName)]
     let outHeapRef := mkMd $ .StaticCall "Heap..nextReference!" [mkMd $ .Var (.Local heapName)]
-    let monoCond : Condition := {condition:= mkMd $ .PrimitiveOp .Geq [outHeapRef, inHeapRef], summary := s!"Heap reference counter monotone ({proc.name.text})"}
+    let monoCond : Condition := {condition:= {val:= .PrimitiveOp .Geq [outHeapRef, inHeapRef], source:= proc.name.source}, summary := s!"Heap reference counter monotone ({proc.name.text})"}
 
     let bodyValueIsUsed := !proc.outputs.isEmpty
     let body' ← match proc.body with
